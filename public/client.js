@@ -9,8 +9,15 @@ const VAL = { A: 1, 2: 2, 3: 3, 4: 4, 5: 5, 6: 6, 7: 7, 8: 0, V: 0.5, D: 0.5, R:
 const points = cards => cards.reduce((t, c) => t + (VAL[c.rank] ?? 0), 0);
 const AVATARS = ['🦊', '🐼', '🐯', '🦁', '🐸', '🐙', '🦄', '🐺', '🐵', '🐨', '🦉', '🐲', '🤠', '😎', '🎩', '👑'];
 const TITLE = document.title;
+const ICONS = { waiting: '⏳', betting: '🪙', playing: '🃏', banker: '🏦', results: '🏆' };
+const DENOMS = [[500, '#6b2fb0'], [100, '#1f9a5b'], [50, '#d6324a'], [10, '#2f7fd8']];
+const SHOE_X = -0.15, POT_X = 0.15; // position du sabot et du pot, en fraction de la largeur de la table
 
-let me = null, state = null, toastTimer, blinkTimer;
+let me = null, state = null, toastTimer, blinkTimer, timerEnd = null, lastCenter = '', lastActions = '';
+const zonePos = {}; // position de la zone de jeu (mise, cartes) de chaque joueur sur le feutre
+
+// Thème de table et dos de cartes choisis, mémorisés sur cet appareil.
+for (const k of ['felt', 'back']) document.documentElement.dataset[k] = localStorage.getItem(k) || '';
 let seen = {}; // par joueur : 'f' (face visible) ou 'b' (dos / cachée) pour chaque carte au dernier affichage
 const seatPos = {}; // position de chaque place, pour les effets
 const chipAnim = {}; // soldes en train de défiler
@@ -175,8 +182,8 @@ function effects(old, s) {
       chipsMoved = true;
     }
     if (p.result && !o.result && !p.isBanker && banker) {
-      const win = p.result.delta > 0;
-      flyChips(seatPos[win ? banker.name : p.name], seatPos[win ? p.name : banker.name]);
+      const win = p.result.delta > 0, pot = { x: (POT_X / parseFloat(getComputedStyle($('#seats')).getPropertyValue('--rx')) * 100).toFixed(3), y: 0 };
+      flyChips(win ? pot : zonePos[p.name], win ? zonePos[p.name] : pot);
       if (win && p.cards.length === 2 && points(p.cards) === 7.5) confetti(seatPos[p.name]);
       if (p.name === s.me) (win ? sfx.win : sfx.lose)();
     }
@@ -236,10 +243,12 @@ socket.on('state', s => {
   if (!s) {
     seen = {};
     seenChat = 0;
+    lastCenter = lastActions = '';
     $('#overlay').hidden = true;
     blink(false);
     return;
   }
+  timerEnd = s.timeLeft === null ? null : performance.now() + s.timeLeft;
   if (old && old.id === s.id) effects(old, s);
   render();
   requestAnimationFrame(tickChips);
@@ -256,8 +265,14 @@ $('#game').onclick = e => {
   if (b.dataset.kick && confirm(`Exclure ${b.dataset.kick} de la table ?`)) return act('kick', b.dataset.kick);
   if (b.dataset.ban && confirm(`Bannir ${b.dataset.ban} ? Il ne pourra plus revenir sur cette table.`)) return act('ban', b.dataset.ban);
   if (b.dataset.add) {
-    const input = $('#bet'), max = Number(input.max);
-    input.value = b.dataset.add === 'all' ? max : Math.min(max, Number(input.value || 0) + Number(b.dataset.add));
+    const input = $('#bet'), max = Number(input.max), add = b.dataset.add;
+    input.value = add === 'reset' ? '' : add === 'all' ? max : Math.min(max, Number(input.value || 0) + Number(add));
+    return updateBetPreview();
+  }
+  for (const k of ['felt', 'back']) {
+    if (b.dataset[k] === undefined) continue;
+    document.documentElement.dataset[k] = b.dataset[k];
+    localStorage.setItem(k, b.dataset[k]);
     return;
   }
   if (b.dataset.keep) {
@@ -267,6 +282,8 @@ $('#game').onclick = e => {
   const a = b.dataset.a;
   if (a === 'leave') socket.emit('leave');
   else if (a === 'closeOverlay') $('#overlay').hidden = true;
+  else if (a === 'themes') $('#themes').hidden = !$('#themes').hidden;
+  else if (a === 'fullscreen') document.fullscreenElement ? document.exitFullscreen() : document.documentElement.requestFullscreen();
   else if (a === 'mute') {
     muted = !muted;
     localStorage.setItem('muted', muted ? '1' : '0');
@@ -280,12 +297,31 @@ $('#game').onclick = e => {
   else if (a) act(a);
 };
 
-function card(c, cls) {
-  if (!c.rank) return `<span class="card back${cls}" aria-label="carte cachée"></span>`;
+// Pile de jetons de casino pour un montant (grosses valeurs en bas).
+function chipStack(v, cls = '', name = '') {
+  const chips = [];
+  let rest = v;
+  for (const [d, c] of DENOMS) while (rest >= d && chips.length < 12) { chips.push(c); rest -= d; }
+  if (!chips.length && v > 0) chips.push(DENOMS[3][1]);
+  return `<div class="stack ${cls}"><div class="pile" style="--n:${chips.length}">${chips.map((c, i) => `<i style="--c:${c};--i:${i}"></i>`).join('')}</div>
+    <b${name ? ` data-chips="${esc(name)}" data-v="${v}"` : ''}>${name ? shownChips(name, v) : v}</b></div>`;
+}
+
+// Aperçu de la mise en cours de saisie, posé sur ma zone de jeu.
+function updateBetPreview() {
+  const input = $('#bet');
+  if (!input) return;
+  const v = Math.floor(Number(input.value) || 0);
+  $('[data-a="bet"]').disabled = !(v >= Number(input.min) && v <= Number(input.max));
+  if ($('#myStack')) $('#myStack').innerHTML = v ? chipStack(v, 'pending') : '<span class="betspot"></span>';
+}
+
+function card(c, cls, style = '') {
+  if (!c.rank) return `<span class="card back${cls}" style="${style}" aria-label="carte cachée"></span>`;
   const red = '♥♦'.includes(c.suit) ? ' red' : '';
   const isFace = 'VDR'.includes(c.rank);
   const corner = `${c.rank}<br>${c.suit}`;
-  return `<span class="card${red}${c.hidden ? ' secret' : ''}${cls}" aria-label="${c.rank}${c.suit}${c.hidden ? ' cachée' : ''}">
+  return `<span class="card${red}${c.hidden ? ' secret' : ''}${cls}" style="${style}" aria-label="${c.rank}${c.suit}${c.hidden ? ' cachée' : ''}">
     <span class="corner tl">${corner}</span>
     <span class="pip${isFace ? ' face' : ''}">${isFace ? c.rank : c.suit}</span>
     <span class="corner br">${corner}</span>
@@ -302,71 +338,94 @@ function render() {
   // En attente, des places libres complètent la table.
   const slots = s.phase === 'waiting' ? Math.max(n, 6) : n;
 
-  $('#seats').className = slots > 6 ? 'many' : '';
-  $('#fx').className = $('#seats').className;
+  for (const id of ['#seats', '#zones', '#fx']) $(id).className = slots > 6 ? 'many' : '';
   const wrap = $('.table-wrap'), W = wrap.clientWidth, H = wrap.clientHeight, cs = getComputedStyle($('#seats'));
   const rx = parseFloat(cs.getPropertyValue('--rx')) / 100, ry = parseFloat(cs.getPropertyValue('--ry')) / 100;
-  const now = Date.now();
+  const KX = parseFloat(cs.getPropertyValue('--kx')), KY = parseFloat(cs.getPropertyValue('--ky'));
+  const now = Date.now(), left = timerEnd === null ? 0 : Math.max(0, timerEnd - performance.now());
+  const pending = p => (s.phase === 'playing' && s.turn === p.name) || (s.phase === 'banker' && p.isBanker) ||
+    (s.phase === 'betting' && p.inRound && p.bet === null);
 
-  const seatHtml = s.players.map((p, i) => {
+  const seatHtml = [], zoneHtml = [];
+  s.players.forEach((p, i) => {
     // Ma place en bas au centre, les suivants dans l'ordre des places.
     const a = Math.PI / 2 + ((i - i0 + n) % n) * 2 * Math.PI / slots;
-    const x = Math.cos(a), y = Math.sin(a);
+    const x = Math.cos(a), y = Math.sin(a), pos = `--x:${x.toFixed(3)};--y:${y.toFixed(3)}`;
     seatPos[p.name] = { x: x.toFixed(3), y: y.toFixed(3) };
+    zonePos[p.name] = { x: (x * KX).toFixed(3), y: (y * KY).toFixed(3) };
+    const r = p.result;
+    const cls = ['seat', p.isBanker && 'banker', (s.turn === p.name || (s.phase === 'banker' && p.isBanker)) && 'turn',
+      p.name === s.me && 'me', !p.connected && 'off', r && (r.delta >= 0 ? 'won' : 'lost'), y < -0.35 && 'top'].filter(Boolean).join(' ');
+    const timer = pending(p) && s.timeTotal
+      ? `<svg class="timer" viewBox="0 0 40 40" aria-hidden="true"><circle cx="20" cy="20" r="18" pathLength="100" style="animation-duration:${s.timeTotal}ms;animation-delay:-${Math.round(s.timeTotal - left)}ms"/></svg>` : '';
+    const bubble = bubbles[p.name]?.until > now ? `<div class="bubble">${esc(bubbles[p.name].text)}</div>` : '';
+    seatHtml.push(`<div class="${cls}" style="${pos};--h:${hue(p.name)}">
+      ${bubble}
+      ${s.host === s.me && p.name !== s.me ? `<div class="mod">
+        <button data-kick="${esc(p.name)}" title="Exclure" aria-label="Exclure ${esc(p.name)}">✕</button>
+        <button data-ban="${esc(p.name)}" title="Bannir" aria-label="Bannir ${esc(p.name)}">⛔</button></div>` : ''}
+      <div class="av">
+        <span class="avatar${p.avatar ? ' emoji' : ''}">${esc(p.avatar || p.name[0].toUpperCase())}</span>${timer}
+        ${p.isBanker ? '<div class="banker-chip">BANQUE</div>' : ''}
+      </div>
+      <div class="plate">
+        <div class="name">${esc(p.name)}${p.name === s.host ? ' <span class="crown" title="Chef du lobby">♛</span>' : ''}</div>
+        <div class="info"><span class="coin"></span><span data-chips="${esc(p.name)}" data-v="${p.chips}">${shownChips(p.name, p.chips)}</span>${p.chips === 0 ? ' · spectateur' : ''}${p.connected ? '' : ' · absent'}</div>
+      </div>
+    </div>`);
+
+    // Zone de jeu sur le feutre : mise en jetons et cartes en éventail.
+    if (!p.inRound && !p.isBanker && !p.cards.length) return;
     let prev = seen[p.name] || [];
     if (p.cards.length < prev.length) prev = [];
     const faces = p.cards.map(c => (c.rank && !c.hidden ? 'f' : 'b'));
     seen[p.name] = faces;
-    const isTurn = s.turn === p.name || (s.phase === 'banker' && p.isBanker);
-    const r = p.result;
-    const badge = r ? `<span class="badge ${r.delta >= 0 ? 'win' : 'lose'}">${r.delta >= 0 ? 'Gagné +' : 'Perdu −'}${Math.abs(r.delta)}</span>` : '';
-    const bubble = bubbles[p.name]?.until > now ? `<div class="bubble">${esc(bubbles[p.name].text)}</div>` : '';
-    const cls = ['seat', p.isBanker && 'banker', isTurn && 'turn', p.name === s.me && 'me', !p.connected && 'off',
-      r && (r.delta >= 0 ? 'won' : 'lost')].filter(Boolean).join(' ');
-    // Décalage jusqu'au paquet, pour que les cartes partent du centre de la table.
-    const dx = Math.round(-x * rx * W), dy = Math.round(-y * ry * H - 0.22 * H);
-    return `<div class="${cls}" style="--x:${x.toFixed(3)};--y:${y.toFixed(3)};--h:${hue(p.name)};--dx:${dx}px;--dy:${dy}px">
-      ${bubble}
-      ${p.isBanker ? '<div class="banker-chip">BANQUIER</div>' : ''}
-      ${s.host === s.me && p.name !== s.me ? `<div class="mod">
-        <button data-kick="${esc(p.name)}" title="Exclure" aria-label="Exclure ${esc(p.name)}">✕</button>
-        <button data-ban="${esc(p.name)}" title="Bannir" aria-label="Bannir ${esc(p.name)}">⛔</button></div>` : ''}
-      <div class="head">
-        <span class="avatar${p.avatar ? ' emoji' : ''}">${esc(p.avatar || p.name[0].toUpperCase())}</span>
-        <div class="who">
-          <div class="name">${esc(p.name)}${p.name === s.host ? ' <span class="crown" title="Chef du lobby">♛</span>' : ''}</div>
-          <div class="info"><span class="coin"></span><span data-chips="${esc(p.name)}" data-v="${p.chips}">${shownChips(p.name, p.chips)}</span>${p.chips === 0 ? ' · spectateur' : ''}${p.connected ? '' : ' · absent'}</div>
-        </div>
-      </div>
-      <div class="cards">${p.cards.map((c, j) => card(c, j >= prev.length ? ' deal' : prev[j] === 'b' && faces[j] === 'f' ? ' flip' : '')).join('')}</div>
-      <div class="foot">
-        ${p.bet !== null ? `<span class="bet-chip">${p.bet}</span>` : ''}
+    // Décalage jusqu'au sabot, pour que les cartes en sortent.
+    const dx = Math.round(SHOE_X * W - x * rx * KX * W), dy = Math.round(-y * ry * KY * H);
+    const mid = (p.cards.length - 1) / 2;
+    const cards = p.cards.map((c, j) => card(c, j >= prev.length ? ' deal' : prev[j] === 'b' && faces[j] === 'f' ? ' flip' : '',
+      `--r:${((j - mid) * 7).toFixed(1)}deg;--ty:${(Math.abs(j - mid) * 3).toFixed(1)}px`)).join('');
+    const bet = s.phase === 'betting' && p.inRound && p.bet === null
+      ? (p.name === s.me ? '<div id="myStack"></div>' : '<span class="betspot"></span>')
+      : p.bet !== null ? chipStack(p.bet) : '';
+    zoneHtml.push(`<div class="zone" style="${pos};--dx:${dx}px;--dy:${dy}px">
+      <div class="cards">${cards}</div>
+      <div class="row">${bet}
         ${p.total !== null && p.cards.length ? `<span class="total${p.total > 7.5 ? ' bust' : ''}">${fmt(p.total)}</span>` : ''}
-        ${badge}
+        ${r ? `<span class="badge ${r.delta >= 0 ? 'win' : 'lose'}">${r.delta >= 0 ? 'Gagné +' : 'Perdu −'}${Math.abs(r.delta)}</span>` : ''}
       </div>
       ${canChallenge && p.inRound && !p.challenged ? `<button class="defy" data-challenge="${esc(p.name)}">Défier</button>` : ''}
-    </div>`;
+    </div>`);
   });
   for (let k = n; k < slots; k++) {
     const a = Math.PI / 2 + k * 2 * Math.PI / slots;
     seatHtml.push(`<div class="seat ghost" style="--x:${Math.cos(a).toFixed(3)};--y:${Math.sin(a).toFixed(3)}"><span>Place libre</span></div>`);
   }
   $('#seats').innerHTML = seatHtml.join('');
+  $('#zones').innerHTML = zoneHtml.join('');
 
-  // Projecteur sur le joueur qui doit agir.
+  // Sabot, caisse du banquier, projecteur sur le joueur qui doit agir.
+  $('#deckLeft').textContent = s.deckLeft ?? '';
+  $('#pot').innerHTML = bankerP ? `${chipStack(bankerP.chips, 'big', bankerP.name)}<small>Banque</small>` : '';
   const active = s.turn || (s.phase === 'banker' ? s.banker : null);
   $('#spot').classList.toggle('on', !!active);
   if (active && seatPos[active]) $('#spot').style.cssText = `--x:${seatPos[active].x};--y:${seatPos[active].y}`;
   if (s.phase !== 'results') $('#overlay').hidden = true;
 
-  $('#center').textContent = {
+  const center = {
     waiting: s.host === s.me ? 'Lance la partie dès que vous êtes 2' : `En attente de ${s.host}…`,
     betting: 'Faites vos jeux…',
     playing: s.turn === s.me ? 'À toi de jouer' : `Au tour de ${s.turn}`,
     banker: iAmBanker ? (bankerP.cards.length ? 'Tire ou défie un joueur' : 'Tire ta première carte') : 'Le banquier tire…',
     results: s.cancelled ? 'Manche annulée' : 'Fin de la manche',
   }[s.phase];
+  if (center !== lastCenter) {
+    lastCenter = center;
+    $('#center').innerHTML = `<span class="ic">${ICONS[s.phase]}</span><span>${esc(center)}</span>`;
+  }
 
+  // Les actions sont de gros jetons posés sur le rebord ; --d décale leur apparition.
+  const chip = (cls, label, attrs, d = 0) => `<button class="act-chip ${cls}" style="--d:${d}" ${attrs}><span>${label}</span></button>`;
   const keptBet = $('#bet')?.value;
   let html = '';
   if (s.phase === 'waiting') {
@@ -379,27 +438,32 @@ function render() {
   if (s.phase === 'betting' && mine.inRound && mine.bet === null) {
     html += `<div class="bet-box">
       <div class="quick">${[10, 50, 100, 500].map(v => `<button class="chipbtn c${v}" data-add="${v}">+${v}</button>`).join('')}
-        <button class="chipbtn all" data-add="all">Tapis</button></div>
-      <label>Mise <input id="bet" type="number" min="${Math.min(10, mine.chips)}" max="${mine.chips}" value="${keptBet || Math.min(100, mine.chips)}"></label>
-      <button class="gold big" data-a="bet">Miser</button></div>`;
+        <button class="chipbtn all" data-add="all">Tapis</button>
+        <button class="chipbtn reset" data-add="reset" aria-label="Remettre la mise à zéro">↺</button></div>
+      <label>Mise <input id="bet" type="number" placeholder="0" min="${Math.min(10, mine.chips)}" max="${mine.chips}" value="${keptBet || ''}"></label>
+      ${chip('c-gold', 'Miser', 'data-a="bet"')}</div>`;
   }
   if (s.phase !== 'playing' || s.turn !== s.me) kept = -1;
   else {
     const hiddenIdx = mine.cards.findIndex(c => c.hidden);
     // Étape 1 : garder caché ou montrer la carte reçue (sautée si une carte est déjà gardée cachée). Étape 2 : tirer ou rester.
-    if (hiddenIdx >= 0 && hiddenIdx !== kept) {
-      html += `<button class="dark" data-keep="${hiddenIdx}">Caché</button>
-        <button class="gold" data-a="reveal">Montrer</button>`;
-    } else {
-      html += `<button class="gold" data-a="draw">Tirer</button>
-        <button class="green" data-a="stand">Rester</button>`;
-    }
+    html += hiddenIdx >= 0 && hiddenIdx !== kept
+      ? chip('c-dark', 'Caché', `data-keep="${hiddenIdx}"`) + chip('c-gold', 'Montrer', 'data-a="reveal"', 1)
+      : chip('c-gold', 'Tirer', 'data-a="draw"') + chip('c-green', 'Rester', 'data-a="stand"', 1);
   }
-  if (s.phase === 'banker' && iAmBanker) html += `<button class="gold big" data-a="bankerDraw" ${mine.total >= 7.5 ? 'disabled' : ''}>Tirer</button>`;
+  if (s.phase === 'banker' && iAmBanker) html += chip('c-gold', 'Tirer', `data-a="bankerDraw" ${mine.total >= 7.5 ? 'disabled' : ''}`);
   if (mine.total !== null && mine.cards.length) html += `<span class="mytotal${mine.total > 7.5 ? ' bust' : ''}"><small>Mon total</small>${fmt(mine.total)}</span>`;
-  html += `<button class="quit icon" data-a="mute" title="${muted ? 'Activer' : 'Couper'} le son" aria-label="${muted ? 'Activer' : 'Couper'} le son">${muted ? '🔇' : '🔊'}</button>`;
-  html += '<button class="quit" data-a="leave" title="Quitter la table">Quitter</button>';
-  $('#actions').innerHTML = html;
+  html += `<div class="tools">
+    <button class="quit icon" data-a="themes" title="Thème de la table" aria-label="Thème de la table">🎨</button>
+    ${document.fullscreenEnabled ? '<button class="quit icon" data-a="fullscreen" title="Plein écran" aria-label="Plein écran">⛶</button>' : ''}
+    <button class="quit icon" data-a="mute" title="${muted ? 'Activer' : 'Couper'} le son" aria-label="${muted ? 'Activer' : 'Couper'} le son">${muted ? '🔇' : '🔊'}</button>
+    <button class="quit" data-a="leave" title="Quitter la table">Quitter</button></div>`;
+  // Ne pas reconstruire la barre sans changement : la saisie de mise et les animations restent en place.
+  if (html !== lastActions) {
+    lastActions = html;
+    $('#actions').innerHTML = html;
+  }
+  updateBetPreview();
 
   // Historique groupé par manche, la plus récente en haut et dépliée.
   const groups = new Map();
@@ -439,3 +503,10 @@ $('#chatForm').onsubmit = e => {
   socket.emit('chat', $('#chatInput').value);
   $('#chatInput').value = '';
 };
+
+// Reflet du feutre qui suit la souris.
+$('.table-wrap').addEventListener('pointermove', e => {
+  const r = $('.felt').getBoundingClientRect();
+  $('.felt').style.setProperty('--mx', `${(((e.clientX - r.left) / r.width) * 100).toFixed(1)}%`);
+  $('.felt').style.setProperty('--my', `${(((e.clientY - r.top) / r.height) * 100).toFixed(1)}%`);
+});

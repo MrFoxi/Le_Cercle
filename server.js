@@ -26,11 +26,19 @@ function update(lobby) {
   const { table } = lobby;
   if (table.players.every(p => p.left)) {
     clearTimeout(lobby.timer);
+    clearTimeout(lobby.turnTimer);
     lobby.graces.forEach(clearTimeout);
     lobbies.delete(lobby.id);
     return sendLobbies();
   }
   for (const [name, s] of lobby.sockets) s.emit('state', { ...table.viewFor(name), id: lobby.id, chat: lobby.chat });
+  clearTimeout(lobby.turnTimer);
+  if (table.deadline) {
+    lobby.turnTimer = setTimeout(() => {
+      table.timeout();
+      update(lobby);
+    }, Math.max(0, table.deadline - Date.now()) + 50);
+  }
   if (table.phase === 'results' && !lobby.timer) {
     lobby.timer = setTimeout(() => {
       lobby.timer = null;

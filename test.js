@@ -126,4 +126,27 @@ assert.strictEqual(outcome(['5', '4'].map(c), 4), 'lose'); // au-dessus de 7,5
   assert.throws(() => t.addPlayer('B'), /banni/);
 }
 
+// Temps écoulé : mise oubliée, joueur ou banquier inactif
+{
+  const t = tableOf('A', 'B', 'C');
+  rig(t, ['4', '6', '2']);
+  t.bet('B', 100);
+  t.timeout(); // délai pas encore écoulé : rien ne se passe
+  assert.strictEqual(t.phase, 'betting');
+  t.deadline = Date.now() - 1;
+  t.timeout(); // C n'a pas misé : il ne joue pas cette manche
+  assert.deepStrictEqual(t.round.order, ['B']);
+  assert.strictEqual(t.round.turn, 0);
+  t.deadline = Date.now() - 1;
+  t.timeout(); // B ne joue pas : il reste
+  assert.strictEqual(t.phase, 'banker');
+  t.deadline = Date.now() - 1;
+  t.timeout(); // le banquier tire sa première carte
+  assert.strictEqual(t.round.bankerCards.length, 1);
+  t.deadline = Date.now() - 1;
+  t.timeout(); // puis défie B
+  assert.strictEqual(t.phase, 'results');
+  assert.strictEqual(t.deadline, null);
+}
+
 console.log('Tous les tests passent.');

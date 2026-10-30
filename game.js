@@ -3,6 +3,8 @@ const RANKS = ['A', '2', '3', '4', '5', '6', '7', '8', 'V', 'D', 'R'];
 const SUITS = ['♠', '♥', '♦', '♣'];
 const VALUES = { A: 1, 2: 2, 3: 3, 4: 4, 5: 5, 6: 6, 7: 7, 8: 0, V: 0.5, D: 0.5, R: 0.5 };
 const MAX_PLAYERS = 8, START_CHIPS = 1000, MIN_BET = 10;
+// Temps laissé pour agir, pour qu'un joueur inactif ne bloque pas la table.
+const BET_MS = 30000, TURN_MS = 30000, BANKER_MS = 20000;
 
 const pts = n => String(n).replace('.', ',');
 const signed = n => (n >= 0 ? `+${n}` : `−${-n}`);
@@ -36,6 +38,13 @@ class Table {
     this.log = []; // { r: n° de manche, k: type, t: texte }
     this.roundNo = 0;
     this.banned = new Set(); // pseudos bannis par le chef du lobby
+    this.deadline = null; // heure limite de l'action en cours
+    this.turnMs = 0;
+  }
+
+  arm(ms) {
+    this.deadline = ms ? Date.now() + ms : null;
+    this.turnMs = ms;
   }
 
   say(t, k = 'info') {
@@ -79,6 +88,7 @@ class Table {
     const n = this.players.length;
     if (this.players.filter(p => this.canPlay(p)).length < 2) {
       this.phase = 'waiting';
+      this.arm(0);
       return this.say('En attente de joueurs');
     }
     do this.bankerIdx = (this.bankerIdx + 1) % n; while (!this.canPlay(this.players[this.bankerIdx]));
@@ -94,6 +104,7 @@ class Table {
     this.phase = 'betting';
     this.roundNo++;
     this.say(`${banker} est le banquier`, 'round');
+    this.arm(BET_MS);
   }
 
   deal() {
@@ -129,10 +140,12 @@ class Table {
     const r = this.round;
     if (++r.turn >= r.order.length) {
       this.phase = 'banker';
+      this.arm(BANKER_MS);
       return this.say(`Tous les joueurs ont fini : au tour du banquier ${r.banker}`, 'banker');
     }
     const name = r.order[r.turn];
     r.hands[name].cards.push({ ...this.deal(), hidden: true });
+    this.arm(TURN_MS);
     if (!this.get(name).connected) {
       r.hands[name].done = true;
       this.say(`${name} est absent : il reste automatiquement`);
@@ -152,6 +165,7 @@ class Table {
     const c = { ...this.deal(), hidden: !!hidden };
     h.cards.push(c);
     this.say(hidden ? `${name} tire une carte et la garde face cachée` : `${name} tire ${c.rank}${c.suit}`, 'draw');
+    this.arm(TURN_MS);
   }
 
   reveal(name) {
@@ -159,6 +173,7 @@ class Table {
     if (!c) throw new Error('Aucune carte cachée');
     c.hidden = false;
     this.say(`${name} montre sa carte cachée : ${c.rank}${c.suit}`, 'draw');
+    this.arm(TURN_MS);
   }
 
   stand(name) {
@@ -178,6 +193,7 @@ class Table {
     if (total(r.bankerCards) >= 7.5) throw new Error('À 7,5 tu ne peux plus que défier');
     const c = { ...this.deal(), hidden: false };
     r.bankerCards.push(c);
+    this.arm(BANKER_MS);
     const bt = total(r.bankerCards);
     this.say(`Le banquier tire ${c.rank}${c.suit} : total ${pts(bt)}`, 'banker');
     if (bt > 7.5) {
@@ -197,6 +213,7 @@ class Table {
     if (!h || h.challenged) throw new Error('Ce joueur ne peut pas être défié');
     const t = total(h.cards), bt = total(r.bankerCards), res = outcome(h.cards, bt);
     this.settle(target, res);
+    this.arm(BANKER_MS);
     const why = t > 7.5 ? ' (dépassé)' : t === bt ? ' (égalité, le banquier gagne)' : res === 'win' && isNatural(h.cards) ? ' (7,5 naturel, payé 3 pour 2)' : '';
     this.say(`Défi : ${target} ${pts(t)} contre ${pts(bt)} pour le banquier → ${target} ${res === 'win' ? 'gagne' : 'perd'} ${signed(h.result.delta)}${why}`, res);
     if (r.order.every(n => r.hands[n].challenged)) this.endRound();
@@ -218,6 +235,7 @@ class Table {
   endRound() {
     const r = this.round;
     this.phase = 'results';
+    this.arm(0);
     for (const h of Object.values(r.hands)) h.cards.forEach(c => (c.hidden = false));
     if (r.cancelled) return;
     const lines = r.order.map(n => `${n} ${signed(r.hands[n].result.delta)}`);
@@ -249,8 +267,7 @@ class Table {
     const h = r.hands[name];
     if (!h) return;
     if (this.phase === 'betting' && h.bet === null) {
-      delete r.hands[name];
-      r.order.splice(r.order.indexOf(name), 1);
+      this.sitOut(name);
       this.checkBets();
     } else if (this.phase === 'playing' && r.order[r.turn] === name) this.stand(name);
     // sinon il « reste » : son tour sera passé automatiquement s'il n'est pas revenu
@@ -264,6 +281,32 @@ class Table {
     if (!quiet) this.say(`${name} quitte la table`);
     // en pleine manche sa main doit encore être défiée : on le retire à la manche suivante
     if (this.phase === 'waiting') this.remove(i);
+  }
+
+  sitOut(name) {
+    delete this.round.hands[name];
+    this.round.order.splice(this.round.order.indexOf(name), 1);
+  }
+
+  // Temps écoulé : action par défaut pour celui qui devait jouer.
+  timeout() {
+    if (!this.deadline || Date.now() < this.deadline) return;
+    const r = this.round;
+    if (this.phase === 'betting') {
+      for (const n of r.order.filter(n => r.hands[n].bet === null)) {
+        this.sitOut(n);
+        this.say(`${n} n'a pas misé à temps : il ne joue pas cette manche`);
+      }
+      this.checkBets();
+    } else if (this.phase === 'playing') {
+      const n = r.order[r.turn];
+      this.say(`Temps écoulé pour ${n}`);
+      this.stand(n);
+    } else if (this.phase === 'banker') {
+      this.say('Temps écoulé : le banquier joue automatiquement');
+      if (!r.bankerCards.length) this.bankerDraw(r.banker);
+      else this.challenge(r.banker, r.order.find(n => !r.hands[n].challenged));
+    }
   }
 
   // Le chef du lobby exclut un joueur ; banni, il ne peut plus revenir sous ce pseudo.
@@ -287,6 +330,8 @@ class Table {
       turn: this.phase === 'playing' ? r.order[r.turn] : null,
       cancelled: !!r?.cancelled,
       log: this.log, roundNo: this.roundNo,
+      deckLeft: r?.deck.length ?? null,
+      timeLeft: this.deadline ? Math.max(0, this.deadline - Date.now()) : null, timeTotal: this.turnMs,
       players: this.players.filter(p => !p.left || r?.hands[p.name]).map(p => {
         const isBanker = r?.banker === p.name, h = r?.hands[p.name], own = p.name === me;
         const cards = isBanker ? r.bankerCards : h?.cards ?? [];

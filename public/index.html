@@ -90,6 +90,7 @@
           <h3>Bon à savoir</h3>
           <ul>
             <li>Le rôle de <b>banquier</b> tourne à chaque manche, vers la gauche.</li>
+            <li>Tu as 30 secondes pour miser ou jouer (20 secondes pour le banquier). Passé ce délai, le jeu agit pour toi : tu ne joues pas la manche, tu restes, ou le banquier tire puis défie.</li>
             <li>À 0 jeton, tu deviens spectateur.</li>
             <li>Déconnecté en pleine manche ? Reviens avec le même pseudo dans les 60 secondes pour retrouver ta place.</li>
           </ul>
@@ -103,15 +104,40 @@
       <div class="table-wrap">
         <div class="rail">
           <div class="felt">
+            <svg class="felt-text" viewBox="0 0 1000 580" preserveAspectRatio="none" aria-hidden="true">
+              <path id="arcTop" d="M 150 290 A 350 205 0 0 1 850 290" fill="none"/>
+              <path id="arcBot" d="M 150 290 A 350 205 0 0 0 850 290" fill="none"/>
+              <ellipse class="line" cx="500" cy="290" rx="390" ry="235"/>
+              <text><textPath href="#arcTop" startOffset="50%" text-anchor="middle">LA BANQUE PAIE 1 POUR 1</textPath></text>
+              <text dy="16"><textPath href="#arcBot" startOffset="50%" text-anchor="middle">7,5 NATUREL PAIE 3 POUR 2</textPath></text>
+            </svg>
             <div class="watermark" aria-hidden="true">7,5</div>
-            <div class="deck" aria-hidden="true"></div>
             <div id="center" aria-live="polite"></div>
           </div>
         </div>
+        <div class="shoe" title="Cartes restantes dans le sabot"><span id="deckLeft"></span></div>
+        <div id="pot" aria-label="Caisse du banquier"></div>
         <div id="spot" aria-hidden="true"></div>
+        <div id="zones"></div>
         <div id="seats"></div>
         <div id="fx" aria-hidden="true"></div>
         <div id="overlay" role="dialog" aria-label="Résultat de la manche" hidden></div>
+      </div>
+      <div id="themes" role="dialog" aria-label="Thème de la table" hidden>
+        <p>Tapis</p>
+        <div class="swatches">
+          <button data-felt="" style="--s:#0f6b45" aria-label="Tapis vert"></button>
+          <button data-felt="blue" style="--s:#154a85" aria-label="Tapis bleu nuit"></button>
+          <button data-felt="bordeaux" style="--s:#6e1726" aria-label="Tapis bordeaux"></button>
+          <button data-felt="noir" style="--s:#1f2024" aria-label="Tapis noir"></button>
+        </div>
+        <p>Dos des cartes</p>
+        <div class="swatches">
+          <button data-back="" style="--s:#7d0f22" aria-label="Dos rouge"></button>
+          <button data-back="blue" style="--s:#1d4f9c" aria-label="Dos bleu"></button>
+          <button data-back="black" style="--s:#2a2a2e" aria-label="Dos noir"></button>
+          <button data-back="green" style="--s:#15704a" aria-label="Dos vert"></button>
+        </div>
       </div>
       <div id="actions"></div>
     </div>
