@@ -2,6 +2,7 @@
 
 Un seul serveur pour plusieurs projets : la page d'accueil (`/`) mène à chaque jeu.
 
+- `/imposteur/` : **L’Imposteur**, de 3 à 12 joueurs en temps réel : civils, imposteurs (mot proche) et Mr. White (aucun mot), indices, discussion, vote secret. Aussi en mode soirée sur un seul appareil (`/imposteur/solo.html`).
 - `/size/` : **Size It Up**, jeu solo : mettre l’objet rouge à l’échelle de l’objet bleu, à l’œil nu.
 - `/p4/` : **Puissance 4**, à deux en temps réel, avec revanches, statistiques du salon et spectateurs.
 - `/cote/` : **Le Demi-Cercle**, jeu à deux en temps réel : un thème, un mot donné par l’adversaire, une aiguille entre MAUVAIS et BON, 68 thèmes au choix, 10 manches.
@@ -38,7 +39,8 @@ Tout est en mémoire : un redémarrage du service efface les lobbys et les jeton
 - `test.js` : tests lancés par `npm test`.
 - `public/index.html` : page d'accueil qui liste les projets.
 - `public/7-5/` : client du 7,5 (HTML/CSS/JS).
-- `lib/rooms.js` : salons temps réel communs aux jeux à deux (code, lobby public ou privé, reconnexion par jeton, spectateurs, chat). Un jeu fournit sa classe `Room` et la liste de ses actions.
+- `lib/rooms.js` : salons temps réel communs aux jeux multijoueurs (code, lobby public ou privé, reconnexion par jeton, spectateurs, chat). Un jeu fournit sa classe `Room` et la liste de ses actions ; si la `Room` a un `deadline`, sa méthode `timeout()` est appelée à l’heure dite (étapes chronométrées).
+- `imposteur/` : L’Imposteur : `words.js` (paires de mots par catégorie : en ajouter une = une ligne), `game.js` (rôles, tours d’indices, vote et revote, Mr. White, victoires, cartes filtrées pour chaque joueur), `server.js` (canal `/imposteur`), `engine.js` (les mêmes règles servies au navigateur sur `/imposteur/engine.js` pour le mode un seul appareil) ; client dans `public/imposteur/` (`client.js` en ligne, `solo.js` un seul appareil, `ui.js` affichage commun), tests dans `test-imposteur.js`.
 - `size/` : Size It Up : `objects.js` (objets et dimensions réelles), `game.js` (paires, score), `api.js` (API `/api/size` : les vraies tailles ne sont envoyées qu’après validation) ; client dans `public/size/`, tests dans `test-size.js`.
 - `p4/` : règles du Puissance 4 (`game.js`) et branchement sur `lib/rooms.js` (`server.js`, canal `/p4`) ; client dans `public/p4/`, tests dans `test-p4.js`.
 - `cote/` : serveur du Demi-Cercle : `game.js` (règles, barème, rôles, thèmes, position secrète filtrée), `themes.js` (68 thèmes en 5 catégories : en ajouter un = l’ajouter à la liste de sa catégorie), `server.js` (salons à code, reconnexion par jeton, canal Socket.io `/cote`).

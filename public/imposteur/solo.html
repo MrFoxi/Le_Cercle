@@ -1,0 +1,79 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>L’Imposteur · un seul appareil</title>
+  <link rel="icon" href="favicon.svg" type="image/svg+xml">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700;900&family=Inter:wght@400;600;800;900&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+  <script type="module" src="solo.js"></script>
+</head>
+<body>
+  <!-- Préparation : joueurs et réglages -->
+  <section id="setup" class="screen wide">
+    <a class="back" href="./">← L’Imposteur en ligne</a>
+    <header class="hero compact">
+      <img src="favicon.svg" alt="" class="logo">
+      <h1>L’Imposteur</h1>
+    </header>
+    <p class="whoami">📱 Mode soirée : <b>un seul appareil</b> qu’on se passe de main en main</p>
+    <div class="lobby">
+      <div class="card side-col">
+        <h2>Joueurs</h2>
+        <p class="hint">Dans l’ordre où vous êtes assis.</p>
+        <ul class="players" id="names"></ul>
+        <form class="add-name" id="addForm">
+          <input name="who" maxlength="20" autocomplete="off" placeholder="Prénom" aria-label="Prénom du joueur">
+          <button class="ghost">Ajouter</button>
+        </form>
+        <button class="gold big" id="go"></button>
+      </div>
+      <form class="card settings" id="settings">
+        <h2>Réglages</h2>
+        <div class="grid4">
+          <label>Manches<select name="rounds"></select></label>
+          <label>Imposteurs<select name="impostors"></select></label>
+          <label>Mr. White<select name="whites"></select></label>
+          <label>Discussion<select name="discussion"></select></label>
+        </div>
+        <p class="split" id="split"></p>
+        <div class="cats-head">
+          <h3>Catégories de mots</h3>
+          <div class="host-only">
+            <button type="button" class="ghost small" id="allCats">Toutes</button>
+            <button type="button" class="ghost small" id="noCats">Aucune</button>
+          </div>
+        </div>
+        <div class="chips" id="cats"></div>
+        <ol class="rules">
+          <li>On se passe l’appareil : chacun découvre <b>son mot en secret</b>, sans savoir s’il est civil ou imposteur. Seul Mr. White sait qui il est.</li>
+          <li>Chacun son tour, on donne son <b>indice à voix haute</b>. L’appareil indique qui parle.</li>
+          <li>On débat, puis chacun <b>vote en secret</b> sur l’appareil. L’éliminé est révélé à tous.</li>
+        </ol>
+      </form>
+    </div>
+  </section>
+
+  <!-- Partie -->
+  <section id="play" class="screen wide" hidden>
+    <div class="topbar">
+      <button class="back" id="quit">← Quitter</button>
+      <p class="brand" id="brand"></p>
+      <span></span>
+    </div>
+    <header class="phase">
+      <h2 id="title"></h2>
+      <p id="hint"></p>
+      <div class="timer" id="timer" hidden><i></i><b></b></div>
+    </header>
+    <ul class="table" id="table" aria-label="Joueurs"></ul>
+    <div class="stage" id="stage" aria-live="polite"></div>
+    <div class="clues" id="clues" hidden></div>
+  </section>
+
+  <div id="toast" role="alert" hidden></div>
+</body>
+</html>

@@ -5,7 +5,7 @@
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
-    "test": "node test.js && node test-pays.mjs && node test-cote.js && node test-p4.js && node test-size.js"
+    "test": "node test.js && node test-pays.mjs && node test-cote.js && node test-p4.js && node test-size.js && node test-imposteur.js"
   },
   "engines": {
     "node": ">=18"

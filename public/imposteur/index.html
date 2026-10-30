@@ -1,0 +1,149 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>L’Imposteur</title>
+  <link rel="icon" href="favicon.svg" type="image/svg+xml">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700;900&family=Inter:wght@400;600;800;900&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+  <script src="/socket.io/socket.io.js"></script>
+  <script type="module" src="client.js"></script>
+</head>
+<body>
+  <!-- Étape 1 : le pseudo -->
+  <section id="name" class="screen">
+    <a class="back" href="../">← Le Cercle</a>
+    <header class="hero">
+      <img src="favicon.svg" alt="" class="logo">
+      <h1>L’Imposteur</h1>
+      <p class="tagline">Civils · Imposteurs · Mr. White</p>
+    </header>
+    <form class="card narrow" id="nameForm">
+      <h2>Choisis ton pseudo</h2>
+      <input name="pseudo" maxlength="20" required autocomplete="nickname" aria-label="Pseudo" placeholder="Ton pseudo">
+      <button class="gold">Continuer</button>
+    </form>
+    <a class="card narrow solo-link" href="solo.html"><b>📱 Un seul appareil</b><span>Mode soirée : on se passe le téléphone, les indices se disent à voix haute. Pas besoin de pseudo.</span></a>
+  </section>
+
+  <!-- Étape 2 : page principale -->
+  <section id="home" class="screen wide" hidden>
+    <a class="back" href="../">← Le Cercle</a>
+    <header class="hero compact">
+      <img src="favicon.svg" alt="" class="logo">
+      <h1>L’Imposteur</h1>
+    </header>
+    <p class="whoami">Connecté en tant que <b id="meName"></b> · <a href="#" id="changeName">changer de pseudo</a></p>
+    <div class="home-grid">
+      <form class="card" id="createForm">
+        <h2>Créer un salon</h2>
+        <div class="privacy" role="radiogroup" aria-label="Visibilité du salon">
+          <label><input type="radio" name="vis" value="public" checked><span><b>🌍 Public</b><small>Visible dans la liste : tout le monde peut entrer ou regarder.</small></span></label>
+          <label><input type="radio" name="vis" value="private"><span><b>🔒 Privé</b><small>Caché de la liste : on n’entre qu’avec le code.</small></span></label>
+        </div>
+        <button class="gold">Créer le salon</button>
+      </form>
+      <form class="card" id="joinForm">
+        <h2>Entrer avec un code</h2>
+        <p class="hint">Pour un salon privé, ou si un ami t’a donné son code.</p>
+        <input name="code" maxlength="5" required autocomplete="off" class="code-input" placeholder="ABCDE" aria-label="Code du salon">
+        <div class="row">
+          <button class="gold" name="mode" value="play">Jouer</button>
+          <button class="ghost" name="mode" value="watch">👁 Regarder</button>
+        </div>
+      </form>
+    </div>
+    <a class="card solo-link" href="solo.html"><b>📱 Jouer sur un seul appareil</b><span>Mode soirée : un téléphone pour tout le groupe, qu’on se passe pour voir sa carte et voter.</span></a>
+    <div class="card games">
+      <h2>Salons en cours</h2>
+      <p class="hint">Les salons publics : rejoins une table ou regarde une partie.</p>
+      <ul id="rooms"></ul>
+    </div>
+    <details class="card rules-card">
+      <summary>Les règles en 1 minute</summary>
+      <ol class="rules">
+        <li>Chacun reçoit une carte secrète avec un mot. Les <b>civils</b> ont tous le même. Les <b>imposteurs</b> ont un mot très proche (Chat / Chien)… mais <b>personne ne sait dans quel camp il est</b> ! Seul <b>Mr. White</b> le sait : sa carte est vide.</li>
+        <li>Chacun son tour, chaque joueur donne <b>un indice court</b> sur son mot, sans jamais le dire. Mr. White improvise à partir des indices des autres.</li>
+        <li>On discute dans le chat, puis on <b>vote en secret</b> pour éliminer un suspect. En cas d’égalité, on revote entre les ex æquo.</li>
+        <li>Le rôle de l’éliminé est révélé. Si c’est <b>Mr. White</b>, il a une dernière chance : s’il devine le mot des civils, il gagne !</li>
+        <li>Les <b>civils</b> gagnent s’ils éliminent tous les intrus. Les <b>imposteurs</b> gagnent s’ils sont aussi nombreux que les civils.</li>
+      </ol>
+    </details>
+  </section>
+
+  <!-- Salon : joueurs et réglages -->
+  <section id="wait" class="screen wide" hidden>
+    <button class="back" data-leave>← Quitter le salon</button>
+    <div class="lobby">
+      <div class="card side-col">
+        <h2>Salon</h2>
+        <p class="privacy-tag" id="waitPrivacy"></p>
+        <div class="code" id="waitCode"></div>
+        <button class="ghost" id="copyLink">🔗 Copier le lien d’invitation</button>
+        <p class="notice" id="notice" hidden></p>
+        <ul class="players" id="waitPlayers"></ul>
+        <p class="hint" id="waitWatchers" hidden></p>
+        <button class="gold" id="startBtn"></button>
+      </div>
+      <form class="card settings" id="settings">
+        <h2>Réglages</h2>
+        <p class="hint" id="settingsWho"></p>
+        <div class="grid4">
+          <label>Manches<select name="rounds"></select></label>
+          <label>Imposteurs<select name="impostors"></select></label>
+          <label>Mr. White<select name="whites"></select></label>
+          <label>Discussion<select name="discussion"></select></label>
+        </div>
+        <p class="split" id="split"></p>
+        <div class="cats-head">
+          <h3>Catégories de mots</h3>
+          <div class="host-only">
+            <button type="button" class="ghost small" id="allCats">Toutes</button>
+            <button type="button" class="ghost small" id="noCats">Aucune</button>
+          </div>
+        </div>
+        <div class="chips" id="cats"></div>
+      </form>
+    </div>
+  </section>
+
+  <!-- Partie -->
+  <section id="game" class="screen wide" hidden>
+    <div class="topbar">
+      <button class="back" data-leave>← Quitter</button>
+      <p class="brand"><span id="roundNo"></span><span id="tourNo"></span></p>
+      <button class="ghost small" id="peekBtn" hidden>🃏 Ma carte</button>
+    </div>
+    <p class="watching" id="watchBadge" hidden></p>
+    <header class="phase">
+      <h2 id="phaseTitle"></h2>
+      <p id="phaseHint"></p>
+      <div class="timer" id="timer" hidden><i></i><b></b></div>
+    </header>
+    <ul class="table" id="table" aria-label="Joueurs"></ul>
+    <div class="stage" id="stage" aria-live="polite"></div>
+    <div class="clues" id="clues"></div>
+  </section>
+
+  <!-- Ma carte, consultable à tout moment -->
+  <div class="peek" id="peek" hidden>
+    <div class="peek-in" id="peekCard"></div>
+    <button class="ghost" id="peekClose">Cacher ma carte</button>
+  </div>
+
+  <!-- Chat du salon, à droite (en dessous sur mobile) -->
+  <aside id="chat" aria-label="Chat du salon">
+    <h2>Chat <small id="chatWho"></small></h2>
+    <div id="chatMsgs" aria-live="polite"></div>
+    <form id="chatForm">
+      <input name="msg" maxlength="200" placeholder="Écris un message…" aria-label="Message" autocomplete="off">
+      <button class="gold">Envoyer</button>
+    </form>
+  </aside>
+
+  <div id="toast" role="alert" hidden></div>
+</body>
+</html>
