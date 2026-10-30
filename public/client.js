@@ -18,11 +18,12 @@ $('#nameForm').onsubmit = e => {
   socket.emit('hello', me);
   $('#nameForm').hidden = true;
   $('#nameHint').textContent = `Connecté en tant que ${me}.`;
+  $('#lobbyName').placeholder = `${me}'s lobby`.slice(0, 30);
   $('#lobbyPane').hidden = false;
 };
 $('#createForm').onsubmit = e => {
   e.preventDefault();
-  socket.emit('create', $('#lobbyName').value);
+  socket.emit('create', $('#lobbyName').value.trim() || $('#lobbyName').placeholder);
 };
 $('#lobbies').onclick = e => {
   const id = e.target.closest('button')?.dataset.join;
