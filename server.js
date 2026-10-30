@@ -5,6 +5,8 @@ const { Server } = require('socket.io');
 const { Table, MAX_PLAYERS } = require('./game');
 
 const app = express();
+// Pingée de l'extérieur pour empêcher Render de mettre le serveur en veille.
+app.get('/health', (req, res) => res.send('ok'));
 app.use(express.static(path.join(__dirname, 'public')));
 const server = http.createServer(app);
 const io = new Server(server);
