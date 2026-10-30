@@ -75,9 +75,11 @@ export function createDial(svg, { onChange } = {}) {
 
   let value = 50, interactive = false, spin = null;
 
+  // animate : true (pivot amorti), false (immédiat) ou 'live' (suit en douceur une position reçue en direct)
   function set(v, animate = true) {
     value = clamp(v);
-    needle.classList.toggle('instant', !animate);
+    needle.classList.toggle('instant', animate === false);
+    needle.classList.toggle('live', animate === 'live');
     needle.style.transform = `rotate(${deg(value)}deg)`;
     svg.setAttribute('aria-valuenow', Math.round(value));
   }

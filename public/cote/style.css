@@ -171,6 +171,7 @@ label { display: flex; flex-direction: column; gap: 6px; font-size: .85rem; font
 
 .needle { transform-box: view-box; transform-origin: 220px 222px; transition: transform 1s cubic-bezier(.3, 1.3, .4, 1), opacity .3s; }
 .needle.instant { transition: opacity .3s; }
+.needle.live { transition: transform .12s linear, opacity .3s; }
 .needle.hidden { opacity: 0; }
 .needle path { fill: #0c0c0e; stroke: var(--gold); stroke-width: 2.5; stroke-linejoin: round; filter: drop-shadow(0 3px 4px rgba(0, 0, 0, .6)); }
 .pivot { fill: #0c0c0e; stroke: var(--gold); stroke-width: 3.5; }

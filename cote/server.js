@@ -110,6 +110,13 @@ module.exports = function cote(nsp) {
       update(entry);
     });
 
+    // Aiguille du devineur en direct, retransmise aux seuls spectateurs (le donneur d'indice ne la voit qu'à la révélation).
+    socket.on('aim', value => {
+      const r = entry?.room, v = Number(value);
+      if (!r || r.phase !== 'guess' || r.current.guesser !== me || !(v >= 0 && v <= 100)) return;
+      for (const s of r.spectators) if (s.connected) entry.sockets.get(s.name)?.emit('aim', v);
+    });
+
     socket.on('chat', text => {
       text = clean(text, 200);
       if (!entry || !text || Date.now() - lastChat < 500) return; // anti-spam : 2 messages par seconde

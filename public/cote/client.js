@@ -12,7 +12,20 @@ const loadSession = () => { try { return JSON.parse(localStorage.getItem('cote-s
 const saveSession = s => { try { s ? localStorage.setItem('cote-session', JSON.stringify(s)) : localStorage.removeItem('cote-session'); } catch { /* stockage bloqué */ } };
 const urlCode = new URLSearchParams(location.search).get('salon')?.toUpperCase();
 
-const dial = createDial($('#dial'), { onChange: v => { $('#readout').textContent = Math.round(v); } });
+// Le devineur envoie sa position au plus toutes les 50 ms, pour que les spectateurs voient l'aiguille bouger.
+let aimTimer = null;
+const dial = createDial($('#dial'), {
+  onChange: v => {
+    $('#readout').textContent = Math.round(v);
+    aimTimer ??= setTimeout(() => {
+      aimTimer = null;
+      socket.emit('aim', Math.round(dial.value * 10) / 10);
+    }, 50);
+  },
+});
+socket.on('aim', v => {
+  if (state?.spectator && state.phase === 'guess') dial.set(v, 'live');
+});
 
 function show(id) {
   for (const s of document.querySelectorAll('.screen')) s.hidden = s.id !== id;
@@ -245,8 +258,8 @@ function renderGame(s) {
     if (s.phase === 'clue') dial.set(50, false);
     dial.setTarget(c.target); // visible seulement pour le donneur d'indice (le serveur l'envoie à lui seul)
   }
-  // Le donneur et les spectateurs ne voient l'aiguille qu'à la révélation (elle n'est pas transmise en direct).
-  dial.showNeedle((!giver && !watcher) || s.phase === 'reveal');
+  // Le donneur ne voit l'aiguille qu'à la révélation ; les spectateurs la voient bouger en direct.
+  dial.showNeedle(!giver || s.phase === 'reveal');
   dial.setInteractive(!giver && !watcher && s.phase === 'guess');
   $('#readout').hidden = !(s.phase === 'guess' && !giver && !watcher);
   $('#readout').textContent = Math.round(dial.value);
