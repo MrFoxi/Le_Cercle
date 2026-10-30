@@ -1,4 +1,4 @@
-// Le demi-cercle : cadran BON (0) → MAUVAIS (100), graduations, aiguille déplaçable (souris, doigt, clavier)
+// Le demi-cercle : cadran MAUVAIS (0) → BON (100), graduations, aiguille déplaçable (souris, doigt, clavier)
 // et roue de révélation qui tourne autour du pivot puis s'arrête sur la position secrète.
 const NS = 'http://www.w3.org/2000/svg';
 const CX = 220, CY = 222, R = 190; // pivot et rayon du cadran, en unités du viewBox
@@ -26,8 +26,8 @@ export function createDial(svg, { onChange } = {}) {
   svg.setAttribute('viewBox', '-16 -34 472 296'); // marges pour les graduations et « NEUTRE »
   svg.innerHTML = `<defs>
     <linearGradient id="dialGrad" x1="${CX - R}" x2="${CX + R}" gradientUnits="userSpaceOnUse">
-      <stop offset="0" stop-color="#fff1c4"/><stop offset=".22" stop-color="#f5d27a"/><stop offset=".5" stop-color="#9a7434"/>
-      <stop offset=".78" stop-color="#2c2620"/><stop offset="1" stop-color="#0c0c0e"/></linearGradient>
+      <stop offset="0" stop-color="#0c0c0e"/><stop offset=".22" stop-color="#2c2620"/><stop offset=".5" stop-color="#9a7434"/>
+      <stop offset=".78" stop-color="#f5d27a"/><stop offset="1" stop-color="#fff1c4"/></linearGradient>
     <clipPath id="dialHalf"><path d="M${CX - R},${CY} A${R},${R} 0 0 1 ${CX + R},${CY} Z"/></clipPath></defs>`;
   el('path', { d: `M${CX - R},${CY} A${R},${R} 0 0 1 ${CX + R},${CY} Z`, class: 'face' }, svg);
 
@@ -51,17 +51,17 @@ export function createDial(svg, { onChange } = {}) {
 
   const ticks = el('g', { class: 'ticks' }, svg);
   for (let v = 0; v <= 100; v += 2) {
-    const big = v % 10 === 0, [x1, y1] = pt(v, R + 4), [x2, y2] = pt(v, R + (big ? 16 : 10));
+    const big = v % 10 === 0, [x1, y1] = pt(v, R + 4), [x2, y2] = pt(v, R + (big ? 11 : 7));
     el('line', { x1, y1, x2, y2, class: big ? 'big' : '' }, ticks);
     if (big) {
-      const [tx, ty] = pt(v, R + 28);
-      el('text', { x: tx, y: ty + 4 }, ticks).textContent = v;
+      const [tx, ty] = pt(v, R + 20);
+      el('text', { x: tx, y: ty + 3 }, ticks).textContent = v;
     }
   }
   el('path', { d: `M${CX - R},${CY} A${R},${R} 0 0 1 ${CX + R},${CY}`, class: 'rim' }, svg);
-  el('text', { x: CX - R + 30, y: CY + 32, class: 'side good' }, svg).textContent = 'BON';
-  el('text', { x: CX, y: CY - R - 46, class: 'side neutral' }, svg).textContent = 'NEUTRE';
-  el('text', { x: CX + R - 30, y: CY + 32, class: 'side bad' }, svg).textContent = 'MAUVAIS';
+  el('text', { x: CX - R + 40, y: CY + 32, class: 'side bad' }, svg).textContent = 'MAUVAIS';
+  el('text', { x: CX, y: CY - R - 34, class: 'side neutral' }, svg).textContent = 'NEUTRE';
+  el('text', { x: CX + R - 30, y: CY + 32, class: 'side good' }, svg).textContent = 'BON';
 
   // Écart entre la réponse et la position secrète, dessiné le long du bord après la révélation.
   const gap = el('g', { class: 'gap hidden' }, svg);
@@ -120,7 +120,7 @@ export function createDial(svg, { onChange } = {}) {
   svg.setAttribute('role', 'slider');
   svg.setAttribute('aria-valuemin', 0);
   svg.setAttribute('aria-valuemax', 100);
-  svg.setAttribute('aria-label', 'Position sur l’échelle, de BON (0) à MAUVAIS (100)');
+  svg.setAttribute('aria-label', 'Position sur l’échelle, de MAUVAIS (0) à BON (100)');
   set(50, false);
 
   return {

@@ -2,7 +2,7 @@
 
 Un seul serveur pour plusieurs projets : la page d'accueil (`/`) mène à chaque jeu.
 
-- `/cote/` : **Le Demi-Cercle**, jeu à deux en temps réel : un sujet, un indice, une aiguille entre BON et MAUVAIS, 68 thèmes au choix, 10 manches.
+- `/cote/` : **Le Demi-Cercle**, jeu à deux en temps réel : un thème, un mot donné par l’adversaire, une aiguille entre MAUVAIS et BON, 68 thèmes au choix, 10 manches.
 - `/pays/` : **Trouve le pays**, quiz de géographie sur une carte du monde (jeu solo, tout se passe dans le navigateur).
 - `/7-5/` : **Le Cercle du 7,5**, jeu de cartes « 7,5 » en temps réel dans le navigateur (Node.js, Express, Socket.io).
 Le serveur fait autorité : paquet, tirages, défis et paiements sont calculés côté serveur, et les cartes cachées ne sont jamais envoyées aux autres joueurs.
@@ -36,7 +36,7 @@ Tout est en mémoire : un redémarrage du service efface les lobbys et les jeton
 - `test.js` : tests lancés par `npm test`.
 - `public/index.html` : page d'accueil qui liste les projets.
 - `public/7-5/` : client du 7,5 (HTML/CSS/JS).
-- `cote/` : serveur du Demi-Cercle : `game.js` (règles, barème, rôles, thèmes, position secrète filtrée), `subjects.js` (68 thèmes en 5 catégories, 15 sujets chacun : ajouter un sujet = l’ajouter à la liste de son thème), `server.js` (salons à code, reconnexion par jeton, canal Socket.io `/cote`).
+- `cote/` : serveur du Demi-Cercle : `game.js` (règles, barème, rôles, thèmes, position secrète filtrée), `themes.js` (68 thèmes en 5 catégories : en ajouter un = l’ajouter à la liste de sa catégorie), `server.js` (salons à code, reconnexion par jeton, canal Socket.io `/cote`).
 - `public/cote/` : client du Demi-Cercle (`dial.js` : le demi-cercle interactif et la roue de révélation, `client.js` : écrans et thèmes).
 - `test-cote.js` : tests du Demi-Cercle (lancés aussi par `npm test`).
 - `public/pays/` : quiz « Trouve le pays » :

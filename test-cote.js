@@ -6,15 +6,10 @@ for (const [diff, pts] of [[0, 5], [5, 5], [6, 4], [10, 4], [11, 3], [20, 3], [2
   assert.strictEqual(pointsFor(diff), pts, `écart ${diff}`);
 }
 
-// Thèmes : 68 thèmes en 5 catégories, chacun avec assez de sujets distincts pour 10 manches
+// Thèmes : 68 thèmes en 5 catégories, identifiants uniques
 assert.strictEqual(THEMES.length, 68);
 assert.strictEqual(new Set(THEMES.map(t => t.category)).size, 5);
 assert.strictEqual(new Set(THEMES.map(t => t.id)).size, 68);
-for (const t of THEMES) {
-  assert.ok(t.subjects.length >= ROUNDS, `${t.name} : ${t.subjects.length} sujets`);
-  assert.strictEqual(new Set(t.subjects).size, t.subjects.length, `doublon dans ${t.name}`);
-  assert.ok(t.subjects.every(x => x.trim() === x && x), `sujet vide dans ${t.name}`);
-}
 
 const room = () => {
   const r = new Room('ABCDE');
@@ -41,12 +36,14 @@ const room = () => {
   const r = room();
   r.start('Ana');
   const seen = new Set(), scores = { Ana: 0, Ben: 0 };
+  const themes = new Set(THEMES.map(t => t.name));
   for (let i = 1; i <= ROUNDS; i++) {
     const c = r.current;
     assert.strictEqual(r.round, i);
     assert.strictEqual(c.giver, i % 2 ? 'Ana' : 'Ben');
-    assert.ok(!seen.has(c.subject));
-    seen.add(c.subject);
+    assert.ok(themes.has(c.theme) && !('subject' in c)); // seulement un thème, pas de sujet imposé
+    assert.ok(!seen.has(c.theme)); // tous les thèmes sont choisis : pas de répétition sur 10 manches
+    seen.add(c.theme);
     // Seul le donneur d'indice voit la position secrète
     assert.strictEqual(r.viewFor(c.giver).current.target, c.target);
     assert.strictEqual(r.viewFor(c.guesser).current.target, null);
@@ -86,14 +83,16 @@ const room = () => {
   assert.deepStrictEqual(r.viewFor('Ben').themes, ['films', 'debats-absurdes']);
   r.start('Ana');
   assert.throws(() => r.setThemes('Ana', ['films']), /pleine partie/);
-  const allowed = new Set(THEMES.filter(t => ['films', 'debats-absurdes'].includes(t.id)).flatMap(t => t.subjects));
+  const count = { Films: 0, 'Débats absurdes': 0 };
   for (let i = 1; i <= ROUNDS; i++) {
     const c = r.current;
-    assert.ok(allowed.has(c.subject) && ['Films', 'Débats absurdes'].includes(c.theme), c.subject);
+    assert.ok(c.theme in count, c.theme);
+    count[c.theme]++;
     r.giveClue(c.giver, i, 'x');
     r.guess(c.guesser, i, 50);
     r.next(i);
   }
+  assert.deepStrictEqual(count, { Films: 5, 'Débats absurdes': 5 }); // les thèmes choisis tournent à égalité
   r.toLobby();
   assert.throws(() => r.toLobby(), /déjà/);
   assert.strictEqual(r.phase, 'lobby');
@@ -125,6 +124,24 @@ const room = () => {
   assert.throws(() => r.guess('Ben', 1, 'abc'), /invalide/);
   r.removePlayer('Ben');
   assert.deepStrictEqual([r.phase, r.host, r.notice], ['lobby', 'Ana', 'Ben a quitté la partie']);
+}
+
+// Spectateurs : pseudo unique, ne voient jamais la position secrète avant la révélation
+{
+  const r = room();
+  assert.throws(() => r.addSpectator('Ana'), /déjà pris/);
+  r.addSpectator('Zoé');
+  assert.throws(() => r.addPlayer('Zoé'), /déjà pris/);
+  r.start('Ana');
+  const v = () => r.viewFor('Zoé');
+  assert.deepStrictEqual([v().spectator, v().spectators], [true, ['Zoé']]);
+  assert.strictEqual(v().current.target, null);
+  r.giveClue('Ana', 1, 'mot');
+  assert.strictEqual(v().current.target, null);
+  r.guess('Ben', 1, 50);
+  assert.strictEqual(v().current.target, r.current.target); // révélé à la fin de la manche
+  r.removeSpectator('Zoé');
+  assert.deepStrictEqual([r.spectators.length, r.phase], [0, 'reveal']); // un spectateur qui part n'arrête pas la partie
 }
 
 console.log('Tests du Demi-Cercle : OK');

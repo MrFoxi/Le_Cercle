@@ -38,49 +38,73 @@ function act(button, ...args) {
   });
 }
 
-/* ---------- Avant d'entrer dans un salon ---------- */
-for (const f of ['#createForm', '#joinForm']) $(f).pseudo.value = localStorage.getItem('cote-pseudo') || '';
-document.addEventListener('click', e => {
-  const go = e.target.closest('[data-go]')?.dataset.go;
-  if (go) {
-    e.preventDefault();
-    show(go);
-    $(`#${go} input`)?.focus();
-  }
-  if (e.target.closest('[data-leave]')) {
-    socket.emit('leave');
-    saveSession(null);
-    state = null;
-    history.replaceState(null, '', location.pathname);
-    show('home');
-  }
+/* ---------- Avant d'entrer dans un salon : pseudo, puis page principale ---------- */
+let pseudo = (() => { try { return localStorage.getItem('cote-pseudo') || ''; } catch { return ''; } })();
+
+// Sans pseudo, on commence par le choisir ; ensuite, page principale (lobbys, création, code).
+function entry() {
+  $('#meName').textContent = pseudo;
+  $('#nameForm').pseudo.value = pseudo;
+  show(pseudo ? 'home' : 'name');
+}
+$('#nameForm').onsubmit = e => {
+  e.preventDefault();
+  pseudo = e.target.pseudo.value.trim().slice(0, 20);
+  if (!pseudo) return;
+  try { localStorage.setItem('cote-pseudo', pseudo); } catch { /* stockage bloqué */ }
+  entry();
+};
+$('#changeName').onclick = e => {
+  e.preventDefault();
+  show('name');
+  $('#nameForm').pseudo.focus();
+};
+
+// Retour à la page principale, hors de tout salon.
+function reset() {
+  saveSession(null);
+  state = null;
+  document.body.classList.remove('in-room');
+  history.replaceState(null, '', location.pathname);
+  entry();
+}
+socket.on('closed', msg => {
+  toast(msg);
+  reset();
 });
 
-function enter(event, payload, form) {
-  const button = form.querySelector('button');
-  button.disabled = true;
-  try { localStorage.setItem('cote-pseudo', form.pseudo.value.trim()); } catch { /* stockage bloqué */ }
+function enter(event, payload, button) {
+  if (button) button.disabled = true;
   socket.emit(event, payload, res => {
-    button.disabled = false;
+    if (button) button.disabled = false;
     if (res?.error) toast(res.error);
   });
 }
 $('#createForm').onsubmit = e => {
   e.preventDefault();
-  enter('create', e.target.pseudo.value, e.target);
+  enter('create', { name: pseudo, private: e.target.vis.value === 'private' }, e.submitter);
 };
 $('#joinForm').onsubmit = e => {
   e.preventDefault();
-  enter('join', { code: e.target.code.value, name: e.target.pseudo.value }, e.target);
+  enter('join', { code: e.target.code.value, name: pseudo, watch: e.submitter?.value === 'watch' }, e.submitter);
 };
 $('#joinForm').code.oninput = e => (e.target.value = e.target.value.toUpperCase());
+document.addEventListener('click', e => {
+  if (e.target.closest('[data-leave]')) {
+    socket.emit('leave');
+    reset();
+  }
+  const b = e.target.closest('[data-room]');
+  if (b) enter('join', { code: b.dataset.room, name: pseudo, watch: b.dataset.mode === 'watch' }, b);
+});
 
 socket.on('session', s => {
   saveSession(s);
   history.replaceState(null, '', `?salon=${s.code}`);
 });
 
-// À chaque (re)connexion, on reprend sa place si on était dans ce salon.
+// À chaque (re)connexion, on reprend sa place si on était dans ce salon ; un lien d'invitation préremplit le code.
+entry();
 socket.on('connect', () => {
   const s = loadSession();
   if (s && (!urlCode || urlCode === s.code)) {
@@ -88,12 +112,24 @@ socket.on('connect', () => {
       if (!res?.error) return;
       saveSession(null);
       toast(res.error);
-      show(urlCode ? 'join' : 'home');
+      entry();
     });
   } else if (urlCode) {
     $('#joinForm').code.value = urlCode;
-    show('join');
   }
+});
+
+// Lobbys publics visibles depuis la page principale (les privés n'y figurent pas).
+socket.on('rooms', list => {
+  const status = r => r.phase === 'lobby' ? (r.players.length < 2 ? 'Attend un adversaire' : 'Dans le lobby')
+    : r.phase === 'over' ? 'Partie terminée' : `Manche ${r.round} / 10`;
+  $('#rooms').innerHTML = list.length ? list.map(r => {
+    const open = r.phase === 'lobby' && r.players.length < 2;
+    return `<li>
+      <div><b>${r.players.map(esc).join(' <span>vs</span> ')}</b><small>${status(r)}${r.spectators ? ` · 👁 ${r.spectators}` : ''}</small></div>
+      ${open ? `<button class="gold small" data-room="${r.code}" data-mode="play">Rejoindre</button>` : ''}
+      <button class="ghost small" data-room="${r.code}" data-mode="watch">👁 Regarder</button></li>`;
+  }).join('') : '<li class="empty">Aucun lobby public pour l’instant. Crée le tien !</li>';
 });
 
 /* ---------- Thèmes ---------- */
@@ -121,9 +157,8 @@ $('#noThemes').onclick = () => send([]);
 
 function renderThemes(s) {
   const host = s.me === s.host, chosen = new Set(s.themes);
-  const subjects = catalog.filter(t => chosen.has(t.id)).reduce((n, t) => n + t.count, 0);
   $('#themeCount').textContent = chosen.size
-    ? `${chosen.size} thème${chosen.size > 1 ? 's' : ''} sélectionné${chosen.size > 1 ? 's' : ''} · ${subjects} sujets possibles`
+    ? `${chosen.size} thème${chosen.size > 1 ? 's' : ''} sélectionné${chosen.size > 1 ? 's' : ''} sur ${catalog.length}`
     : 'Aucun thème sélectionné';
   document.querySelector('.themes-card').classList.toggle('readonly', !host);
   for (const fs of document.querySelectorAll('#themeList fieldset')) {
@@ -147,6 +182,8 @@ function renderThemes(s) {
 /* ---------- Dans un salon ---------- */
 socket.on('state', s => {
   state = s;
+  document.body.classList.add('in-room');
+  renderChat(s);
   if (s.phase === 'lobby') renderWait(s);
   else if (s.phase === 'over') renderResults(s);
   else renderGame(s);
@@ -166,6 +203,7 @@ function renderWait(s) {
   show('wait');
   shown = '';
   $('#waitCode').textContent = s.code;
+  $('#waitPrivacy').textContent = s.private ? '🔒 Lobby privé : partage le code pour inviter' : '🌍 Lobby public : visible dans la liste';
   $('#notice').hidden = !s.notice;
   $('#notice').textContent = s.notice ?? '';
   const slots = [...s.players, null].slice(0, 2);
@@ -173,7 +211,10 @@ function renderWait(s) {
     ? `<li>${dot(p)}<b>${esc(p.name)}</b>${p.name === s.host ? '<small>créateur</small>' : ''}${p.name === s.me ? '<small>toi</small>' : ''}<span>${p.connected ? 'connecté' : 'déconnecté'}</span></li>`
     : '<li class="empty"><span class="dot wait"></span>En attente d’un adversaire…</li>').join('');
   const ready = s.players.length === 2 && s.players.every(p => p.connected);
+  $('#waitWatchers').hidden = !s.spectators.length;
+  $('#waitWatchers').textContent = `👁 Spectateurs : ${s.spectators.join(', ')}`;
   const b = $('#startBtn');
+  b.hidden = s.spectator;
   b.disabled = !(ready && s.me === s.host && s.themes.length);
   b.textContent = s.me !== s.host ? `${s.host} va lancer la partie…` : !ready ? 'En attente du 2ᵉ joueur…' : !s.themes.length ? 'Choisis au moins un thème' : 'Commencer la partie';
   renderThemes(s);
@@ -181,7 +222,8 @@ function renderWait(s) {
 
 function renderGame(s) {
   show('game');
-  const c = s.current, giver = c.giver === s.me, key = `${s.round}-${s.phase}`;
+  const c = s.current, giver = c.giver === s.me, watcher = s.spectator, key = `${s.round}-${s.phase}`;
+  $('#watchBadge').hidden = !watcher;
   const fresh = key !== shown; // on entre dans une nouvelle étape (et pas une simple mise à jour)
   shown = key;
 
@@ -192,7 +234,6 @@ function renderGame(s) {
   });
   $('#roundNo').textContent = `${s.round} / ${s.rounds}`;
   $('#theme').textContent = c.theme;
-  $('#subject').textContent = c.subject;
   $('#clue').hidden = !c.clue;
   $('#clue').textContent = c.clue ?? '';
 
@@ -204,18 +245,19 @@ function renderGame(s) {
     if (s.phase === 'clue') dial.set(50, false);
     dial.setTarget(c.target); // visible seulement pour le donneur d'indice (le serveur l'envoie à lui seul)
   }
-  dial.showNeedle(!giver || s.phase === 'reveal');
-  dial.setInteractive(!giver && s.phase === 'guess');
-  $('#readout').hidden = !(s.phase === 'guess' && !giver);
+  // Le donneur et les spectateurs ne voient l'aiguille qu'à la révélation (elle n'est pas transmise en direct).
+  dial.showNeedle((!giver && !watcher) || s.phase === 'reveal');
+  dial.setInteractive(!giver && !watcher && s.phase === 'guess');
+  $('#readout').hidden = !(s.phase === 'guess' && !giver && !watcher);
   $('#readout').textContent = Math.round(dial.value);
 
   if (s.phase === 'clue') {
     if (giver) {
-      $('#status').innerHTML = `Ta position secrète : <b>${c.target}</b>. Écris un indice pour la faire deviner.`;
+      $('#status').innerHTML = `Ta position secrète : <b>${c.target}</b>. Donne un mot du thème qui correspond à cette position.`;
       if (fresh) {
         panel.innerHTML = `<form id="clueForm" class="clue-form">
-          <textarea name="clue" maxlength="${s.maxClue}" rows="2" required placeholder="Ton indice, sans donner de chiffre…"></textarea>
-          <div><small id="count">0 / ${s.maxClue}</small><button class="gold">Envoyer l’indice</button></div></form>`;
+          <input name="clue" maxlength="${s.maxClue}" required autocomplete="off" placeholder="Un mot ou un nom en rapport avec « ${esc(c.theme)} »">
+          <div><small id="count">0 / ${s.maxClue}</small><button class="gold">Envoyer le mot</button></div></form>`;
         const f = $('#clueForm');
         f.clue.oninput = () => ($('#count').textContent = `${f.clue.value.length} / ${s.maxClue}`);
         f.onsubmit = e => {
@@ -225,15 +267,15 @@ function renderGame(s) {
         f.clue.focus();
       }
     } else {
-      $('#status').innerHTML = `<span class="typing">${esc(c.giver)} écrit son indice</span>${esc(away)}`;
+      $('#status').innerHTML = `<span class="typing">${esc(c.giver)} cherche un mot</span>${esc(away)}`;
       panel.innerHTML = '';
     }
   } else if (s.phase === 'guess') {
-    if (giver) {
+    if (giver || watcher) {
       $('#status').innerHTML = `<span class="typing">${esc(c.guesser)} place l’aiguille</span>${esc(away)}`;
       panel.innerHTML = '';
     } else {
-      $('#status').textContent = 'Fais glisser l’aiguille selon l’indice, puis valide.';
+      $('#status').textContent = `Où ${c.giver} classe ce mot, entre MAUVAIS et BON ? Fais glisser l’aiguille, puis valide.`;
       if (fresh) {
         panel.innerHTML = '<button class="gold big" id="guessBtn">Valider ma réponse</button>';
         $('#guessBtn').onclick = e => act(e.target, 'guess', s.round, dial.value);
@@ -255,8 +297,8 @@ function renderGame(s) {
           <div><small>Écart</small><b>${c.diff}</b></div>
           <div class="won"><small>${esc(c.guesser)}</small><b>+${c.points}</b><small>point${c.points > 1 ? 's' : ''}</small></div>
         </div>
-        <button class="gold" id="nextBtn">${last ? 'Voir les résultats' : 'Manche suivante'}</button>`;
-      $('#nextBtn').onclick = e => act(e.target, 'next', s.round);
+        ${watcher ? '<p class="hint">Les joueurs passent à la suite…</p>' : `<button class="gold" id="nextBtn">${last ? 'Voir les résultats' : 'Manche suivante'}</button>`}`;
+      if (!watcher) $('#nextBtn').onclick = e => act(e.target, 'next', s.round);
     });
   }
 }
@@ -270,12 +312,32 @@ function renderResults(s) {
     `<div class="${p.name === s.winner ? 'win' : ''}"><span>${esc(p.name)}</span><b>${p.score}</b></div>`).join('<span class="vs">–</span>');
   const best = [...s.history].sort((x, y) => x.diff - y.diff || x.round - y.round).slice(0, 3);
   $('#best').innerHTML = best.map((h, i) => `<li><span class="medal">${['🥇', '🥈', '🥉'][i]}</span>
-    <div><b>${esc(h.subject)}</b><small>« ${esc(h.clue)} » — ${esc(h.giver)} → ${esc(h.guesser)}</small></div>
+    <div><b>${esc(h.theme)} : « ${esc(h.clue)} »</b><small>${esc(h.giver)} → ${esc(h.guesser)}</small></div>
     <span class="gap">écart ${h.diff} · +${h.points}</span></li>`).join('');
   $('#summary').innerHTML = s.history.map(h => `<tr>
-    <td>${h.round}</td><td>${esc(h.subject)}<small>${esc(h.theme)}</small></td><td class="q">« ${esc(h.clue)} »<small>${esc(h.giver)} → ${esc(h.guesser)}</small></td>
+    <td>${h.round}</td><td>${esc(h.theme)}</td><td class="q">« ${esc(h.clue)} »<small>${esc(h.giver)} → ${esc(h.guesser)}</small></td>
     <td>${h.target}</td><td>${h.guess}</td><td>${h.diff}</td><td class="pts pts${h.points}">+${h.points}</td></tr>`).join('');
   const ready = s.players.length === 2 && s.players.every(p => p.connected);
   $('#again').disabled = !ready;
   $('#toLobby').disabled = false;
+  $('#again').hidden = $('#toLobby').hidden = s.spectator;
 }
+
+/* ---------- Chat ---------- */
+let chatSeen = 0;
+function renderChat(s) {
+  $('#chatWho').textContent = s.spectator ? '· tu es spectateur' : '';
+  const last = s.chat.at(-1)?.id || 0;
+  if (last === chatSeen && $('#chatMsgs').childElementCount) return;
+  chatSeen = last;
+  const box = $('#chatMsgs'), atBottom = box.scrollHeight - box.scrollTop - box.clientHeight < 40;
+  box.innerHTML = s.chat.length ? s.chat.map(m => `<div class="msg${m.name === s.me ? ' mine' : ''}">
+      <b>${m.spectator ? '👁 ' : ''}${esc(m.name)}</b><span>${esc(m.text)}</span></div>`).join('')
+    : '<p class="empty">Aucun message. Dis bonjour !</p>';
+  if (atBottom) box.scrollTop = box.scrollHeight;
+}
+$('#chatForm').onsubmit = e => {
+  e.preventDefault();
+  socket.emit('chat', e.target.msg.value);
+  e.target.msg.value = '';
+};

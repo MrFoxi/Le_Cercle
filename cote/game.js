@@ -1,8 +1,8 @@
 // Règles du Demi-Cercle (échelle de BON à MAUVAIS) pour un salon de 2 joueurs. Aucune notion de réseau : testé par test-cote.js.
-const { THEMES } = require('./subjects');
+const { THEMES } = require('./themes');
 const THEME_IDS = new Set(THEMES.map(t => t.id));
 
-const ROUNDS = 10, MAX_CLUE = 140;
+const ROUNDS = 10, MAX_CLUE = 60; // l'indice est un mot ou un nom en rapport avec le thème
 
 // Barème : plus la réponse est proche de la position secrète, plus elle rapporte.
 function pointsFor(diff) {
@@ -24,23 +24,36 @@ function shuffle(list, rng) {
 }
 
 class Room {
-  constructor(code, rng = Math.random) {
+  constructor(code, rng = Math.random, isPrivate = false) {
     this.code = code;
+    this.private = isPrivate; // privé : absent de la liste publique, on n'entre qu'avec le code
     this.rng = rng;
     this.players = []; // [{ name, score, connected }] ; le premier est le créateur du salon
     this.phase = 'lobby'; // lobby | clue | guess | reveal | over
     this.round = 0;
-    this.current = null; // { subject, category, target, clue, guess, diff, points, giver, guesser }
+    this.current = null; // { theme, target, clue, guess, diff, points, giver, guesser }
     this.history = [];
     this.notice = null; // dernier événement à afficher (départ d'un joueur…)
+    this.spectators = []; // [{ name, connected }] : regardent la partie sans jouer
     this.themes = [...THEME_IDS]; // thèmes choisis par le créateur ; tous par défaut
   }
 
   get host() { return this.players[0]?.name; }
   get(name) { return this.players.find(p => p.name === name); }
 
+  taken(name) { return !!this.get(name) || this.spectators.some(s => s.name === name); }
+  spectator(name) { return this.spectators.find(s => s.name === name); }
+
+  addSpectator(name) {
+    if (this.taken(name)) throw new Error('Ce pseudo est déjà pris dans ce salon');
+    if (this.spectators.length >= 30) throw new Error('Trop de spectateurs dans ce salon');
+    this.spectators.push({ name, connected: true });
+  }
+
+  removeSpectator(name) { this.spectators = this.spectators.filter(s => s.name !== name); }
+
   addPlayer(name) {
-    if (this.get(name)) throw new Error('Ce pseudo est déjà pris dans ce salon');
+    if (this.taken(name)) throw new Error('Ce pseudo est déjà pris dans ce salon');
     if (this.players.length >= 2) throw new Error('Ce salon est déjà complet');
     this.players.push({ name, score: 0, connected: true });
   }
@@ -74,8 +87,7 @@ class Room {
     if (this.phase === 'lobby' && name !== this.host) throw new Error('Seul le créateur du salon peut lancer la partie');
     if (!this.themes.length) throw new Error('Choisis au moins un thème');
     for (const p of this.players) p.score = 0;
-    const subjects = THEMES.filter(t => this.themes.includes(t.id)).flatMap(t => t.subjects.map(text => ({ text, theme: t.name })));
-    this.deck = shuffle(subjects, this.rng); // pas de sujet en double dans une partie
+    this.deck = [];
     this.round = 0;
     this.history = [];
     this.notice = null;
@@ -91,8 +103,10 @@ class Room {
     this.round++;
     // Les rôles s'inversent à chaque manche : le créateur donne l'indice aux manches impaires.
     const giver = this.players[(this.round - 1) % 2].name, guesser = this.players[this.round % 2].name;
-    const { text, theme } = this.deck.pop();
-    this.current = { subject: text, theme, target: Math.floor(this.rng() * 101), clue: null, guess: null, diff: null, points: null, giver, guesser };
+    // Thèmes tirés au hasard parmi ceux choisis : chacun sort une fois avant qu'un thème revienne.
+    if (!this.deck.length) this.deck = shuffle(THEMES.filter(t => this.themes.includes(t.id)).map(t => t.name), this.rng);
+    const theme = this.deck.pop();
+    this.current = { theme, target: Math.floor(this.rng() * 101), clue: null, guess: null, diff: null, points: null, giver, guesser };
     this.phase = 'clue';
   }
 
@@ -140,7 +154,9 @@ class Room {
       history: this.history,
       winner: this.phase !== 'over' ? null : a.score === b.score ? null : (a.score > b.score ? a : b).name,
       themes: this.themes,
-      maxClue: MAX_CLUE,
+      maxClue: MAX_CLUE, private: this.private,
+      spectator: !!this.spectator(name), // les spectateurs voient comme le devineur : jamais le secret avant la révélation
+      spectators: this.spectators.filter(s => s.connected).map(s => s.name),
     };
   }
 }

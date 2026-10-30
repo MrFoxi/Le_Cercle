@@ -13,49 +13,62 @@
   <script type="module" src="client.js"></script>
 </head>
 <body>
-  <!-- Accueil -->
-  <section id="home" class="screen">
+  <!-- Étape 1 : le pseudo -->
+  <section id="name" class="screen">
     <a class="back" href="../">← Le Cercle</a>
     <header class="hero">
       <img src="favicon.svg" alt="" class="logo">
       <h1>Le Demi-Cercle</h1>
-      <p class="tagline">Bon · Neutre · Mauvais — un jeu d’indices à deux</p>
+      <p class="tagline">Mauvais · Neutre · Bon — un jeu d’indices à deux</p>
     </header>
-    <div class="card">
-      <div class="row">
-        <button class="gold" data-go="create">Jouer</button>
-        <button class="ghost" data-go="join">Rejoindre une partie</button>
-      </div>
-      <h2>En 30 secondes</h2>
+    <form class="card narrow" id="nameForm">
+      <h2>Choisis ton pseudo</h2>
+      <input name="pseudo" maxlength="20" required autocomplete="nickname" aria-label="Pseudo" placeholder="Ton pseudo">
+      <button class="gold">Continuer</button>
+    </form>
+  </section>
+
+  <!-- Étape 2 : page principale -->
+  <section id="home" class="screen wide" hidden>
+    <a class="back" href="../">← Le Cercle</a>
+    <header class="hero compact">
+      <img src="favicon.svg" alt="" class="logo">
+      <h1>Le Demi-Cercle</h1>
+    </header>
+    <p class="me">Connecté en tant que <b id="meName"></b> · <a href="#" id="changeName">changer de pseudo</a></p>
+    <div class="home-grid">
+      <form class="card" id="createForm">
+        <h2>Créer un lobby</h2>
+        <div class="privacy" role="radiogroup" aria-label="Visibilité du lobby">
+          <label><input type="radio" name="vis" value="public" checked><span><b>🌍 Public</b><small>Visible dans la liste : tout le monde peut entrer ou regarder.</small></span></label>
+          <label><input type="radio" name="vis" value="private"><span><b>🔒 Privé</b><small>Caché de la liste : on n’entre qu’avec le code.</small></span></label>
+        </div>
+        <button class="gold">Créer le lobby</button>
+      </form>
+      <form class="card" id="joinForm">
+        <h2>Entrer avec un code</h2>
+        <p class="hint">Pour un lobby privé, ou si on t’a donné un code.</p>
+        <input name="code" maxlength="5" required autocomplete="off" class="code-input" placeholder="ABCDE" aria-label="Code du lobby">
+        <div class="row">
+          <button class="gold" name="mode" value="play">Jouer</button>
+          <button class="ghost" name="mode" value="watch">👁 Regarder</button>
+        </div>
+      </form>
+    </div>
+    <div class="card games">
+      <h2>Lobbys en cours</h2>
+      <p class="hint">Les lobbys publics : rejoins une table qui attend un adversaire, ou regarde une partie.</p>
+      <ul id="rooms"></ul>
+    </div>
+    <details class="card rules-card">
+      <summary>Les règles en 30 secondes</summary>
       <ol class="rules">
-        <li>Le demi-cercle va de <b class="good">BON (0)</b> à <b class="bad">MAUVAIS (100)</b>, en passant par <b>NEUTRE (50)</b>.</li>
-        <li>Un joueur reçoit un <b>sujet</b> (« Minecraft ») et une <b>position secrète</b> (10). Il écrit un <b>indice</b> : « On peut y jouer des centaines d’heures sans se lasser. »</li>
-        <li>L’autre place l’<b>aiguille</b>. La roue tourne et révèle la position : <b>5 points</b> à 5 près, puis 4, 3, 2, 1.</li>
+        <li>Le demi-cercle va de <b class="bad">MAUVAIS (0)</b> à <b class="good">BON (100)</b>, en passant par <b>NEUTRE (50)</b>.</li>
+        <li>Un joueur reçoit un <b>thème</b> (« Films ») et une <b>position secrète</b> sur le demi-cercle (90, donc très bon). Il donne un <b>mot</b> du thème qui correspond à cette position : « Interstellar ».</li>
+        <li>L’autre place l’<b>aiguille</b> là où il pense que son adversaire classe ce mot. La roue tourne et révèle la position : <b>5 points</b> à 5 près, puis 4, 3, 2, 1.</li>
         <li>Les rôles s’inversent à chaque manche. Après <b>10 manches</b>, le meilleur score gagne.</li>
       </ol>
-    </div>
-  </section>
-
-  <!-- Création -->
-  <section id="create" class="screen" hidden>
-    <a class="back" href="#" data-go="home">← Retour</a>
-    <form class="card narrow" id="createForm">
-      <h2>Créer une partie</h2>
-      <label>Ton pseudo <input name="pseudo" maxlength="20" required autocomplete="nickname"></label>
-      <button class="gold">Créer le salon</button>
-      <p class="hint">Ensuite : choix des thèmes et code à envoyer à ton adversaire.</p>
-    </form>
-  </section>
-
-  <!-- Rejoindre -->
-  <section id="join" class="screen" hidden>
-    <a class="back" href="#" data-go="home">← Retour</a>
-    <form class="card narrow" id="joinForm">
-      <h2>Rejoindre une partie</h2>
-      <label>Ton pseudo <input name="pseudo" maxlength="20" required autocomplete="nickname"></label>
-      <label>Code du salon <input name="code" maxlength="5" required autocomplete="off" class="code-input" placeholder="ABCDE"></label>
-      <button class="gold">Rejoindre</button>
-    </form>
+    </details>
   </section>
 
   <!-- Lobby : joueurs et thèmes -->
@@ -63,10 +76,12 @@
     <div class="lobby">
       <div class="card side-col">
         <h2>Salon</h2>
+        <p class="privacy-tag" id="waitPrivacy"></p>
         <div class="code" id="waitCode"></div>
         <button class="ghost" id="copyLink">🔗 Copier le lien d’invitation</button>
         <p class="notice" id="notice" hidden></p>
         <ul class="players" id="waitPlayers"></ul>
+        <p class="hint" id="waitWatchers" hidden></p>
         <button class="gold" id="startBtn"></button>
         <button class="ghost" data-leave>Quitter le salon</button>
       </div>
@@ -88,6 +103,7 @@
 
   <!-- Partie -->
   <section id="game" class="screen" hidden>
+    <p class="watching" id="watchBadge" hidden>👁 Tu regardes cette partie en spectateur</p>
     <header class="scoreboard">
       <div class="player" id="p0"></div>
       <div class="round"><small>Manche</small><b id="roundNo"></b></div>
@@ -95,8 +111,8 @@
     </header>
     <main class="table">
       <div class="subject">
-        <small id="theme"></small>
-        <h2 id="subject"></h2>
+        <small>Thème</small>
+        <h2 id="theme"></h2>
       </div>
       <p class="status" id="status" aria-live="polite"></p>
       <blockquote class="clue" id="clue" hidden></blockquote>
@@ -119,7 +135,7 @@
       <h3>Récapitulatif</h3>
       <div class="table-scroll">
         <table>
-          <thead><tr><th>#</th><th>Sujet</th><th>Indice</th><th>Secret</th><th>Réponse</th><th>Écart</th><th>Points</th></tr></thead>
+          <thead><tr><th>#</th><th>Thème</th><th>Mot donné</th><th>Secret</th><th>Réponse</th><th>Écart</th><th>Points</th></tr></thead>
           <tbody id="summary"></tbody>
         </table>
       </div>
@@ -130,6 +146,16 @@
       <button class="ghost leave" data-leave>Quitter</button>
     </div>
   </section>
+
+  <!-- Chat du salon, à droite (en dessous sur mobile) -->
+  <aside id="chat" aria-label="Chat du salon">
+    <h2>Chat <small id="chatWho"></small></h2>
+    <div id="chatMsgs" aria-live="polite"></div>
+    <form id="chatForm">
+      <input name="msg" maxlength="200" placeholder="Écris un message…" aria-label="Message" autocomplete="off">
+      <button class="gold">Envoyer</button>
+    </form>
+  </aside>
 
   <div id="toast" role="alert" hidden></div>
 </body>
