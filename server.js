@@ -11,6 +11,7 @@ app.use(express.static(path.join(__dirname, 'public')));
 const server = http.createServer(app);
 const sockets = new Server(server);
 const io = sockets.of('/7-5'); // chaque projet du site a son propre canal Socket.io
+require('./cote/server')(sockets.of('/cote')); // Surcoté / Sous-coté
 
 const ACTIONS = ['start', 'bet', 'draw', 'reveal', 'stand', 'bankerDraw', 'challenge', 'kick', 'ban'];
 const GRACE_MS = 60000, RESULTS_MS = 6000;

@@ -1,0 +1,118 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Surcoté / Sous-coté</title>
+  <link rel="icon" href="favicon.svg" type="image/svg+xml">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800;900&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+  <script src="/socket.io/socket.io.js"></script>
+  <script type="module" src="client.js"></script>
+</head>
+<body>
+  <!-- Accueil -->
+  <section id="home" class="screen">
+    <a class="back" href="../">← Le Cercle</a>
+    <header class="hero">
+      <img src="favicon.svg" alt="" class="logo">
+      <h1><span class="low">Sous-coté</span> <span class="slash">/</span> <span class="high">Surcoté</span></h1>
+      <p>Le jeu à deux où il faut deviner ce que l’autre pense vraiment.</p>
+    </header>
+    <div class="card">
+      <div class="row">
+        <button class="primary" data-go="create">Jouer</button>
+        <button class="ghost" data-go="join">Rejoindre une partie</button>
+      </div>
+      <h2>Comment ça marche ?</h2>
+      <ol class="rules">
+        <li>À chaque manche, un joueur reçoit un <b>sujet</b> (ex. « La galette des rois ») et une <b>position secrète</b> sur le demi-cercle, de <span class="low">0, très sous-coté</span> à <span class="high">100, très surcoté</span>.</li>
+        <li>Il écrit un <b>indice</b> pour faire comprendre cette position, sans la donner.</li>
+        <li>L’autre joueur place l’<b>aiguille</b> là où il pense que se trouve la position.</li>
+        <li>Plus il est proche, plus il marque : <b>5 points</b> à 5 près, puis 4, 3, 2, 1… Les rôles s’inversent à chaque manche. Après <b>10 manches</b>, le meilleur score gagne.</li>
+      </ol>
+    </div>
+  </section>
+
+  <!-- Création -->
+  <section id="create" class="screen" hidden>
+    <a class="back" href="#" data-go="home">← Retour</a>
+    <form class="card narrow" id="createForm">
+      <h2>Créer une partie</h2>
+      <label>Ton pseudo <input name="pseudo" maxlength="20" required autocomplete="nickname"></label>
+      <button class="primary">Créer le salon</button>
+      <p class="hint">Tu recevras un code à envoyer à ton adversaire.</p>
+    </form>
+  </section>
+
+  <!-- Rejoindre -->
+  <section id="join" class="screen" hidden>
+    <a class="back" href="#" data-go="home">← Retour</a>
+    <form class="card narrow" id="joinForm">
+      <h2>Rejoindre une partie</h2>
+      <label>Ton pseudo <input name="pseudo" maxlength="20" required autocomplete="nickname"></label>
+      <label>Code du salon <input name="code" maxlength="5" required autocomplete="off" class="code-input" placeholder="ABCDE"></label>
+      <button class="primary">Rejoindre</button>
+    </form>
+  </section>
+
+  <!-- Salle d'attente -->
+  <section id="wait" class="screen" hidden>
+    <div class="card narrow">
+      <h2>Salle d’attente</h2>
+      <p class="hint">Code du salon à partager :</p>
+      <div class="code" id="waitCode"></div>
+      <button class="ghost" id="copyLink">🔗 Copier le lien d’invitation</button>
+      <p class="notice" id="notice" hidden></p>
+      <ul class="players" id="waitPlayers"></ul>
+      <button class="primary" id="startBtn"></button>
+      <button class="ghost" data-leave>Quitter le salon</button>
+    </div>
+  </section>
+
+  <!-- Partie -->
+  <section id="game" class="screen" hidden>
+    <header class="scoreboard">
+      <div class="player" id="p0"></div>
+      <div class="round"><small>Manche</small><b id="roundNo"></b></div>
+      <div class="player" id="p1"></div>
+    </header>
+    <main class="table">
+      <div class="subject">
+        <small id="category"></small>
+        <h2 id="subject"></h2>
+      </div>
+      <p class="status" id="status" aria-live="polite"></p>
+      <blockquote class="clue" id="clue" hidden></blockquote>
+      <div class="dial-wrap">
+        <svg id="dial"></svg>
+        <div class="readout" id="readout" hidden></div>
+      </div>
+      <div class="panel" id="panel"></div>
+    </main>
+    <button class="ghost leave" data-leave>Quitter</button>
+  </section>
+
+  <!-- Résultats -->
+  <section id="results" class="screen" hidden>
+    <div class="card">
+      <h2 id="winner"></h2>
+      <div class="final" id="finalScores"></div>
+      <div class="table-scroll">
+        <table>
+          <thead><tr><th>#</th><th>Sujet</th><th>Indice</th><th>Secret</th><th>Réponse</th><th>Écart</th><th>Points</th></tr></thead>
+          <tbody id="summary"></tbody>
+        </table>
+      </div>
+      <div class="row">
+        <button class="primary" id="again">Rejouer</button>
+        <button class="ghost" data-leave>Retour à l’accueil</button>
+      </div>
+    </div>
+  </section>
+
+  <div id="toast" role="alert" hidden></div>
+</body>
+</html>
