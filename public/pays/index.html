@@ -1,0 +1,131 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Trouve le pays</title>
+  <link rel="icon" href="favicon.svg" type="image/svg+xml">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700;900&family=Inter:wght@400;600;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+  <script src="https://cdn.jsdelivr.net/npm/d3@7.9.0/dist/d3.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/topojson-client@3.1.0/dist/topojson-client.min.js"></script>
+  <script type="module" src="main.js"></script>
+</head>
+<body>
+  <!-- Menu principal -->
+  <section id="menu" class="screen">
+    <a class="back" href="../">← Le Cercle</a>
+    <header class="hero">
+      <div class="globe" aria-hidden="true">🌍</div>
+      <h1>Trouve le pays</h1>
+      <p>Le nom d’un pays s’affiche : clique dessus sur la carte du monde.</p>
+    </header>
+    <div class="panel">
+      <h2>Mode de jeu</h2>
+      <div id="modes" class="modes" role="radiogroup" aria-label="Mode de jeu"></div>
+      <div class="options">
+        <label>Zone <select id="optScope"></select></label>
+        <label>Chrono
+          <select id="optTime">
+            <option value="0">Sans limite</option><option value="60">1 min</option><option value="180">3 min</option>
+            <option value="300">5 min</option><option value="600">10 min</option>
+          </select>
+        </label>
+        <label>Erreurs
+          <select id="optLives">
+            <option value="0">Illimitées</option><option value="1">1</option><option value="3">3</option>
+            <option value="5">5</option><option value="10">10</option>
+          </select>
+        </label>
+      </div>
+      <p id="bestLine" class="best"></p>
+      <button id="play" class="primary" disabled>Chargement de la carte…</button>
+      <div class="links">
+        <button id="openStats" class="ghost">📊 Statistiques</button>
+        <button id="openSettings" class="ghost">⚙️ Paramètres</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- Partie -->
+  <section id="game" class="screen" hidden>
+    <header class="hud">
+      <div class="question">
+        <small>Trouve</small>
+        <strong id="target"></strong>
+      </div>
+      <div class="chips">
+        <span class="chip" title="Score"><b id="hScore">0</b> pts</span>
+        <span class="chip good" title="Bonnes réponses">✔ <b id="hGood">0</b></span>
+        <span class="chip bad" title="Mauvaises réponses">✖ <b id="hBad">0</b></span>
+        <span class="chip" id="hLivesBox" title="Erreurs restantes">❤ <b id="hLives"></b></span>
+        <span class="chip" title="Temps">⏱ <b id="hTime">0:00</b></span>
+      </div>
+      <div class="progress" title="Progression">
+        <div class="bar"><i id="bar"></i></div>
+        <span id="hProg"></span>
+      </div>
+      <div class="actions">
+        <button id="skip">Passer</button>
+        <button id="restart" class="ghost">Recommencer</button>
+        <button id="quit" class="ghost">Quitter</button>
+      </div>
+    </header>
+    <div class="map-wrap">
+      <svg id="map" role="img" aria-label="Carte du monde : clique sur le pays demandé"></svg>
+      <div id="feedback" aria-live="polite"></div>
+      <div id="tip" hidden></div>
+      <div class="zoom">
+        <button data-zoom="in" aria-label="Zoomer">+</button>
+        <button data-zoom="out" aria-label="Dézoomer">−</button>
+        <button data-zoom="reset" aria-label="Recentrer la carte">⟲</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- Fin de partie -->
+  <section id="end" class="screen" hidden>
+    <div class="panel end">
+      <h2 id="endTitle"></h2>
+      <p id="endSub" class="sub"></p>
+      <div class="final"><span id="endPoints"></span><small>points</small></div>
+      <p id="newBest" class="record" hidden>🏆 Nouveau record !</p>
+      <dl class="grid">
+        <div><dt>Bonnes réponses</dt><dd id="eGood"></dd></div>
+        <div><dt>Mauvaises réponses</dt><dd id="eBad"></dd></div>
+        <div><dt>Réussite</dt><dd id="eAcc"></dd></div>
+        <div><dt>Pays trouvés</dt><dd id="eFound"></dd></div>
+        <div><dt>Passés</dt><dd id="eSkip"></dd></div>
+        <div><dt>Temps</dt><dd id="eTime"></dd></div>
+      </dl>
+      <div id="missedBox">
+        <h3>À revoir</h3>
+        <ul id="missed"></ul>
+      </div>
+      <div class="row">
+        <button id="again" class="primary">Rejouer</button>
+        <button id="toMenu" class="ghost">Menu</button>
+      </div>
+    </div>
+  </section>
+
+  <dialog id="statsDlg">
+    <h2>Statistiques</h2>
+    <div id="statsBody"></div>
+    <form method="dialog"><button class="primary">Fermer</button></form>
+  </dialog>
+
+  <dialog id="settingsDlg">
+    <h2>Paramètres</h2>
+    <label class="field">Langue des noms
+      <select id="setLang"><option value="fr">Français</option><option value="en">English</option></select>
+    </label>
+    <label class="check"><input type="checkbox" id="setLabels"> Afficher le nom des pays trouvés au survol</label>
+    <label class="check"><input type="checkbox" id="setZoom"> Zoomer automatiquement sur le continent joué</label>
+    <button id="resetStats" class="danger">Effacer les statistiques et records</button>
+    <form method="dialog"><button class="primary">Fermer</button></form>
+  </dialog>
+</body>
+</html>

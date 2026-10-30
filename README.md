@@ -1,6 +1,9 @@
-# 7,5 — multijoueur en ligne
+# Le Cercle — jeux en ligne
 
-Jeu de cartes « 7,5 » en temps réel dans le navigateur (Node.js, Express, Socket.io).
+Un seul serveur pour plusieurs projets : la page d'accueil (`/`) mène à chaque jeu.
+
+- `/pays/` : **Trouve le pays**, quiz de géographie sur une carte du monde (jeu solo, tout se passe dans le navigateur).
+- `/7-5/` : **Le Cercle du 7,5**, jeu de cartes « 7,5 » en temps réel dans le navigateur (Node.js, Express, Socket.io).
 Le serveur fait autorité : paquet, tirages, défis et paiements sont calculés côté serveur, et les cartes cachées ne sont jamais envoyées aux autres joueurs.
 
 ## Lancer en local
@@ -12,7 +15,7 @@ npm install
 npm start
 ```
 
-Puis ouvrir http://localhost:3000 dans deux onglets (avec deux pseudos différents).
+Puis ouvrir http://localhost:3000 (accueil) ou directement http://localhost:3000/7-5/ dans deux onglets, avec deux pseudos différents.
 
 Tests du moteur de règles : `npm test`.
 
@@ -27,7 +30,20 @@ Tout est en mémoire : un redémarrage du service efface les lobbys et les jeton
 
 ## Fichiers
 
-- `game.js` : moteur de règles (points, tours, défis, paiements, rotation du banquier).
-- `server.js` : lobbys, connexions, reconnexion sous 60 s, envoi d'un état filtré à chaque joueur.
-- `public/` : client HTML/CSS/JS.
+- `server.js` : serveur unique (Express + Socket.io), route `/health`, lobbys du 7,5 sur le canal Socket.io `/7-5`.
+- `game.js` : moteur de règles du 7,5 (points, tours, défis, paiements, rotation du banquier, temps de jeu).
 - `test.js` : tests lancés par `npm test`.
+- `public/index.html` : page d'accueil qui liste les projets.
+- `public/7-5/` : client du 7,5 (HTML/CSS/JS).
+- `public/pays/` : quiz « Trouve le pays » :
+  - `quiz.js` (règles, questions, score), `map.js` (carte d3 : frontières, zoom, clics), `stats.js` (records et paramètres dans le navigateur), `main.js` (écrans) ;
+  - `countries.json` : frontières Natural Earth 1:50m (197 pays + territoires), générées par `scripts/build-countries.mjs`.
+- `test-pays.mjs` : tests du quiz et des données de la carte (lancés aussi par `npm test`).
+
+Pour régénérer la carte (rarement utile) : `node scripts/build-countries.mjs`.
+
+## Ajouter un projet
+
+1. Mettre ses fichiers dans `public/<nom-du-projet>/` : il sera servi à l'adresse `/<nom-du-projet>/`.
+2. S'il a besoin de temps réel, lui donner son propre canal : `sockets.of('/<nom-du-projet>')` dans `server.js`, `io('/<nom-du-projet>')` côté client.
+3. Ajouter sa carte dans `public/index.html`.

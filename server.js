@@ -9,7 +9,8 @@ const app = express();
 app.get('/health', (req, res) => res.send('ok'));
 app.use(express.static(path.join(__dirname, 'public')));
 const server = http.createServer(app);
-const io = new Server(server);
+const sockets = new Server(server);
+const io = sockets.of('/7-5'); // chaque projet du site a son propre canal Socket.io
 
 const ACTIONS = ['start', 'bet', 'draw', 'reveal', 'stand', 'bankerDraw', 'challenge', 'kick', 'ban'];
 const GRACE_MS = 60000, RESULTS_MS = 6000;

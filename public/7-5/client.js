@@ -1,4 +1,4 @@
-const socket = io();
+const socket = io('/7-5'); // canal réservé à ce jeu : les autres projets du site ont le leur
 const $ = s => document.querySelector(s);
 const esc = s => String(s).replace(/[&<>"']/g, c => `&#${c.charCodeAt(0)};`);
 const fmt = n => String(n).replace('.', ',');
@@ -289,7 +289,7 @@ $('#game').onclick = e => {
     localStorage.setItem('muted', muted ? '1' : '0');
     render();
   } else if (a === 'invite') {
-    navigator.clipboard.writeText(`${location.origin}/?lobby=${state.id}`)
+    navigator.clipboard.writeText(`${location.origin}${location.pathname}?lobby=${state.id}`)
       .then(() => toast('Lien d’invitation copié !', true), () => toast('Copie impossible'));
   } else if (a === 'bet') act('bet', $('#bet').value);
   // Sans carte cachée, la nouvelle carte arrive cachée puis on demande « Caché » ou « Montrer ».
