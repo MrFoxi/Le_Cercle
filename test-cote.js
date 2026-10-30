@@ -58,8 +58,8 @@ const room = () => {
     assert.throws(() => r.guess(c.guesser, i, value), /déjà/); // double validation refusée
     scores[c.guesser] += pointsFor(Math.abs(value - c.target));
     assert.strictEqual(r.viewFor(c.guesser).current.target, c.target); // révélé
-    r.next(i);
-    assert.throws(() => r.next(i), /déjà/); // les deux joueurs cliquent « suivante » : une seule fois
+    r.next('Ana', i);
+    assert.throws(() => r.next('Ana', i), /déjà/); // les deux joueurs cliquent « suivante » : une seule fois
   }
   assert.strictEqual(r.phase, 'over');
   assert.strictEqual(r.history.length, ROUNDS);
@@ -90,11 +90,11 @@ const room = () => {
     count[c.theme]++;
     r.giveClue(c.giver, i, 'x');
     r.guess(c.guesser, i, 50);
-    r.next(i);
+    r.next('Ana', i);
   }
   assert.deepStrictEqual(count, { Films: 5, 'Débats absurdes': 5 }); // les thèmes choisis tournent à égalité
-  r.toLobby();
-  assert.throws(() => r.toLobby(), /déjà/);
+  r.toLobby('Ana');
+  assert.throws(() => r.toLobby('Ana'), /déjà/);
   assert.strictEqual(r.phase, 'lobby');
   r.setThemes('Ana', ['espace']); // un seul thème suffit pour 10 manches
   r.start('Ana');
@@ -109,7 +109,7 @@ const room = () => {
     const c = r.current;
     r.giveClue(c.giver, i, 'x');
     r.guess(c.guesser, i, c.target); // 5 points chacun à chaque fois
-    r.next(i);
+    r.next('Ana', i);
   }
   assert.deepStrictEqual(r.players.map(p => p.score), [25, 25]);
   assert.strictEqual(r.viewFor('Ana').winner, null);

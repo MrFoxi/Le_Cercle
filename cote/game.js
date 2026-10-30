@@ -76,7 +76,7 @@ class Room {
   }
 
   // Après une partie, retour au lobby pour changer les thèmes.
-  toLobby() {
+  toLobby() { // appelée avec le pseudo du joueur, inutile ici
     if (this.phase !== 'over') throw new Error('Action déjà prise en compte');
     this.phase = 'lobby';
   }
@@ -138,7 +138,7 @@ class Room {
     this.phase = 'reveal';
   }
 
-  next(round) {
+  next(name, round) {
     if (round !== this.round || this.phase !== 'reveal') throw new Error('Action déjà prise en compte');
     this.nextRound();
   }

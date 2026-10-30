@@ -7,11 +7,13 @@ const { Table, MAX_PLAYERS } = require('./game');
 const app = express();
 // Pingée de l'extérieur pour empêcher Render de mettre le serveur en veille.
 app.get('/health', (req, res) => res.send('ok'));
+app.use('/api/size', require('./size/api')); // Size It Up : les vraies tailles restent côté serveur
 app.use(express.static(path.join(__dirname, 'public')));
 const server = http.createServer(app);
 const sockets = new Server(server);
 const io = sockets.of('/7-5'); // chaque projet du site a son propre canal Socket.io
-require('./cote/server')(sockets.of('/cote')); // Surcoté / Sous-coté
+require('./cote/server')(sockets.of('/cote')); // Le Demi-Cercle
+require('./p4/server')(sockets.of('/p4')); // Puissance 4
 
 const ACTIONS = ['start', 'bet', 'draw', 'reveal', 'stand', 'bankerDraw', 'challenge', 'kick', 'ban'];
 const GRACE_MS = 60000, RESULTS_MS = 6000;

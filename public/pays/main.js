@@ -205,7 +205,7 @@ function end() {
   show('end');
 }
 $('#again').onclick = () => start(quiz.options);
-$('#toMenu').onclick = () => { quiz = null; show('menu'); syncMenu(); };
+$('#toMenu').onclick = $('#endBack').onclick = () => { quiz = null; show('menu'); syncMenu(); };
 $('#play').onclick = () => start(readOptions());
 
 /* ---------- Statistiques ---------- */

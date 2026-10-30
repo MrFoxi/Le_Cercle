@@ -1,0 +1,52 @@
+// Objets à comparer, avec leurs dimensions réelles approximatives (en mètres) : h = hauteur, w = largeur (ou longueur).
+// Pour en ajouter un : une ligne de plus. Le jeu ne forme que des paires de tailles comparables (voir game.js).
+module.exports = [
+  // Petits objets
+  { id: 'pomme', name: 'Une pomme', emoji: '🍎', h: 0.08, w: 0.08 },
+  { id: 'tasse', name: 'Une tasse de café', emoji: '☕', h: 0.1, w: 0.12 },
+  { id: 'telephone', name: 'Un smartphone', emoji: '📱', h: 0.15, w: 0.072 },
+  { id: 'ballon', name: 'Un ballon de foot', emoji: '⚽', h: 0.22, w: 0.22 },
+  { id: 'souris', name: 'Une souris', emoji: '🐁', h: 0.05, w: 0.09 },
+  { id: 'banane', name: 'Une banane', emoji: '🍌', h: 0.05, w: 0.19 },
+  { id: 'ananas', name: 'Un ananas', emoji: '🍍', h: 0.3, w: 0.14 },
+  { id: 'bouteille', name: 'Une bouteille d’eau', emoji: '🍼', h: 0.3, w: 0.08 },
+  // Animaux
+  { id: 'chat', name: 'Un chat', emoji: '🐈', h: 0.25, w: 0.46 },
+  { id: 'lapin', name: 'Un lapin', emoji: '🐇', h: 0.25, w: 0.4 },
+  { id: 'chien', name: 'Un labrador', emoji: '🐕', h: 0.6, w: 0.95 },
+  { id: 'manchot', name: 'Un manchot empereur', emoji: '🐧', h: 1.15, w: 0.45 },
+  { id: 'tortue', name: 'Une tortue géante', emoji: '🐢', h: 0.7, w: 1.3 },
+  { id: 'cheval', name: 'Un cheval', emoji: '🐎', h: 1.65, w: 2.4 },
+  { id: 'ours', name: 'Un ours polaire debout', emoji: '🐻‍❄️', h: 2.6, w: 1.1 },
+  { id: 'girafe', name: 'Une girafe', emoji: '🦒', h: 5.5, w: 3.2 },
+  { id: 'elephant', name: 'Un éléphant d’Afrique', emoji: '🐘', h: 3.3, w: 6 },
+  { id: 'requin', name: 'Un grand requin blanc', emoji: '🦈', h: 1.5, w: 5 },
+  { id: 'trex', name: 'Un T-Rex', emoji: '🦖', h: 4, w: 12 },
+  { id: 'baleine', name: 'Une baleine bleue', emoji: '🐋', h: 4.5, w: 27 },
+  // Personnes et objets du quotidien
+  { id: 'humain', name: 'Un adulte', emoji: '🧍', h: 1.75, w: 0.5 },
+  { id: 'enfant', name: 'Un enfant de 5 ans', emoji: '🧒', h: 1.1, w: 0.35 },
+  { id: 'porte', name: 'Une porte', emoji: '🚪', h: 2.04, w: 0.83 },
+  { id: 'guitare', name: 'Une guitare', emoji: '🎸', h: 1, w: 0.38 },
+  { id: 'velo', name: 'Un vélo', emoji: '🚲', h: 1.1, w: 1.75 },
+  { id: 'stop', name: 'Un panneau stop (sans le poteau)', emoji: '🛑', h: 0.75, w: 0.75 },
+  // Véhicules
+  { id: 'voiture', name: 'Une voiture', emoji: '🚗', h: 1.5, w: 4.4 },
+  { id: 'bus', name: 'Un bus', emoji: '🚌', h: 3.2, w: 12 },
+  { id: 'camion', name: 'Un semi-remorque', emoji: '🚛', h: 4, w: 16.5 },
+  { id: 'helico', name: 'Un hélicoptère', emoji: '🚁', h: 4.4, w: 17 },
+  { id: 'a380', name: 'Un Airbus A380', emoji: '✈️', h: 24, w: 73 },
+  { id: 'fusee', name: 'La fusée Saturn V', emoji: '🚀', h: 110, w: 10 },
+  { id: 'titanic', name: 'Le Titanic', emoji: '🚢', h: 53, w: 269 },
+  // Bâtiments et nature
+  { id: 'maison', name: 'Une maison', emoji: '🏠', h: 8, w: 10 },
+  { id: 'chene', name: 'Un grand chêne', emoji: '🌳', h: 25, w: 20 },
+  { id: 'montgolfiere', name: 'Une montgolfière', emoji: '🎈', h: 22, w: 17 },
+  { id: 'immeuble', name: 'Un immeuble de 10 étages', emoji: '🏢', h: 30, w: 20 },
+  { id: 'liberte', name: 'La statue de la Liberté (avec socle)', emoji: '🗽', h: 93, w: 30 },
+  { id: 'bigben', name: 'Big Ben', emoji: '🕰️', h: 96, w: 15 },
+  { id: 'pyramide', name: 'La grande pyramide de Gizeh', emoji: '🔺', h: 139, w: 230 },
+  { id: 'eiffel', name: 'La tour Eiffel', emoji: '🗼', h: 330, w: 125 },
+  { id: 'empire', name: 'L’Empire State Building', emoji: '🏙️', h: 443, w: 57 },
+  { id: 'burj', name: 'Le Burj Khalifa', emoji: '🏗️', h: 828, w: 70 },
+];

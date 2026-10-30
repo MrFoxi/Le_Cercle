@@ -104,6 +104,9 @@ $('#joinForm').onsubmit = e => {
 $('#joinForm').code.oninput = e => (e.target.value = e.target.value.toUpperCase());
 document.addEventListener('click', e => {
   if (e.target.closest('[data-leave]')) {
+    // Un joueur qui part en pleine partie l'arrête pour l'autre : on confirme.
+    const playing = state && !state.spectator && !['lobby', 'over'].includes(state.phase);
+    if (playing && !confirm('Quitter la partie en cours ? Elle s’arrêtera pour ton adversaire.')) return;
     socket.emit('leave');
     reset();
   }

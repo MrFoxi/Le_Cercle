@@ -1,0 +1,81 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Size It Up</title>
+  <link rel="icon" href="favicon.svg" type="image/svg+xml">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800;900&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+  <script type="module" src="client.js"></script>
+</head>
+<body>
+  <!-- Menu -->
+  <section id="menu" class="screen">
+    <a class="back" href="../">← Le Cercle</a>
+    <header class="hero">
+      <img src="favicon.svg" alt="" class="logo">
+      <h1>Size It Up</h1>
+      <p>À l’œil nu : quelle taille fait vraiment l’objet rouge, comparé au bleu ?</p>
+    </header>
+    <div class="card">
+      <ol class="rules">
+        <li><span class="sw blue"></span><span>L’objet <b class="blue-t">bleu</b> sert de référence : il ne bouge pas.</span></li>
+        <li><span class="sw red"></span><span>Agrandis ou rétrécis l’objet <b class="red-t">rouge</b> pour qu’il ait sa <b>vraie taille</b> par rapport au bleu.</span></li>
+        <li><span class="sw grid"></span><span>Aucune mesure n’est affichée : fie-toi à tes yeux. <b>100 points</b> pour une estimation parfaite, 10 manches.</span></li>
+      </ol>
+      <button class="primary big" id="play">Jouer</button>
+      <p class="best" id="best"></p>
+    </div>
+  </section>
+
+  <!-- Partie -->
+  <section id="game" class="screen game" hidden>
+    <header class="hud">
+      <button class="back" id="quit">← Menu</button>
+      <div class="hud-mid">
+        <span>Manche <b id="roundNo"></b></span>
+        <span>Score <b id="total">0</b></span>
+      </div>
+      <span class="hud-best" id="hudBest"></span>
+    </header>
+    <div class="legend">
+      <span class="tag blue"><i></i><b id="refName"></b><small>référence</small></span>
+      <span class="vs">vs</span>
+      <span class="tag red"><i></i><b id="targetName"></b><small>à mettre à l’échelle</small></span>
+    </div>
+    <div class="stage-wrap">
+      <svg id="stage" role="application" aria-label="Zone de jeu : déplace et redimensionne l’objet rouge"></svg>
+      <div class="zoom">
+        <button data-zoom="in" aria-label="Zoomer">+</button>
+        <button data-zoom="out" aria-label="Dézoomer">−</button>
+        <button data-zoom="fit" aria-label="Tout afficher">⤢</button>
+      </div>
+      <p class="coach" id="coach">Glisse le <b>rouge</b> pour le déplacer · tire un <b>coin</b> pour le redimensionner · <b>molette</b> ou <b>+ −</b> pour zoomer · glisse le fond pour te déplacer · sur mobile : <b>deux doigts</b> pour redimensionner</p>
+      <div class="reveal" id="reveal" hidden></div>
+    </div>
+    <div class="actions">
+      <button class="primary big" id="validate">Valider mon estimation</button>
+    </div>
+  </section>
+
+  <!-- Fin -->
+  <section id="end" class="screen" hidden>
+    <button class="back" id="endBack">← Menu</button>
+    <div class="card end">
+      <h2>Partie terminée</h2>
+      <div class="final"><b id="endTotal"></b><small>/ 1000 points</small></div>
+      <p class="record" id="record" hidden>🏆 Nouveau record !</p>
+      <ol class="recap" id="recap"></ol>
+      <div class="row">
+        <button class="primary" id="again">Rejouer</button>
+        <button class="ghost" id="toMenu">Menu</button>
+      </div>
+    </div>
+  </section>
+
+  <div id="toast" role="alert" hidden></div>
+</body>
+</html>

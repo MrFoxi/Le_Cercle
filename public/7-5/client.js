@@ -279,7 +279,8 @@ $('#game').onclick = e => {
     return render();
   }
   const a = b.dataset.a;
-  if (a === 'leave') socket.emit('leave');
+  // Quitter en pleine manche te fait rester avec tes cartes (ou annule la manche si tu es banquier) : on confirme.
+  if (a === 'leave') { if (state.phase === 'waiting' || confirm('Quitter la table en pleine partie ?')) socket.emit('leave'); }
   else if (a === 'closeOverlay') $('#overlay').hidden = true;
   else if (a === 'themes') $('#themes').hidden = !$('#themes').hidden;
   else if (a === 'fullscreen') document.fullscreenElement ? document.exitFullscreen() : document.documentElement.requestFullscreen();

@@ -35,7 +35,7 @@
       <img src="favicon.svg" alt="" class="logo">
       <h1>Le Demi-Cercle</h1>
     </header>
-    <p class="me">Connecté en tant que <b id="meName"></b> · <a href="#" id="changeName">changer de pseudo</a></p>
+    <p class="whoami">Connecté en tant que <b id="meName"></b> · <a href="#" id="changeName">changer de pseudo</a></p>
     <div class="home-grid">
       <form class="card" id="createForm">
         <h2>Créer un lobby</h2>
@@ -73,6 +73,7 @@
 
   <!-- Lobby : joueurs et thèmes -->
   <section id="wait" class="screen wide" hidden>
+    <button class="back" data-leave>← Quitter le salon</button>
     <div class="lobby">
       <div class="card side-col">
         <h2>Salon</h2>
@@ -103,6 +104,7 @@
 
   <!-- Partie -->
   <section id="game" class="screen" hidden>
+    <button class="back" data-leave>← Quitter la partie</button>
     <p class="watching" id="watchBadge" hidden>👁 Tu regardes cette partie en spectateur</p>
     <header class="scoreboard">
       <div class="player" id="p0"></div>
@@ -127,6 +129,7 @@
 
   <!-- Résultats -->
   <section id="results" class="screen" hidden>
+    <button class="back" data-leave>← Accueil</button>
     <div class="card">
       <h2 id="winner"></h2>
       <div class="final" id="finalScores"></div>
