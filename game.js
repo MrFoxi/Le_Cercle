@@ -46,17 +46,18 @@ class Table {
   get host() { return this.players.find(p => !p.left)?.name; }
   canPlay(p) { return p.connected && !p.left && p.chips > 0; }
 
-  addPlayer(name) {
+  addPlayer(name, avatar = '') {
     if (this.banned.has(name)) throw new Error('Tu as été banni de cette table');
     const p = this.get(name);
     if (p) {
       if (p.connected) throw new Error('Ce pseudo est déjà à cette table');
       p.connected = true;
       p.left = false;
+      p.avatar = avatar || p.avatar;
       return this.say(`${name} est de retour`);
     }
     if (this.players.filter(p => !p.left).length >= MAX_PLAYERS) throw new Error('Table pleine');
-    this.players.push({ name, chips: START_CHIPS, connected: true, left: false });
+    this.players.push({ name, avatar, chips: START_CHIPS, connected: true, left: false });
     this.say(`${name} rejoint la table`);
   }
 
@@ -290,7 +291,7 @@ class Table {
         const isBanker = r?.banker === p.name, h = r?.hands[p.name], own = p.name === me;
         const cards = isBanker ? r.bankerCards : h?.cards ?? [];
         return {
-          name: p.name, chips: p.chips, connected: p.connected, isBanker,
+          name: p.name, avatar: p.avatar, chips: p.chips, connected: p.connected, isBanker,
           inRound: !!h, bet: h?.bet ?? null, challenged: !!h?.challenged,
           result: isBanker && reveal && !r.cancelled ? { delta: r.bankerDelta } : h?.result ?? null,
           cards: cards.map(c => (c.hidden && !own ? { hidden: true } : c)),

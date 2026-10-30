@@ -16,7 +16,8 @@ const GRACE_MS = 60000, RESULTS_MS = 6000;
 const lobbies = new Map(); // id -> { id, table, sockets: Map(pseudo -> socket), graces: Map(pseudo -> timer), timer, chat, chatSeq }
 
 const list = () => [...lobbies.values()].map(({ id, table }) => ({
-  id, name: table.name, count: table.players.filter(p => !p.left).length, max: MAX_PLAYERS, playing: table.phase !== 'waiting',
+  id, name: table.name, max: MAX_PLAYERS, playing: table.phase !== 'waiting',
+  players: table.players.filter(p => !p.left).map(p => ({ name: p.name, avatar: p.avatar })),
 }));
 const sendLobbies = () => io.emit('lobbies', list());
 
@@ -29,7 +30,7 @@ function update(lobby) {
     lobbies.delete(lobby.id);
     return sendLobbies();
   }
-  for (const [name, s] of lobby.sockets) s.emit('state', { ...table.viewFor(name), chat: lobby.chat });
+  for (const [name, s] of lobby.sockets) s.emit('state', { ...table.viewFor(name), id: lobby.id, chat: lobby.chat });
   if (table.phase === 'results' && !lobby.timer) {
     lobby.timer = setTimeout(() => {
       lobby.timer = null;
@@ -53,13 +54,13 @@ function eject(lobby, name, banned) {
 }
 
 io.on('connection', socket => {
-  let me = null, lobby = null, lastChat = 0;
+  let me = null, avatar = '', lobby = null, lastChat = 0;
   socket.ejected = () => (lobby = null);
   const fail = e => socket.emit('err', e.message);
   const clean = (v, max) => String(v ?? '').trim().slice(0, max);
 
   function enter(l) {
-    l.table.addPlayer(me);
+    l.table.addPlayer(me, avatar);
     clearTimeout(l.graces.get(me));
     l.graces.delete(me);
     l.sockets.set(me, socket);
@@ -84,9 +85,10 @@ io.on('connection', socket => {
     update(l);
   }
 
-  socket.on('hello', name => {
+  socket.on('hello', (name, av) => {
     if (lobby) return;
     me = clean(name, 20);
+    avatar = clean(av, 8); // un emoji peut faire plusieurs caractères
     if (!me) return fail(new Error('Pseudo requis'));
     socket.emit('lobbies', list());
     // Même pseudo revenu à temps : il retrouve sa place.
@@ -104,7 +106,8 @@ io.on('connection', socket => {
 
   socket.on('join', id => {
     const l = lobbies.get(id);
-    if (!me || lobby || !l) return fail(new Error('Lobby introuvable'));
+    if (lobby) return; // déjà assis (ex. lien d'invitation après une reconnexion)
+    if (!me || !l) return fail(new Error('Lobby introuvable'));
     try { enter(l); } catch (e) { fail(e); }
   });
 
