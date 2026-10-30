@@ -51,10 +51,7 @@ $('#nameForm').onsubmit = e => {
   me = $('#pseudo').value.trim();
   localStorage.setItem('pseudo', me);
   socket.emit('hello', me, avatar);
-  if (invite) {
-    socket.emit('join', invite);
-    history.replaceState(null, '', location.pathname);
-  }
+  if (invite) socket.emit('join', invite);
   $('#nameForm').hidden = $('#avatarPick').hidden = true;
   $('#nameHint').textContent = `Connecté en tant que ${avatar} ${me}.`;
   $('#lobbyName').placeholder = `${me}'s lobby`.slice(0, 30);
@@ -238,6 +235,8 @@ function showOverlay(roundNo) {
 socket.on('state', s => {
   const old = state;
   state = s;
+  // L'adresse suit la table : /7-5/?lobby=<id> se partage ou se recharge pour revenir à la même table.
+  history.replaceState(null, '', s ? `?lobby=${s.id}` : location.pathname);
   $('#home').hidden = !!s;
   $('#game').hidden = !s;
   if (!s) {
