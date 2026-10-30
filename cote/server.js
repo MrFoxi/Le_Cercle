@@ -1,6 +1,9 @@
-// Salons temps réel du Surcoté / Sous-coté, sur le canal Socket.io « /cote ».
+// Salons temps réel du Demi-Cercle, sur le canal Socket.io « /cote ».
 const crypto = require('crypto');
-const { Room } = require('./game');
+const { Room, THEMES } = require('./game');
+
+// Liste des thèmes envoyée aux navigateurs (sans les sujets, qui restent sur le serveur).
+const CATALOG = THEMES.map(({ id, name, category, subjects }) => ({ id, name, category, count: subjects.length }));
 
 const ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // sans 0/O ni 1/I, pour dicter le code sans confusion
 const EMPTY_ROOM_MS = 10 * 60 * 1000; // salon gardé 10 min quand plus personne n'est connecté
@@ -22,6 +25,7 @@ module.exports = function cote(nsp) {
 
   nsp.on('connection', socket => {
     let entry = null, me = null;
+    socket.emit('catalog', CATALOG);
 
     // Associe ce navigateur au joueur ; le jeton secret permet de revenir après une coupure.
     const sit = (e, name, token) => {
@@ -76,10 +80,11 @@ module.exports = function cote(nsp) {
 
     socket.on('act', (type, ...args) => {
       const ack = typeof args.at(-1) === 'function' ? args.pop() : null;
-      if (!entry || !['start', 'giveClue', 'guess', 'next'].includes(type)) return;
+      if (!entry || !['start', 'giveClue', 'guess', 'next', 'setThemes', 'toLobby'].includes(type)) return;
       try {
         if (type === 'start') entry.room.start(me);
         else if (type === 'next') entry.room.next(args[0]);
+        else if (type === 'toLobby') entry.room.toLobby();
         else entry.room[type](me, ...args);
         ack?.({ ok: true });
       } catch (err) {

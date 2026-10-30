@@ -3,11 +3,11 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Surcoté / Sous-coté</title>
+  <title>Le Demi-Cercle</title>
   <link rel="icon" href="favicon.svg" type="image/svg+xml">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800;900&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700;900&family=Inter:wght@400;600;800&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="style.css">
   <script src="/socket.io/socket.io.js"></script>
   <script type="module" src="client.js"></script>
@@ -18,20 +18,20 @@
     <a class="back" href="../">← Le Cercle</a>
     <header class="hero">
       <img src="favicon.svg" alt="" class="logo">
-      <h1><span class="low">Sous-coté</span> <span class="slash">/</span> <span class="high">Surcoté</span></h1>
-      <p>Le jeu à deux où il faut deviner ce que l’autre pense vraiment.</p>
+      <h1>Le Demi-Cercle</h1>
+      <p class="tagline">Bon · Neutre · Mauvais — un jeu d’indices à deux</p>
     </header>
     <div class="card">
       <div class="row">
-        <button class="primary" data-go="create">Jouer</button>
+        <button class="gold" data-go="create">Jouer</button>
         <button class="ghost" data-go="join">Rejoindre une partie</button>
       </div>
-      <h2>Comment ça marche ?</h2>
+      <h2>En 30 secondes</h2>
       <ol class="rules">
-        <li>À chaque manche, un joueur reçoit un <b>sujet</b> (ex. « La galette des rois ») et une <b>position secrète</b> sur le demi-cercle, de <span class="low">0, très sous-coté</span> à <span class="high">100, très surcoté</span>.</li>
-        <li>Il écrit un <b>indice</b> pour faire comprendre cette position, sans la donner.</li>
-        <li>L’autre joueur place l’<b>aiguille</b> là où il pense que se trouve la position.</li>
-        <li>Plus il est proche, plus il marque : <b>5 points</b> à 5 près, puis 4, 3, 2, 1… Les rôles s’inversent à chaque manche. Après <b>10 manches</b>, le meilleur score gagne.</li>
+        <li>Le demi-cercle va de <b class="good">BON (0)</b> à <b class="bad">MAUVAIS (100)</b>, en passant par <b>NEUTRE (50)</b>.</li>
+        <li>Un joueur reçoit un <b>sujet</b> (« Minecraft ») et une <b>position secrète</b> (10). Il écrit un <b>indice</b> : « On peut y jouer des centaines d’heures sans se lasser. »</li>
+        <li>L’autre place l’<b>aiguille</b>. La roue tourne et révèle la position : <b>5 points</b> à 5 près, puis 4, 3, 2, 1.</li>
+        <li>Les rôles s’inversent à chaque manche. Après <b>10 manches</b>, le meilleur score gagne.</li>
       </ol>
     </div>
   </section>
@@ -42,8 +42,8 @@
     <form class="card narrow" id="createForm">
       <h2>Créer une partie</h2>
       <label>Ton pseudo <input name="pseudo" maxlength="20" required autocomplete="nickname"></label>
-      <button class="primary">Créer le salon</button>
-      <p class="hint">Tu recevras un code à envoyer à ton adversaire.</p>
+      <button class="gold">Créer le salon</button>
+      <p class="hint">Ensuite : choix des thèmes et code à envoyer à ton adversaire.</p>
     </form>
   </section>
 
@@ -54,21 +54,35 @@
       <h2>Rejoindre une partie</h2>
       <label>Ton pseudo <input name="pseudo" maxlength="20" required autocomplete="nickname"></label>
       <label>Code du salon <input name="code" maxlength="5" required autocomplete="off" class="code-input" placeholder="ABCDE"></label>
-      <button class="primary">Rejoindre</button>
+      <button class="gold">Rejoindre</button>
     </form>
   </section>
 
-  <!-- Salle d'attente -->
-  <section id="wait" class="screen" hidden>
-    <div class="card narrow">
-      <h2>Salle d’attente</h2>
-      <p class="hint">Code du salon à partager :</p>
-      <div class="code" id="waitCode"></div>
-      <button class="ghost" id="copyLink">🔗 Copier le lien d’invitation</button>
-      <p class="notice" id="notice" hidden></p>
-      <ul class="players" id="waitPlayers"></ul>
-      <button class="primary" id="startBtn"></button>
-      <button class="ghost" data-leave>Quitter le salon</button>
+  <!-- Lobby : joueurs et thèmes -->
+  <section id="wait" class="screen wide" hidden>
+    <div class="lobby">
+      <div class="card side-col">
+        <h2>Salon</h2>
+        <div class="code" id="waitCode"></div>
+        <button class="ghost" id="copyLink">🔗 Copier le lien d’invitation</button>
+        <p class="notice" id="notice" hidden></p>
+        <ul class="players" id="waitPlayers"></ul>
+        <button class="gold" id="startBtn"></button>
+        <button class="ghost" data-leave>Quitter le salon</button>
+      </div>
+      <div class="card themes-card">
+        <div class="themes-head">
+          <div>
+            <h2>Thèmes</h2>
+            <p class="hint" id="themeCount"></p>
+          </div>
+          <div class="host-only">
+            <button class="ghost small" id="allThemes">Tout sélectionner</button>
+            <button class="ghost small" id="noThemes">Tout désélectionner</button>
+          </div>
+        </div>
+        <div id="themeList"></div>
+      </div>
     </div>
   </section>
 
@@ -81,7 +95,7 @@
     </header>
     <main class="table">
       <div class="subject">
-        <small id="category"></small>
+        <small id="theme"></small>
         <h2 id="subject"></h2>
       </div>
       <p class="status" id="status" aria-live="polite"></p>
@@ -90,7 +104,7 @@
         <svg id="dial"></svg>
         <div class="readout" id="readout" hidden></div>
       </div>
-      <div class="panel" id="panel"></div>
+      <div class="panel" id="panel" aria-live="polite"></div>
     </main>
     <button class="ghost leave" data-leave>Quitter</button>
   </section>
@@ -100,6 +114,9 @@
     <div class="card">
       <h2 id="winner"></h2>
       <div class="final" id="finalScores"></div>
+      <h3>Meilleures réponses</h3>
+      <ol class="best" id="best"></ol>
+      <h3>Récapitulatif</h3>
       <div class="table-scroll">
         <table>
           <thead><tr><th>#</th><th>Sujet</th><th>Indice</th><th>Secret</th><th>Réponse</th><th>Écart</th><th>Points</th></tr></thead>
@@ -107,9 +124,10 @@
         </table>
       </div>
       <div class="row">
-        <button class="primary" id="again">Rejouer</button>
-        <button class="ghost" data-leave>Retour à l’accueil</button>
+        <button class="gold" id="again">Rejouer avec les mêmes thèmes</button>
+        <button class="ghost" id="toLobby">Retour au lobby</button>
       </div>
+      <button class="ghost leave" data-leave>Quitter</button>
     </div>
   </section>
 

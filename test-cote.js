@@ -1,14 +1,20 @@
 const assert = require('node:assert');
-const { Room, pointsFor, ROUNDS, SUBJECTS } = require('./cote/game');
+const { Room, pointsFor, ROUNDS, THEMES } = require('./cote/game');
 
 // Barème, aux limites de chaque tranche
 for (const [diff, pts] of [[0, 5], [5, 5], [6, 4], [10, 4], [11, 3], [20, 3], [21, 2], [30, 2], [31, 1], [40, 1], [41, 0], [100, 0]]) {
   assert.strictEqual(pointsFor(diff), pts, `écart ${diff}`);
 }
 
-// Banque de sujets : au moins 200, sans doublon
-assert.ok(SUBJECTS.length >= 200, `${SUBJECTS.length} sujets`);
-assert.strictEqual(new Set(SUBJECTS.map(s => s.text)).size, SUBJECTS.length);
+// Thèmes : 68 thèmes en 5 catégories, chacun avec assez de sujets distincts pour 10 manches
+assert.strictEqual(THEMES.length, 68);
+assert.strictEqual(new Set(THEMES.map(t => t.category)).size, 5);
+assert.strictEqual(new Set(THEMES.map(t => t.id)).size, 68);
+for (const t of THEMES) {
+  assert.ok(t.subjects.length >= ROUNDS, `${t.name} : ${t.subjects.length} sujets`);
+  assert.strictEqual(new Set(t.subjects).size, t.subjects.length, `doublon dans ${t.name}`);
+  assert.ok(t.subjects.every(x => x.trim() === x && x), `sujet vide dans ${t.name}`);
+}
 
 const room = () => {
   const r = new Room('ABCDE');
@@ -68,6 +74,34 @@ const room = () => {
   assert.deepStrictEqual([r.round, r.players[0].score, r.players[1].score, r.history.length], [1, 0, 0, 0]);
 }
 
+// Thèmes : seul le créateur choisit, au moins un thème, et seuls ses sujets sortent ; retour au lobby après la partie
+{
+  const r = room();
+  assert.strictEqual(r.viewFor('Ben').themes.length, 68); // tous par défaut
+  assert.throws(() => r.setThemes('Ben', ['films']), /créateur/);
+  r.setThemes('Ana', ['inconnu']); // thème inconnu ignoré
+  r.setThemes('Ana', []); // « tout désélectionner » est permis…
+  assert.throws(() => r.start('Ana'), /au moins un/); // …mais pas de partie sans thème
+  r.setThemes('Ana', ['films', 'debats-absurdes', 'films']);
+  assert.deepStrictEqual(r.viewFor('Ben').themes, ['films', 'debats-absurdes']);
+  r.start('Ana');
+  assert.throws(() => r.setThemes('Ana', ['films']), /pleine partie/);
+  const allowed = new Set(THEMES.filter(t => ['films', 'debats-absurdes'].includes(t.id)).flatMap(t => t.subjects));
+  for (let i = 1; i <= ROUNDS; i++) {
+    const c = r.current;
+    assert.ok(allowed.has(c.subject) && ['Films', 'Débats absurdes'].includes(c.theme), c.subject);
+    r.giveClue(c.giver, i, 'x');
+    r.guess(c.guesser, i, 50);
+    r.next(i);
+  }
+  r.toLobby();
+  assert.throws(() => r.toLobby(), /déjà/);
+  assert.strictEqual(r.phase, 'lobby');
+  r.setThemes('Ana', ['espace']); // un seul thème suffit pour 10 manches
+  r.start('Ana');
+  assert.strictEqual(r.current.theme, 'Espace');
+}
+
 // Égalité : pas de vainqueur
 {
   const r = room();
@@ -93,4 +127,4 @@ const room = () => {
   assert.deepStrictEqual([r.phase, r.host, r.notice], ['lobby', 'Ana', 'Ben a quitté la partie']);
 }
 
-console.log('Tests du Surcoté / Sous-coté : OK');
+console.log('Tests du Demi-Cercle : OK');

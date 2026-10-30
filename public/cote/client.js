@@ -1,20 +1,18 @@
-// Interface du Surcoté / Sous-coté : écrans, synchronisation avec le serveur, demi-cercle.
+// Interface du Demi-Cercle : écrans, thèmes, synchronisation avec le serveur, révélation animée.
 /* global io */
 import { createDial } from './dial.js';
 
 const socket = io('/cote');
 const $ = s => document.querySelector(s);
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => `&#${c.charCodeAt(0)};`);
-let state = null, shown = '', toastTimer;
+let state = null, catalog = [], shown = '', toastTimer;
 
 // Session : le jeton permet de retrouver sa place après un rechargement ou une coupure réseau.
 const loadSession = () => { try { return JSON.parse(localStorage.getItem('cote-session')); } catch { return null; } };
 const saveSession = s => { try { s ? localStorage.setItem('cote-session', JSON.stringify(s)) : localStorage.removeItem('cote-session'); } catch { /* stockage bloqué */ } };
 const urlCode = new URLSearchParams(location.search).get('salon')?.toUpperCase();
 
-const dial = createDial($('#dial'), {
-  onChange: v => { $('#readout').textContent = Math.round(v); },
-});
+const dial = createDial($('#dial'), { onChange: v => { $('#readout').textContent = Math.round(v); } });
 
 function show(id) {
   for (const s of document.querySelectorAll('.screen')) s.hidden = s.id !== id;
@@ -98,6 +96,54 @@ socket.on('connect', () => {
   }
 });
 
+/* ---------- Thèmes ---------- */
+socket.on('catalog', c => {
+  catalog = c;
+  const cats = [...new Set(c.map(t => t.category))];
+  $('#themeList').innerHTML = cats.map(cat => `<fieldset data-category="${esc(cat)}">
+      <legend><label><input type="checkbox" data-cat="${esc(cat)}"> ${esc(cat)}</label><small></small></legend>
+      <div class="chips">${c.filter(t => t.category === cat).map(t =>
+        `<label class="chip"><input type="checkbox" value="${t.id}"><span>${esc(t.name)}</span></label>`).join('')}</div>
+    </fieldset>`).join('');
+  if (state?.phase === 'lobby') renderThemes(state);
+});
+
+const send = ids => act(null, 'setThemes', ids);
+$('#themeList').onchange = e => {
+  const cat = e.target.dataset.cat;
+  if (cat) {
+    for (const i of $(`fieldset[data-category="${CSS.escape(cat)}"]`).querySelectorAll('.chips input')) i.checked = e.target.checked;
+  }
+  send([...document.querySelectorAll('#themeList .chips input:checked')].map(i => i.value));
+};
+$('#allThemes').onclick = () => send(catalog.map(t => t.id));
+$('#noThemes').onclick = () => send([]);
+
+function renderThemes(s) {
+  const host = s.me === s.host, chosen = new Set(s.themes);
+  const subjects = catalog.filter(t => chosen.has(t.id)).reduce((n, t) => n + t.count, 0);
+  $('#themeCount').textContent = chosen.size
+    ? `${chosen.size} thème${chosen.size > 1 ? 's' : ''} sélectionné${chosen.size > 1 ? 's' : ''} · ${subjects} sujets possibles`
+    : 'Aucun thème sélectionné';
+  document.querySelector('.themes-card').classList.toggle('readonly', !host);
+  for (const fs of document.querySelectorAll('#themeList fieldset')) {
+    const inputs = [...fs.querySelectorAll('.chips input')];
+    let n = 0;
+    for (const i of inputs) {
+      i.checked = chosen.has(i.value);
+      i.disabled = !host;
+      i.closest('.chip').hidden = !host && !i.checked; // l'invité ne voit que les thèmes retenus
+      n += i.checked;
+    }
+    const all = fs.querySelector('[data-cat]');
+    all.checked = n === inputs.length;
+    all.indeterminate = n > 0 && n < inputs.length;
+    all.disabled = !host;
+    fs.querySelector('legend small').textContent = `${n} / ${inputs.length}`;
+    fs.hidden = !host && !n;
+  }
+}
+
 /* ---------- Dans un salon ---------- */
 socket.on('state', s => {
   state = s;
@@ -112,11 +158,13 @@ $('#copyLink').onclick = () => {
 };
 $('#startBtn').onclick = e => act(e.target, 'start');
 $('#again').onclick = e => act(e.target, 'start');
+$('#toLobby').onclick = e => act(e.target, 'toLobby');
 
 const dot = p => `<span class="dot ${p.connected ? 'on' : 'off'}" title="${p.connected ? 'Connecté' : 'Déconnecté'}"></span>`;
 
 function renderWait(s) {
   show('wait');
+  shown = '';
   $('#waitCode').textContent = s.code;
   $('#notice').hidden = !s.notice;
   $('#notice').textContent = s.notice ?? '';
@@ -126,8 +174,9 @@ function renderWait(s) {
     : '<li class="empty"><span class="dot wait"></span>En attente d’un adversaire…</li>').join('');
   const ready = s.players.length === 2 && s.players.every(p => p.connected);
   const b = $('#startBtn');
-  b.disabled = !(ready && s.me === s.host);
-  b.textContent = s.me !== s.host ? `${s.host} va lancer la partie…` : ready ? 'Commencer la partie' : 'En attente du 2ᵉ joueur…';
+  b.disabled = !(ready && s.me === s.host && s.themes.length);
+  b.textContent = s.me !== s.host ? `${s.host} va lancer la partie…` : !ready ? 'En attente du 2ᵉ joueur…' : !s.themes.length ? 'Choisis au moins un thème' : 'Commencer la partie';
+  renderThemes(s);
 }
 
 function renderGame(s) {
@@ -142,7 +191,7 @@ function renderGame(s) {
       <small class="role">${p.role === 'giver' ? '✍️ donne l’indice' : '🎯 devine'}</small>`;
   });
   $('#roundNo').textContent = `${s.round} / ${s.rounds}`;
-  $('#category').textContent = c.category;
+  $('#theme').textContent = c.theme;
   $('#subject').textContent = c.subject;
   $('#clue').hidden = !c.clue;
   $('#clue').textContent = c.clue ?? '';
@@ -151,11 +200,10 @@ function renderGame(s) {
   const away = other && !other.connected ? ` (${other.name} est déconnecté, la partie reprendra à son retour)` : '';
   const panel = $('#panel');
 
-  if (fresh && s.phase === 'clue') {
-    dial.set(50, false);
-    dial.setTarget(null);
+  if (fresh && s.phase !== 'reveal') {
+    if (s.phase === 'clue') dial.set(50, false);
+    dial.setTarget(c.target); // visible seulement pour le donneur d'indice (le serveur l'envoie à lui seul)
   }
-  dial.setTarget(c.target, s.phase === 'reveal' && fresh);
   dial.showNeedle(!giver || s.phase === 'reveal');
   dial.setInteractive(!giver && s.phase === 'guess');
   $('#readout').hidden = !(s.phase === 'guess' && !giver);
@@ -163,11 +211,11 @@ function renderGame(s) {
 
   if (s.phase === 'clue') {
     if (giver) {
-      $('#status').textContent = `Ta position secrète est ${c.target}. Écris un indice pour la faire deviner.`;
+      $('#status').innerHTML = `Ta position secrète : <b>${c.target}</b>. Écris un indice pour la faire deviner.`;
       if (fresh) {
         panel.innerHTML = `<form id="clueForm" class="clue-form">
           <textarea name="clue" maxlength="${s.maxClue}" rows="2" required placeholder="Ton indice, sans donner de chiffre…"></textarea>
-          <div><small id="count">0 / ${s.maxClue}</small><button class="primary">Envoyer l’indice</button></div></form>`;
+          <div><small id="count">0 / ${s.maxClue}</small><button class="gold">Envoyer l’indice</button></div></form>`;
         const f = $('#clueForm');
         f.clue.oninput = () => ($('#count').textContent = `${f.clue.value.length} / ${s.maxClue}`);
         f.onsubmit = e => {
@@ -187,24 +235,29 @@ function renderGame(s) {
     } else {
       $('#status').textContent = 'Fais glisser l’aiguille selon l’indice, puis valide.';
       if (fresh) {
-        panel.innerHTML = '<button class="primary big" id="guessBtn">Valider ma réponse</button>';
+        panel.innerHTML = '<button class="gold big" id="guessBtn">Valider ma réponse</button>';
         $('#guessBtn').onclick = e => act(e.target, 'guess', s.round, dial.value);
       }
     }
-  } else if (s.phase === 'reveal') {
-    $('#status').textContent = '';
-    if (fresh) {
-      dial.set(c.guess); // l'aiguille pivote jusqu'à la réponse donnée
+  } else if (s.phase === 'reveal' && fresh) {
+    // Révélation : l'aiguille se place sur la réponse, la roue tourne jusqu'au secret, puis le score apparaît.
+    $('#status').textContent = 'La roue tourne…';
+    panel.innerHTML = '';
+    dial.set(c.guess);
+    const round = s.round;
+    dial.reveal(c.target, c.guess).then(() => {
+      if (state?.round !== round || state.phase !== 'reveal') return; // déjà passé à la suite
+      $('#status').textContent = '';
       const last = s.round === s.rounds;
       panel.innerHTML = `<div class="result pts${c.points}">
-          <div><small>Position secrète</small><b>${c.target}</b></div>
           <div><small>Réponse</small><b>${c.guess}</b></div>
+          <div><small>Position secrète</small><b>${c.target}</b></div>
           <div><small>Écart</small><b>${c.diff}</b></div>
           <div class="won"><small>${esc(c.guesser)}</small><b>+${c.points}</b><small>point${c.points > 1 ? 's' : ''}</small></div>
         </div>
-        <button class="primary" id="nextBtn">${last ? 'Voir les résultats' : 'Manche suivante'}</button>`;
+        <button class="gold" id="nextBtn">${last ? 'Voir les résultats' : 'Manche suivante'}</button>`;
       $('#nextBtn').onclick = e => act(e.target, 'next', s.round);
-    }
+    });
   }
 }
 
@@ -215,8 +268,14 @@ function renderResults(s) {
   $('#winner').textContent = s.winner ? (s.winner === s.me ? '🏆 Tu as gagné !' : `🏆 ${s.winner} a gagné !`) : '🤝 Match nul !';
   $('#finalScores').innerHTML = [a, b].map(p =>
     `<div class="${p.name === s.winner ? 'win' : ''}"><span>${esc(p.name)}</span><b>${p.score}</b></div>`).join('<span class="vs">–</span>');
+  const best = [...s.history].sort((x, y) => x.diff - y.diff || x.round - y.round).slice(0, 3);
+  $('#best').innerHTML = best.map((h, i) => `<li><span class="medal">${['🥇', '🥈', '🥉'][i]}</span>
+    <div><b>${esc(h.subject)}</b><small>« ${esc(h.clue)} » — ${esc(h.giver)} → ${esc(h.guesser)}</small></div>
+    <span class="gap">écart ${h.diff} · +${h.points}</span></li>`).join('');
   $('#summary').innerHTML = s.history.map(h => `<tr>
-    <td>${h.round}</td><td>${esc(h.subject)}</td><td class="q">« ${esc(h.clue)} »<small>${esc(h.giver)} → ${esc(h.guesser)}</small></td>
+    <td>${h.round}</td><td>${esc(h.subject)}<small>${esc(h.theme)}</small></td><td class="q">« ${esc(h.clue)} »<small>${esc(h.giver)} → ${esc(h.guesser)}</small></td>
     <td>${h.target}</td><td>${h.guess}</td><td>${h.diff}</td><td class="pts pts${h.points}">+${h.points}</td></tr>`).join('');
-  $('#again').disabled = !s.players.every(p => p.connected) || s.players.length < 2;
+  const ready = s.players.length === 2 && s.players.every(p => p.connected);
+  $('#again').disabled = !ready;
+  $('#toLobby').disabled = false;
 }

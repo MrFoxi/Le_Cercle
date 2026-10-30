@@ -1,67 +1,90 @@
-// Banque de sujets, rangés par catégorie : pour en ajouter, il suffit d'ajouter une ligne dans la bonne liste.
-const BANK = {
-  Nourriture: [
-    'La galette des rois', 'Le chocolat', 'Les pizzas à l’ananas', 'Les fast-foods', 'Les sushis', 'Le fromage qui sent fort',
-    'Les brocolis', 'Le café', 'Les croissants', 'La raclette', 'Les épinards', 'Le Nutella', 'Les huîtres', 'Le brunch',
-    'Les cookies', 'La cuisine végane', 'Les frites', 'Le thé matcha', 'La fondue savoyarde',
-  ],
-  'Films et séries': [
-    'Les films Marvel', 'Star Wars', 'Harry Potter', 'Game of Thrones', 'Les comédies romantiques', 'Les films d’horreur',
-    'Friends', 'Titanic', 'Les remakes Disney en prises de vue réelles', 'Netflix', 'Le Seigneur des anneaux', 'Les films Pixar',
-    'La Casa de papel', 'Les séries coréennes', 'Les téléfilms de Noël', 'La cérémonie des Oscars',
-  ],
-  'Jeux vidéo': [
-    'Minecraft', 'Fortnite', 'Les jeux sur téléphone', 'Mario Kart', 'League of Legends', 'Les Pokémon', 'GTA', 'Les jeux de foot',
-    'Les jeux rétro', 'Zelda', 'Animal Crossing', 'Les battle royale', 'Les achats intégrés', 'Tetris', 'Les jeux très difficiles', 'Among Us',
-  ],
-  Musique: [
-    'Les Beatles', 'Le rap français', 'Les vinyles', 'L’Eurovision', 'La K-pop', 'Taylor Swift', 'Les comédies musicales', 'Le jazz',
-    'Les playlists Spotify', 'La musique classique', 'Les boys bands', 'Le karaoké', 'Les festivals d’été', 'L’autotune', 'La techno',
-    'Les chansons de l’été',
-  ],
-  Sports: [
-    'Le football', 'Le golf', 'Les Jeux olympiques', 'La Formule 1', 'Le padel', 'Le marathon', 'Le Tour de France', 'Le rugby',
-    'Le yoga', 'La salle de sport', 'Le ski', 'La pétanque', 'Le tennis', 'L’e-sport', 'Le surf', 'Le curling',
-  ],
-  'Vie quotidienne': [
-    'Le lundi matin', 'Les transports en commun', 'Se lever à 6 h', 'Faire la vaisselle', 'Les embouteillages', 'La sieste',
-    'Le télétravail', 'Les réunions', 'Le dimanche soir', 'Faire les courses', 'Les soldes', 'Le repassage', 'Les files d’attente',
-    'Les déménagements', 'Les jours de pluie', 'Le premier café du matin',
-  ],
-  Célébrités: [
-    'Elon Musk', 'Beyoncé', 'Kylian Mbappé', 'La famille Kardashian', 'Zinédine Zidane', 'Lady Gaga', 'Leonardo DiCaprio',
-    'Cristiano Ronaldo', 'Johnny Hallyday', 'Omar Sy', 'Rihanna', 'Squeezie', 'Les youtubeurs', 'La famille royale britannique',
-    'Céline Dion', 'Les stars de la télé-réalité',
-  ],
-  Technologie: [
-    'L’intelligence artificielle', 'Les smartphones pliables', 'Les montres connectées', 'La réalité virtuelle', 'Les voitures électriques',
-    'Les assistants vocaux', 'L’iPhone', 'Les cryptomonnaies', 'La 5G', 'Les imprimantes', 'Les trottinettes électriques',
-    'Les objets connectés', 'Les mises à jour automatiques', 'Le Wi-Fi gratuit', 'Les écouteurs sans fil', 'Les ordinateurs de gamer',
-  ],
-  Voyages: [
-    'Les vacances à la plage', 'Le camping', 'Les croisières', 'Paris', 'Les road trips', 'Les clubs de vacances', 'New York',
-    'Les voyages en train', 'Les aéroports', 'La randonnée en montagne', 'Venise', 'Les auberges de jeunesse', 'Le Japon',
-    'Les voyages organisés', 'Disneyland', 'Les vols low cost',
-  ],
-  'Culture générale': [
-    'La Joconde', 'Les musées', 'Les pyramides d’Égypte', 'La tour Eiffel', 'Les châteaux de la Loire', 'L’opéra', 'La poésie',
-    'Les livres de développement personnel', 'Les dictionnaires', 'Les jeux télévisés', 'L’art contemporain', 'Shakespeare',
-    'Les mathématiques', 'Les escape games', 'L’histoire de France', 'La philosophie',
-  ],
-  'Réseaux sociaux': [
-    'Les réseaux sociaux', 'Les influenceurs', 'TikTok', 'Instagram', 'Les stories', 'Les selfies', 'Facebook', 'Les mèmes',
-    'LinkedIn', 'Les hashtags', 'Les filtres photo', 'Les lives Twitch', 'BeReal', 'Les challenges viraux', 'Les vidéos de chats',
-    'Les commentaires YouTube',
-  ],
-  Animaux: [
-    'Les chats', 'Les chiens', 'Les pandas', 'Les araignées', 'Les licornes', 'Les pigeons', 'Les dauphins', 'Les moustiques',
-    'Les hamsters', 'Les manchots', 'Les serpents', 'Les loutres', 'Les chevaux', 'Les poissons rouges', 'Les lamas', 'Les requins',
-  ],
-  Loisirs: [
-    'Les jeux de société', 'La lecture', 'Le jardinage', 'Le tricot', 'La pêche', 'Les puzzles', 'La photographie', 'Le bricolage',
-    'Les parcs d’attractions', 'Le cinéma en salle', 'Les soirées pyjama', 'La cuisine maison', 'Le scrapbooking', 'Les mangas',
-    'Le Monopoly', 'Les apéros entre amis',
-  ],
+// Thèmes et sujets, rangés par catégorie. Pour ajouter un sujet : l'ajouter dans la liste de son thème, séparé par « | ».
+// Chaque thème doit garder au moins 10 sujets, pour qu'une partie de 10 manches sur un seul thème ne se répète pas.
+const CATALOG = {
+  'Culture et divertissement': {
+    Films: 'Interstellar|Titanic|Shrek|Harry Potter|Avengers|Le Seigneur des anneaux|Fast and Furious|Le Roi Lion|Inception|Bienvenue chez les Ch’tis|Star Wars|Jurassic Park|Les Visiteurs|Barbie|Avatar',
+    'Séries TV': 'Friends|Game of Thrones|Stranger Things|La Casa de papel|Breaking Bad|The Office|Plus belle la vie|Squid Game|Lupin|Les Simpson|Grey’s Anatomy|The Walking Dead|Kaamelott|Peaky Blinders|Emily in Paris',
+    'Dessins animés': 'Bob l’éponge|Les Pokémon|Scooby-Doo|Tom et Jerry|Peppa Pig|Oui-Oui|Les Razmoket|Totally Spies|Ben 10|Les Schtroumpfs|Pat’ Patrouille|Code Lyoko|Titeuf|Avatar, le dernier maître de l’air|Les Mystérieuses Cités d’or',
+    'Animes et mangas': 'One Piece|Naruto|Dragon Ball|L’Attaque des Titans|Death Note|Demon Slayer|Pokémon|Jujutsu Kaisen|Fullmetal Alchemist|Le Voyage de Chihiro|Captain Tsubasa|Les Chevaliers du Zodiaque|My Hero Academia|Hunter x Hunter|Sailor Moon',
+    'Jeux vidéo': 'Minecraft|GTA V|Fortnite|League of Legends|Red Dead Redemption 2|Roblox|Counter-Strike 2|Mario Kart|The Legend of Zelda|Tetris|Among Us|Animal Crossing|FIFA|Call of Duty|Candy Crush',
+    Musique: 'Le rap français|La K-pop|Les Beatles|Le jazz|La musique classique|L’Eurovision|Le karaoké|Les boys bands|L’autotune|La techno|Les chansons de l’été|Le reggaeton|Le métal|Les comédies musicales|La musique d’ascenseur',
+    'Artistes et célébrités': 'Beyoncé|Taylor Swift|Céline Dion|Omar Sy|Johnny Hallyday|Rihanna|Squeezie|Jul|Aya Nakamura|Stromae|Lady Gaga|Michael Jackson|Les Kardashian|Daft Punk|Édith Piaf',
+    Livres: 'Harry Potter|Le Petit Prince|Les Misérables|Twilight|Astérix|Tintin|Le Seigneur des anneaux|Cinquante nuances de Grey|Les livres de développement personnel|Le dictionnaire|Les livres dont vous êtes le héros|Gaston Lagaffe|Candide|Les modes d’emploi|Les livres audio',
+    'Personnages fictifs': 'Dark Vador|Mario|Shrek|Dobby|Le Joker|Sherlock Holmes|Pikachu|Homer Simpson|Batman|Voldemort|Jar Jar Binks|Le Père Noël|Gollum|Spider-Man|Bob l’éponge',
+    'Émissions TV': 'Koh-Lanta|Les Marseillais|Question pour un champion|Fort Boyard|Qui veut gagner des millions|Top Chef|Le Bachelor|Les Reines du shopping|La Roue de la fortune|Pékin Express|Danse avec les stars|Le Maillon faible|Les 12 coups de midi|Secret Story|Interville',
+    Publicités: 'Les pubs avant les vidéos YouTube|Les pubs pour le parfum à Noël|Les jingles qui restent en tête|Les pubs de lessive|Les pubs pour les jouets|Les pubs des assurances|Les panneaux publicitaires|Les pubs de 30 secondes impossibles à passer|Les placements de produits|Les pubs du Super Bowl|Les prospectus dans la boîte aux lettres|Les pubs Coca-Cola de Noël|Les pop-ups sur Internet|Les pubs de voiture|Les démarcheurs téléphoniques',
+    'Internet et YouTube': 'Les mèmes|Les vidéos de chats|Les commentaires YouTube|Les tutos maquillage|Les vidéos ASMR|Les live Twitch|Les vlogs|Les vidéos réaction|Wikipédia|Les forums|Les chaînes de vulgarisation|Les clickbaits|Les challenges viraux|Les unboxing|Les vidéos « 10 heures de… »',
+  },
+  'Vie quotidienne': {
+    Nourriture: 'La raclette|Les sushis|Les pizzas|Les frites|La galette des rois|Les brocolis|Le kebab|La pizza à l’ananas|Les épinards|La fondue savoyarde|Les huîtres|Le fromage qui sent fort|Les escargots|Les lasagnes|Le chou de Bruxelles',
+    Boissons: 'Le café|Le thé|Le Coca-Cola|L’eau pétillante|Le jus d’orange|Le chocolat chaud|Le lait|Les boissons énergisantes|Le smoothie|Le sirop à l’eau|Le bubble tea|L’eau du robinet|Le jus de tomate|La limonade|Le lait fraise',
+    'Fast-food': 'McDonald’s|Burger King|KFC|Le kebab du coin|Les tacos français|Subway|Les nuggets|Le Big Mac|Les menus enfants|Les drive|Les frites molles|Les sauces à volonté|Les bornes de commande|Domino’s Pizza|Les milkshakes',
+    Desserts: 'Le tiramisu|La crème brûlée|Le fondant au chocolat|La tarte au citron|Le flan|Les macarons|La mousse au chocolat|Le crumble|Les crêpes|Le riz au lait|Les profiteroles|La salade de fruits|Le cheesecake|Les îles flottantes|La bûche de Noël',
+    Animaux: 'Les chats|Les chiens|Les pandas|Les araignées|Les pigeons|Les dauphins|Les moustiques|Les hamsters|Les manchots|Les serpents|Les loutres|Les lamas|Les requins|Les poissons rouges|Les mouettes',
+    Métiers: 'Pompier|Influenceur|Médecin|Professeur|Astronaute|Comptable|Boulanger|Agent de la circulation|Youtubeur|Développeur|Clown|Plombier|Contrôleur de bus|Chef cuisinier|Vendeur de forfaits téléphoniques',
+    Transports: 'Le métro|Le TGV|L’avion|La trottinette électrique|Le vélo|Le bus de nuit|La voiture|Le covoiturage|Le bateau|Le RER|L’hélicoptère|Le taxi|La montgolfière|Le téléphérique|Marcher à pied',
+    Vêtements: 'Les Crocs|Les chaussettes dépareillées|Le jogging|La cravate|Les pulls de Noël|Les claquettes-chaussettes|Le jean slim|Les chapeaux|La doudoune|Les talons hauts|Le pyjama|Les sandales|Le kilt|Les vêtements de marque|La banane',
+    'École et études': 'Les mathématiques|La récréation|Les devoirs|La cantine|Les contrôles surprises|Les voyages scolaires|Le bac|La philosophie|Les exposés|Le sport à l’école|Les cours de langue|L’université|Les révisions de dernière minute|Le tableau noir|Les photos de classe',
+    Travail: 'Le télétravail|Les réunions|Le lundi matin|Les afterworks|Les open spaces|Le café du matin au bureau|Les mails « urgents »|Les entretiens d’embauche|La machine à café|Les jours fériés|Le team building|Les heures supplémentaires|Les collègues qui parlent fort|Le vendredi après-midi|Les visios caméra allumée',
+    Technologie: 'L’intelligence artificielle|Les smartphones pliables|Les montres connectées|La réalité virtuelle|Les voitures électriques|Les assistants vocaux|L’iPhone|Les cryptomonnaies|Les imprimantes|Les objets connectés|Les mises à jour automatiques|Le Wi-Fi gratuit|Les écouteurs sans fil|Les robots aspirateurs|La 5G',
+    'Logiciels et applications': 'Discord|Spotify|Photoshop|Windows|TikTok|Instagram|Google Maps|WhatsApp|Excel|PowerPoint|Snapchat|Netflix|Waze|Duolingo|Tinder',
+  },
+  'Loisirs et passions': {
+    Sports: 'Le football|Le golf|Le rugby|Le tennis|Le padel|La Formule 1|Le curling|Le marathon|Le ski|La pétanque|Le surf|Le basket|Le handball|L’e-sport|La natation',
+    'Jeux de société': 'Le Monopoly|Le Uno|Les échecs|Le Scrabble|Le Cluedo|Le Loup-garou|Le Trivial Pursuit|Dobble|Les Aventuriers du rail|Le Jungle Speed|Les Mille Bornes|Le Puissance 4|Catan|Le Time’s Up|Le jeu de l’oie',
+    Voyages: 'Paris|New York|Le Japon|Venise|Les road trips|Les croisières|Les auberges de jeunesse|Les vols low cost|Les aéroports|Les voyages organisés|Disneyland|Les voyages en train de nuit|Les décalages horaires|Les valises qui débordent|Les sacs à dos en Asie',
+    Vacances: 'La plage|Le camping|La montagne|Les clubs de vacances|Les colonies de vacances|Les vacances chez les grands-parents|Les embouteillages du départ|Les coups de soleil|Les cartes postales|Les campings-cars|Les vacances au ski|Les gîtes|Les souvenirs en plastique|Le retour de vacances|Les vacances sans Wi-Fi',
+    Automobile: 'Les voitures de sport|Les SUV|Les voitures électriques|La Twingo|Les décapotables|Les voitures autonomes|Les 4x4 en ville|Les voitures de collection|Les limousines|Le permis de conduire|Les créneaux|Le GPS|Les bouchons|La Fiat Multipla|Les voitures sans permis',
+    Motos: 'Les Harley-Davidson|Les scooters|Les motos de cross|Les side-cars|Les motos électriques|Les casques intégraux|Le permis moto|Les bikers|Les mobylettes|Les motos sportives|Les quads|Les rassemblements de motards|Les motos de collection|Les trottinettes thermiques|Faire du wheeling',
+    Pêche: 'La pêche à la ligne|Les asticots|Attendre des heures sans rien attraper|La pêche en mer|Les cannes à pêche télescopiques|Les bottes de pêcheur|Le poisson-chat|La pêche au gros|Les hameçons coincés dans les arbres|Pêcher au lever du soleil|Relâcher le poisson|Les histoires de pêche exagérées|La pêche sur glace|Les mouches artificielles|Le poisson du dimanche',
+    'Musculation et fitness': 'La salle de sport|Les squats|Les protéines en poudre|Le CrossFit|Le yoga|Les abdos|Les selfies à la salle|Le cardio|Les coachs sportifs|Le jour des jambes|Les courbatures|Les tapis de course|Les applis de sport|La zumba|Les gourdes géantes',
+    Soirées: 'Les soirées karaoké|Les soirées pyjama|Les soirées jeux|Les soirées déguisées|Les boîtes de nuit|Les apéros entre amis|Les soirées raclette|Les soirées film|Les afters|Les soirées où on rentre à 6 h|Les soirées à thème|Les playlists de soirée|Les barbecues|Les soirées où on ne connaît personne|Le lendemain de soirée',
+    'Fêtes et événements': 'Noël|Le Nouvel An|Halloween|Les anniversaires|Les mariages|La fête de la musique|Le 14 juillet|Pâques|La Saint-Valentin|Les baptêmes|Les fêtes de village|Les fêtes surprises|Les crémaillères|Les réunions de famille|Le carnaval',
+    Hobbies: 'Le jardinage|Le tricot|Les puzzles|La photographie|Le bricolage|Le scrapbooking|La poterie|La lecture|La cuisine|Les maquettes|La danse|La couture|Le dessin|Le Lego|La collection de timbres',
+  },
+  'Humour et thèmes absurdes': {
+    'Situations gênantes': 'Faire coucou à quelqu’un qui ne te parlait pas|Appeler son prof « maman »|Rester coincé dans une porte tournante|Envoyer un message à la mauvaise personne|Rire seul dans le métro|Trébucher devant tout le monde|Oublier le prénom de quelqu’un en le saluant|Être pris en train de chanter fort|Mettre son pull à l’envers toute la journée|Tirer une porte où c’est écrit « pousser »|Se tromper de voiture sur un parking|Un ventre qui gargouille en pleine réunion|Répondre « toi aussi » au serveur qui dit « bon appétit »|Faire semblant de téléphoner|Rater une marche',
+    'Red Flags': 'Ne jamais rappeler|Parler de son ex au premier rendez-vous|Ne pas aimer les animaux|Mâcher la bouche ouverte|Être impoli avec les serveurs|Avoir 47 alarmes le matin|Mettre des likes à 3 h du matin|Ne jamais s’excuser|Répondre « mdr » à tout|Manger ses frites une par une avec une fourchette|Garder ses chaussures sur le canapé|Avoir 0 photo de ses amis|Liker ses propres photos|Vérifier ton téléphone|Ne pas aimer le fromage',
+    'Green Flags': 'Ramener des croissants le dimanche|Se souvenir des petits détails|Être gentil avec les inconnus|Savoir s’excuser|Écouter sans couper la parole|Proposer de partager l’addition|Envoyer « bien rentré ? »|Faire rire sans se moquer|Aimer les animaux|Être ponctuel|Cuisiner pour les autres|Prendre des nouvelles|Rire de soi-même|Respecter les silences|Faire la vaisselle sans qu’on demande',
+    'Pires excuses': '« Mon chien a mangé mes devoirs »|« Je n’avais plus de batterie »|« Il y avait des bouchons »|« Je n’ai pas vu ton message »|« C’est pas moi, c’est le Wi-Fi »|« Mon réveil n’a pas sonné »|« J’ai cru que c’était demain »|« Je t’ai appelé mais ça ne passait pas »|« J’étais sous la douche »|« Mon chat a marché sur le clavier »|« J’ai été retenu par ma grand-mère »|« Mercure était rétrograde »|« C’était une blague »|« Je suis en route » (alors qu’on est au lit)|« Je ne savais pas qu’il fallait venir »',
+    'Choses inutiles': 'Les boutons des passages piétons|La touche Arrêt défil|Le petit pot de mayonnaise de 5 ml|Les manuels d’utilisation|La poche de jean minuscule|Les rideaux de douche|Les mots de passe à 12 caractères|Les sachets de silice|Le papier bulle|Les télécommandes de climatisation|Les tire-bouchons sur les couteaux suisses|Les selfie-sticks|Les ascenseurs pour un étage|Les chargeurs qui ne chargent pas|Les gommes qui salissent',
+    'Mauvaises habitudes': 'Se ronger les ongles|Scroller avant de dormir|Remettre son réveil 5 fois|Grignoter la nuit|Laisser traîner ses chaussettes|Arriver en retard|Parler la bouche pleine|Craquer ses doigts|Oublier de boire de l’eau|Procrastiner|Laisser 200 onglets ouverts|Ne jamais répondre aux messages|Manger devant un écran|Remettre au lendemain la vaisselle|Dire « je commence lundi »',
+    'Situations du quotidien': 'Chercher ses clés|Attendre le bus sous la pluie|Faire la queue à la poste|Monter les courses en une fois|Le Wi-Fi qui coupe|Une chaussette perdue au lavage|Faire le plein d’essence|Rater son train de 30 secondes|Oublier pourquoi on est entré dans une pièce|Trouver une place de parking|Sortir les poubelles|Déboucher l’évier|Se brûler la langue avec son café|Ranger sa chambre|Recharger son téléphone',
+    'Personnes insupportables': 'Ceux qui écoutent de la musique sans écouteurs|Ceux qui doublent dans la file|Ceux qui spoilent les séries|Ceux qui répondent « ok. »|Ceux qui parlent au cinéma|Ceux qui laissent une miette de pain|Ceux qui tapent fort sur leur clavier|Ceux qui donnent des leçons|Ceux qui arrivent toujours en retard|Ceux qui envoient des vocaux de 5 minutes|Ceux qui mangent bruyamment|Ceux qui disent « c’était mieux avant »|Ceux qui ne rendent jamais ce qu’on leur prête|Ceux qui klaxonnent pour rien|Ceux qui lisent par-dessus ton épaule',
+    'Pouvoirs inutiles': 'Savoir toujours l’heure exacte|Parler aux pigeons|Devenir invisible seulement quand personne ne regarde|Voler à 10 cm du sol|Changer la couleur de ses chaussettes|Deviner le goût des yaourts|Respirer sous l’eau du bain uniquement|Lire dans les pensées des poissons rouges|Téléporter à 1 mètre|Faire cuire les pâtes parfaitement|Éternuer sur commande|Ouvrir n’importe quel pot de cornichons|Retrouver toujours les télécommandes|Faire pousser la moustache instantanément|Avoir toujours du réseau dans les ascenseurs',
+    'Pires façons de mourir': 'Écrasé par une pile de linge sale|Étouffé par un fou rire|Tomber d’une chaise en se balançant|Glisser sur une peau de banane|Coincé dans un toboggan aquatique|Avalé par un trou dans le canapé|Noyé dans un bol de céréales|Attaqué par une oie|Enseveli sous des peluches|Assommé par une noix de coco|Emporté par un parapluie un jour de vent|Perdu dans un magasin IKEA|Mort d’ennui en réunion|Tomber dans une piscine à balles|Étouffé par trop de câlins',
+    'Objets improbables': 'Un grille-pain connecté|Une fourchette à spaghettis qui tourne toute seule|Un parapluie pour chien|Des chaussures avec des roulettes|Un oreiller en forme de pizza|Un aspirateur pour clavier|Une cravate USB|Des lunettes essuie-glaces|Un sèche-cheveux à manivelle|Un chapeau-parapluie|Une brosse à dents musicale|Des chaussettes pour bouteilles|Un réveil qui s’enfuit|Un frigo de poche|Une moustache autocollante',
+    'Débats absurdes': 'Mettre du lait avant les céréales|Dormir avec des chaussettes|Manger une pizza froide au petit-déjeuner|Parler tout seul|Se doucher le matin plutôt que le soir|Mettre de l’ananas sur la pizza|Dire « pain au chocolat » plutôt que « chocolatine »|Manger les frites avec une fourchette|Plier son papier toilette plutôt que le froisser|Tremper ses tartines dans le café|Mettre du ketchup sur des pâtes|Laisser la porte du placard ouverte|Faire son lit tous les matins|Mettre le papier toilette par-dessus|Dire bonjour aux animaux',
+    'Pires colocataires': 'Celui qui mange tes yaourts|Celui qui ne fait jamais la vaisselle|Celui qui joue de la batterie à minuit|Celui qui invite des inconnus|Celui qui laisse des cheveux partout|Celui qui chante sous la douche à 6 h|Celui qui ne paie jamais sa part|Celui qui élève des serpents|Celui qui emprunte tes vêtements|Celui qui fait des bruits de bouche|Celui qui laisse traîner ses chaussettes|Celui qui ne sort jamais de sa chambre|Celui qui parle à ses plantes très fort|Celui qui cuisine du poisson tous les jours|Celui qui organise des soirées tous les soirs',
+    'Galères de soirée': 'Rater le dernier métro|Arriver en premier|Ne connaître personne|Renverser un verre sur le canapé|Oublier ses clés|Plus de batterie à 2 h du matin|La musique choisie par quelqu’un d’autre|Faire la queue pendant une heure pour entrer|Être le seul déguisé|Attendre un taxi qui n’arrive jamais|Se faire voler sa place sur le canapé|Les pieds qui font mal en talons|Les chips finies à 22 h|Le voisin qui appelle pour le bruit|Raccompagner tout le monde',
+    'Comportements gênants': 'Parler très fort au téléphone|Mâcher du chewing-gum la bouche ouverte|Applaudir à l’atterrissage de l’avion|Se curer le nez en voiture|Faire des blagues lourdes|Raconter sa vie à un inconnu|Danser seul dans la rue|Fixer quelqu’un dans le métro|Se recoiffer dans toutes les vitrines|Imiter des accents|Rire à ses propres blagues|Parler de soi à la 3ᵉ personne|Corriger l’orthographe des autres|Faire des selfies aux enterrements|Réciter des répliques de films',
+    'Idées stupides': 'Couper sa frange soi-même|Envoyer un texto à son ex à 3 h|Manger un piment entier|Se lancer dans un marathon sans entraînement|Acheter un abonnement de sport en janvier|Réviser la veille de l’examen|Promettre de « juste regarder un épisode »|Se teindre les cheveux la veille d’un mariage|Partir sans GPS|Faire confiance à la météo|Adopter trois chats d’un coup|Cuisiner un plat nouveau pour 15 invités|Mettre de nouvelles chaussures pour une randonnée|Répondre à tous dans un mail|Dire « ça va, je conduis bien »',
+    'Pires cadeaux': 'Une calculatrice|Des chaussettes de Noël|Une plante en plastique|Un bon d’achat de 5 €|Un livre de régime|Un mug « Meilleur collègue »|Un cadeau déjà ouvert|Un parfum qui sent fort|Une carte de vœux vide|Un aspirateur|Un abonnement à la salle de sport|Une photo de soi encadrée|Un pull qui gratte|Un caillou décoratif|Des savons d’hôtel',
+    'Pires prénoms': 'Clafoutis|Wifi|Raclette|Toblerone|Patate|Ikea|Batterie|Vendredi|Sardine|Rhubarbe|Excel|Gruyère|Moustache|Parking|Lasagne',
+    'Situations improbables': 'Croiser sa prof à la plage|Gagner au loto deux fois|Se faire voler son sandwich par une mouette|Trouver 50 € dans un vieux manteau|Être coincé dans un ascenseur avec son ex|Voir un chat conduire une voiture télécommandée|Recevoir une lettre de soi-même du passé|Être pris pour une star dans la rue|Se faire réveiller par une vache|Tomber sur son sosie|Le Wi-Fi qui marche parfaitement dans le train|Une pizza livrée en 5 minutes|Trouver une place de parking du premier coup|Un lundi agréable|Retrouver une chaussette perdue',
+    'Choses qu’on regrette': 'Le tatouage fait sur un coup de tête|La coupe de cheveux de 2010|Le dernier verre de trop|Avoir dit « je vais juste dormir 10 minutes »|Avoir répondu « tranquille » à un message important|Avoir supprimé une photo|Avoir revendu sa console|Ne pas avoir appris à nager tôt|Avoir mangé le kebab de 4 h|Avoir regardé la fin d’une série décevante|Avoir mis « répondre à tous »|Avoir prêté de l’argent à un ami|Avoir oublié un anniversaire|Avoir parlé trop vite|Avoir acheté un appareil à raclette jamais utilisé',
+    'Mauvaises décisions': 'Commander des sushis dans une station-service|Prendre un raccourci inconnu|Dormir 2 h avant un examen|Acheter des chaussures une taille trop petite|Aller au cinéma sans réserver un soir de sortie|Ignorer le voyant d’essence|Mettre un pantalon blanc pour manger des spaghettis|Arrêter une série à un épisode de la fin|Sortir sans parapluie un jour gris|Laisser son frère couper ses cheveux|Rentrer à pied à 3 h du matin|Commencer Game of Thrones un dimanche soir|Prendre un chat et un chien en même temps|Repousser le dentiste|Changer de mot de passe sans le noter',
+  },
+  'Culture générale et société': {
+    'Pays et villes': 'Paris|Marseille|New York|Tokyo|Le Japon|L’Italie|Las Vegas|La Belgique|Dubaï|Venise|Londres|Le Canada|L’Islande|Bruxelles|Los Angeles',
+    Histoire: 'L’Égypte antique|Le Moyen Âge|La Renaissance|Les châteaux forts|Les Vikings|L’Empire romain|La Révolution française|La Préhistoire|Les pyramides|Les chevaliers|Les pirates|Les mousquetaires|Les Années folles|La conquête de l’Ouest|Les dinosaures',
+    Sciences: 'Les mathématiques|La chimie|La physique quantique|Le tableau périodique|Les microscopes|La biologie|La génétique|Les volcans|Les expériences ratées|La gravité|Les trous noirs|L’électricité|Les vaccins|Les robots|La météo',
+    Mythologie: 'Zeus|Hercule|Les sirènes|Les dragons|Méduse|Les licornes|Thor|Le Minotaure|Pégase|Les cyclopes|L’Atlantide|Les vampires|Les loups-garous|Les nymphes|Poséidon',
+    Inventions: 'La roue|L’imprimerie|Internet|L’électricité|Le téléphone portable|La télévision|Le micro-ondes|Le frigo|Les avions|Le vélo|Les lunettes|Le papier toilette|Le Post-it|Le lave-vaisselle|La machine à café',
+    Marques: 'Apple|Nike|Coca-Cola|IKEA|Lego|Nutella|Samsung|McDonald’s|Adidas|Netflix|Amazon|Tesla|Haribo|Décathlon|Kinder',
+    'Personnalités historiques': 'Napoléon|Jeanne d’Arc|Léonard de Vinci|Marie Curie|Albert Einstein|Cléopâtre|Louis XIV|Charles de Gaulle|Victor Hugo|Mozart|Christophe Colomb|Gandhi|Martin Luther King|Molière|Jules César',
+    'Expressions françaises': '« Avoir un poil dans la main »|« Coûter un bras »|« Poser un lapin »|« Avoir la flemme »|« Tomber dans les pommes »|« Être dans la lune »|« Avoir le cafard »|« Mettre les pieds dans le plat »|« Raconter des salades »|« Avoir un chat dans la gorge »|« Prendre un râteau »|« Faire la grasse matinée »|« Casser les pieds »|« Être une poule mouillée »|« Ça ne casse pas trois pattes à un canard »',
+    Langues: 'L’anglais|L’espagnol|L’allemand|Le japonais|Le latin|L’italien|Le chinois|Le verlan|Le langage SMS|L’espéranto|Le russe|L’arabe|Le langage des signes|Les accents régionaux|Le franglais',
+    'Événements historiques': 'Les premiers pas sur la Lune|La chute du mur de Berlin|La Coupe du monde 1998|L’invention de l’imprimerie|Les Jeux olympiques de Paris 2024|La découverte de l’Amérique|La prise de la Bastille|Le passage à l’an 2000|Le naufrage du Titanic|L’ouverture de Disneyland Paris|La sortie du premier iPhone|Le passage à l’euro|La construction de la tour Eiffel|Le premier vol des frères Wright|Le sacre de Napoléon',
+    Nature: 'La forêt|Les volcans|Les orages|La neige|La plage|Les montagnes|Les cascades|Les déserts|Les moustiques|Les arcs-en-ciel|La jungle|Les champignons|Le printemps|Le brouillard|Les marées',
+    Espace: 'La Lune|Mars|Les étoiles filantes|Les trous noirs|Les astronautes|La Station spatiale internationale|Les extraterrestres|Le Soleil|Saturne|Les fusées|Les éclipses|Pluton|Les comètes|Le tourisme spatial|La Voie lactée',
+  },
 };
 
-module.exports = Object.entries(BANK).flatMap(([category, list]) => list.map(text => ({ text, category })));
+const slug = s => s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+
+// THEMES : [{ id, name, category, subjects: [...] }]
+const THEMES = Object.entries(CATALOG).flatMap(([category, themes]) =>
+  Object.entries(themes).map(([name, list]) => ({ id: slug(name), name, category, subjects: list.split('|') })));
+
+module.exports = { THEMES };

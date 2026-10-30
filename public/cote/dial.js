@@ -1,12 +1,15 @@
-// Le demi-cercle : cadran bleu → rouge, graduations, zone secrète, aiguille déplaçable (souris, doigt, clavier).
+// Le demi-cercle : cadran BON (0) → MAUVAIS (100), graduations, aiguille déplaçable (souris, doigt, clavier)
+// et roue de révélation qui tourne autour du pivot puis s'arrête sur la position secrète.
 const NS = 'http://www.w3.org/2000/svg';
-const CX = 220, CY = 222, R = 190; // centre (pivot) et rayon du cadran, en unités du viewBox
+const CX = 220, CY = 222, R = 190; // pivot et rayon du cadran, en unités du viewBox
 const BANDS = [[40, 1], [30, 2], [20, 3], [10, 4], [5, 5]]; // demi-largeur de la zone -> points
+const SPIN_MS = 3600;
 
-// Valeur 0..100 -> angle : 0 à gauche, 50 en haut, 100 à droite.
-const angle = v => Math.PI * (1 - v / 100);
-const pt = (v, r) => [CX + r * Math.cos(angle(v)), CY - r * Math.sin(angle(v))];
+// Valeur 0..100 -> point : 0 à gauche, 50 en haut, 100 à droite.
+const rad = v => Math.PI * (1 - v / 100);
+const pt = (v, r) => [CX + r * Math.cos(rad(v)), CY - r * Math.sin(rad(v))];
 const clamp = v => Math.max(0, Math.min(100, v));
+const deg = v => (v - 50) * 1.8; // rotation (en degrés) d'un élément dessiné à 50 pour l'amener à v
 
 function el(tag, attrs, parent) {
   const e = document.createElementNS(NS, tag);
@@ -20,14 +23,31 @@ const wedge = (a, b, r) => {
 };
 
 export function createDial(svg, { onChange } = {}) {
-  svg.setAttribute('viewBox', '-16 0 472 262'); // marge pour les graduations 0 et 100
-  // Un seul dégradé : bleu profond à gauche, presque blanc au milieu, rouge vif à droite.
-  svg.innerHTML = `<defs><linearGradient id="dialGrad" x1="${CX - R}" x2="${CX + R}" gradientUnits="userSpaceOnUse">
-    <stop offset="0" stop-color="#1d56d8"/><stop offset=".3" stop-color="#6f9bf2"/><stop offset=".5" stop-color="#eef1f7"/>
-    <stop offset=".7" stop-color="#f08a92"/><stop offset="1" stop-color="#e0202f"/></linearGradient></defs>`;
+  svg.setAttribute('viewBox', '-16 -34 472 296'); // marges pour les graduations et « NEUTRE »
+  svg.innerHTML = `<defs>
+    <linearGradient id="dialGrad" x1="${CX - R}" x2="${CX + R}" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#fff1c4"/><stop offset=".22" stop-color="#f5d27a"/><stop offset=".5" stop-color="#9a7434"/>
+      <stop offset=".78" stop-color="#2c2620"/><stop offset="1" stop-color="#0c0c0e"/></linearGradient>
+    <clipPath id="dialHalf"><path d="M${CX - R},${CY} A${R},${R} 0 0 1 ${CX + R},${CY} Z"/></clipPath></defs>`;
   el('path', { d: `M${CX - R},${CY} A${R},${R} 0 0 1 ${CX + R},${CY} Z`, class: 'face' }, svg);
 
-  const target = el('g', { class: 'target' }, svg);
+  // Roue : dessinée centrée sur 50 (en haut), puis tournée jusqu'à la position. Le cadran la coupe en demi-cercle.
+  const wheelClip = el('g', { 'clip-path': 'url(#dialHalf)' }, svg);
+  const wheel = el('g', { class: 'wheel hidden' }, wheelClip);
+  for (let a = 0; a < 360; a += 15) {
+    const t = (a * Math.PI) / 180;
+    el('line', { x1: CX, y1: CY, x2: CX + R * Math.cos(t), y2: CY + R * Math.sin(t), class: 'spoke' }, wheel);
+  }
+  for (const [w, p] of BANDS) el('path', { d: wedge(50 - w, 50 + w, R - 2), class: `band b${p}` }, wheel);
+  for (const [w, p] of BANDS) {
+    const inner = BANDS.find(b => b[1] === p + 1)?.[0]; // le chiffre se place entre sa bande et la suivante, plus fine
+    for (const v of p === 5 ? [50] : [50 - (w + inner) / 2, 50 + (w + inner) / 2]) {
+      const [x, y] = pt(v, R - 24);
+      el('text', { x, y: y + 5, class: 'band-label' }, wheel).textContent = p;
+    }
+  }
+  el('line', { x1: CX, y1: CY, x2: CX, y2: CY - R + 4, class: 'secret-line' }, wheel);
+  el('path', { d: `M${CX - 9},${CY - R - 2} L${CX + 9},${CY - R - 2} L${CX},${CY - R + 14} Z`, class: 'secret-mark' }, wheel);
 
   const ticks = el('g', { class: 'ticks' }, svg);
   for (let v = 0; v <= 100; v += 2) {
@@ -39,39 +59,37 @@ export function createDial(svg, { onChange } = {}) {
     }
   }
   el('path', { d: `M${CX - R},${CY} A${R},${R} 0 0 1 ${CX + R},${CY}`, class: 'rim' }, svg);
-  el('text', { x: CX - R + 40, y: CY + 32, class: 'side low' }, svg).textContent = 'SOUS-COTÉ';
-  el('text', { x: CX + R - 40, y: CY + 32, class: 'side high' }, svg).textContent = 'SURCOTÉ';
+  el('text', { x: CX - R + 30, y: CY + 32, class: 'side good' }, svg).textContent = 'BON';
+  el('text', { x: CX, y: CY - R - 46, class: 'side neutral' }, svg).textContent = 'NEUTRE';
+  el('text', { x: CX + R - 30, y: CY + 32, class: 'side bad' }, svg).textContent = 'MAUVAIS';
+
+  // Écart entre la réponse et la position secrète, dessiné le long du bord après la révélation.
+  const gap = el('g', { class: 'gap hidden' }, svg);
+  const gapArc = el('path', { class: 'gap-arc' }, gap);
+  const gapText = el('text', { class: 'gap-label' }, gap);
 
   const needle = el('g', { class: 'needle' }, svg);
   el('path', { d: `M${CX - 7},${CY} L${CX},${CY - R + 12} L${CX + 7},${CY} Z` }, needle);
   el('circle', { cx: CX, cy: CY, r: 16, class: 'pivot' }, svg);
   el('circle', { cx: CX, cy: CY, r: 6, class: 'pivot-dot' }, svg);
 
-  let value = 50, interactive = false;
+  let value = 50, interactive = false, spin = null;
 
   function set(v, animate = true) {
     value = clamp(v);
     needle.classList.toggle('instant', !animate);
-    needle.style.transform = `rotate(${(value - 50) * 1.8}deg)`;
+    needle.style.transform = `rotate(${deg(value)}deg)`;
     svg.setAttribute('aria-valuenow', Math.round(value));
   }
 
-  // Zone secrète : bandes de points autour de la position, de la plus large (1 pt) à la plus fine (5 pts).
-  function setTarget(t, reveal = false) {
-    target.innerHTML = '';
-    target.classList.toggle('reveal', reveal);
-    if (t === null || t === undefined) return;
-    for (const [w, p] of BANDS) {
-      el('path', { d: wedge(clamp(t - w), clamp(t + w), R - 2), class: `band b${p}` }, target);
-    }
-    for (const [w, p] of BANDS) {
-      const inner = BANDS.find(b => b[1] === p + 1)?.[0]; // le chiffre se place entre sa bande et la suivante, plus fine
-      for (const v of p === 5 ? [t] : [t - (w + inner) / 2, t + (w + inner) / 2]) {
-        if (v < 0 || v > 100) continue;
-        const [x, y] = pt(v, R - 22);
-        el('text', { x, y: y + 5, class: 'band-label' }, target).textContent = p;
-      }
-    }
+  function showGap(target, guess) {
+    const [a, b] = [Math.min(target, guess), Math.max(target, guess)];
+    const [x1, y1] = pt(a, R - 8), [x2, y2] = pt(b, R - 8), [lx, ly] = pt((a + b) / 2, R * 0.58);
+    gapArc.setAttribute('d', b - a < 0.5 ? '' : `M${x1},${y1} A${R - 8},${R - 8} 0 0 1 ${x2},${y2}`);
+    gapText.setAttribute('x', lx);
+    gapText.setAttribute('y', ly);
+    gapText.textContent = b - a ? `écart ${Math.round(b - a)}` : 'en plein dans le mille !';
+    gap.classList.remove('hidden');
   }
 
   // Position du pointeur -> valeur ; sous la ligne de base, on reste collé à l'extrémité la plus proche.
@@ -102,13 +120,38 @@ export function createDial(svg, { onChange } = {}) {
   svg.setAttribute('role', 'slider');
   svg.setAttribute('aria-valuemin', 0);
   svg.setAttribute('aria-valuemax', 100);
-  svg.setAttribute('aria-label', 'Position sur l’échelle, de sous-coté (0) à surcoté (100)');
+  svg.setAttribute('aria-label', 'Position sur l’échelle, de BON (0) à MAUVAIS (100)');
   set(50, false);
 
   return {
     get value() { return value; },
     set,
-    setTarget,
+    // Affiche (ou cache, avec null) la zone secrète, sans animation.
+    setTarget(t) {
+      spin?.cancel();
+      wheel.classList.toggle('hidden', t === null || t === undefined);
+      svg.classList.toggle('revealing', t !== null && t !== undefined);
+      wheel.classList.remove('landed');
+      gap.classList.add('hidden');
+      if (t !== null && t !== undefined) wheel.style.transform = `rotate(${deg(t)}deg)`;
+    },
+    // Révélation : la roue tourne vite, ralentit et s'arrête pile sur la position secrète, puis l'écart s'affiche.
+    reveal(target, guess) {
+      const end = deg(target), start = end - 360 * 5 - 120;
+      wheel.classList.remove('hidden', 'landed');
+      svg.classList.add('revealing');
+      gap.classList.add('hidden');
+      spin?.cancel();
+      const done = () => {
+        wheel.style.transform = `rotate(${end}deg)`;
+        wheel.classList.add('landed');
+        showGap(target, guess);
+      };
+      if (matchMedia('(prefers-reduced-motion: reduce)').matches) return done(), Promise.resolve();
+      spin = wheel.animate([{ transform: `rotate(${start}deg)` }, { transform: `rotate(${end}deg)` }],
+        { duration: SPIN_MS, easing: 'cubic-bezier(.12, .7, .16, 1)', fill: 'forwards' });
+      return spin.finished.then(done, () => {});
+    },
     setInteractive(on) {
       interactive = on;
       svg.classList.toggle('interactive', on);

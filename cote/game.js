@@ -1,5 +1,6 @@
-// Règles du Surcoté / Sous-coté pour un salon de 2 joueurs. Aucune notion de réseau : testé par test-cote.js.
-const SUBJECTS = require('./subjects');
+// Règles du Demi-Cercle (échelle de BON à MAUVAIS) pour un salon de 2 joueurs. Aucune notion de réseau : testé par test-cote.js.
+const { THEMES } = require('./subjects');
+const THEME_IDS = new Set(THEMES.map(t => t.id));
 
 const ROUNDS = 10, MAX_CLUE = 140;
 
@@ -32,6 +33,7 @@ class Room {
     this.current = null; // { subject, category, target, clue, guess, diff, points, giver, guesser }
     this.history = [];
     this.notice = null; // dernier événement à afficher (départ d'un joueur…)
+    this.themes = [...THEME_IDS]; // thèmes choisis par le créateur ; tous par défaut
   }
 
   get host() { return this.players[0]?.name; }
@@ -53,12 +55,27 @@ class Room {
     }
   }
 
+  // Le créateur choisit les thèmes dans le lobby ; ils déterminent les sujets possibles.
+  setThemes(name, ids) {
+    if (!['lobby', 'over'].includes(this.phase)) throw new Error('On ne change pas les thèmes en pleine partie');
+    if (name !== this.host) throw new Error('Seul le créateur du salon choisit les thèmes');
+    this.themes = [...new Set(Array.isArray(ids) ? ids : [])].filter(id => THEME_IDS.has(id));
+  }
+
+  // Après une partie, retour au lobby pour changer les thèmes.
+  toLobby() {
+    if (this.phase !== 'over') throw new Error('Action déjà prise en compte');
+    this.phase = 'lobby';
+  }
+
   start(name) {
     if (!['lobby', 'over'].includes(this.phase)) throw new Error('La partie est déjà en cours');
     if (this.players.length < 2 || this.players.some(p => !p.connected)) throw new Error('Il faut deux joueurs connectés');
     if (this.phase === 'lobby' && name !== this.host) throw new Error('Seul le créateur du salon peut lancer la partie');
+    if (!this.themes.length) throw new Error('Choisis au moins un thème');
     for (const p of this.players) p.score = 0;
-    this.deck = shuffle(SUBJECTS, this.rng); // pas de sujet en double dans une partie
+    const subjects = THEMES.filter(t => this.themes.includes(t.id)).flatMap(t => t.subjects.map(text => ({ text, theme: t.name })));
+    this.deck = shuffle(subjects, this.rng); // pas de sujet en double dans une partie
     this.round = 0;
     this.history = [];
     this.notice = null;
@@ -74,8 +91,8 @@ class Room {
     this.round++;
     // Les rôles s'inversent à chaque manche : le créateur donne l'indice aux manches impaires.
     const giver = this.players[(this.round - 1) % 2].name, guesser = this.players[this.round % 2].name;
-    const { text, category } = this.deck.pop();
-    this.current = { subject: text, category, target: Math.floor(this.rng() * 101), clue: null, guess: null, diff: null, points: null, giver, guesser };
+    const { text, theme } = this.deck.pop();
+    this.current = { subject: text, theme, target: Math.floor(this.rng() * 101), clue: null, guess: null, diff: null, points: null, giver, guesser };
     this.phase = 'clue';
   }
 
@@ -122,9 +139,10 @@ class Room {
       current: c && { ...c, target: secret ? c.target : null },
       history: this.history,
       winner: this.phase !== 'over' ? null : a.score === b.score ? null : (a.score > b.score ? a : b).name,
+      themes: this.themes,
       maxClue: MAX_CLUE,
     };
   }
 }
 
-module.exports = { Room, pointsFor, ROUNDS, SUBJECTS };
+module.exports = { Room, pointsFor, ROUNDS, THEMES };
