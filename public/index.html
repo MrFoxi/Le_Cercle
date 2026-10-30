@@ -11,24 +11,88 @@
 </head>
 <body>
   <section id="home">
-    <div class="hero">
+    <header class="hero">
       <div class="hero-cards" aria-hidden="true"><span>7</span><span>R</span></div>
       <h1>7,5</h1>
-      <p class="tagline">Le jeu de cartes en ligne</p>
-    </div>
-    <div class="panel">
-      <form id="nameForm">
-        <input id="pseudo" maxlength="20" placeholder="Ton pseudo" aria-label="Pseudo" required autocomplete="off">
-        <button class="gold">Entrer</button>
-      </form>
-      <div id="lobbyPane" hidden>
-        <form id="createForm">
-          <input id="lobbyName" maxlength="30" placeholder="Nom de ta table" aria-label="Nom du lobby" required>
-          <button class="gold">Créer</button>
-        </form>
-        <h2>Tables ouvertes</h2>
-        <ul id="lobbies"></ul>
+      <p class="tagline">Le jeu de cartes en ligne · 2 à 8 joueurs</p>
+    </header>
+
+    <div class="home-grid">
+      <div class="play">
+        <div class="panel">
+          <h2 class="panel-title">Jouer</h2>
+          <form id="nameForm">
+            <input id="pseudo" maxlength="20" placeholder="Ton pseudo" aria-label="Pseudo" required autocomplete="off">
+            <button class="gold">Entrer</button>
+          </form>
+          <p class="hint" id="nameHint">Pas de compte : choisis juste un pseudo.</p>
+          <div id="lobbyPane" hidden>
+            <form id="createForm">
+              <input id="lobbyName" maxlength="30" placeholder="Nom de ta table" aria-label="Nom du lobby" required>
+              <button class="gold">Créer</button>
+            </form>
+            <h3>Tables ouvertes</h3>
+            <ul id="lobbies"></ul>
+          </div>
+        </div>
       </div>
+
+      <article class="rules" aria-labelledby="rulesTitle">
+        <h2 id="rulesTitle">Les règles</h2>
+
+        <section class="rule goal">
+          <span class="rule-icon" aria-hidden="true">🎯</span>
+          <div>
+            <h3>Le but</h3>
+            <p>Faire un total de points <strong>le plus proche possible de 7,5</strong>, sans le dépasser, et battre le <strong>banquier</strong>. Chaque joueur commence avec <strong>1000 jetons</strong>.</p>
+          </div>
+        </section>
+
+        <section class="rule">
+          <h3>La valeur des cartes</h3>
+          <ul class="values"><li><div class="mini"><span class="card"><span class="corner tl">A<br>♠</span><span class="pip">♠</span><span class="corner br">A<br>♠</span></span></div><b>1</b><small>As</small></li><li><div class="mini"><span class="card red"><span class="corner tl">2<br>♥</span><span class="pip">♥</span><span class="corner br">2<br>♥</span></span><span class="card"><span class="corner tl">7<br>♣</span><span class="pip">♣</span><span class="corner br">7<br>♣</span></span></div><b>2 à 7</b><small>leur valeur</small></li><li><div class="mini"><span class="card red"><span class="corner tl">8<br>♦</span><span class="pip">♦</span><span class="corner br">8<br>♦</span></span></div><b>0</b><small>le 8 ne vaut rien</small></li><li><div class="mini"><span class="card"><span class="corner tl">V<br>♣</span><span class="pip face">V</span><span class="corner br">V<br>♣</span></span><span class="card red"><span class="corner tl">D<br>♥</span><span class="pip face">D</span><span class="corner br">D<br>♥</span></span><span class="card"><span class="corner tl">R<br>♠</span><span class="pip face">R</span><span class="corner br">R<br>♠</span></span></div><b>0,5</b><small>Valet, Dame, Roi</small></li></ul>
+        </section>
+
+        <section class="rule">
+          <h3>Une manche en 3 temps</h3>
+          <ol class="steps">
+            <li><span class="num">1</span><div><b>Les mises.</b> Chaque joueur, sauf le banquier, mise entre 10 jetons et tout son solde.</div></li>
+            <li><span class="num">2</span><div><b>Le tour des joueurs</b>, l'un après l'autre. Tu reçois ta première carte <strong>face cachée</strong> : toi seul la vois. Tu choisis de la garder <em>cachée</em> ou de la <em>montrer</em>, puis de <em>tirer</em> une carte ou de <em>rester</em>.
+              <ul class="notes">
+                <li>Une seule carte cachée par main : une fois une carte gardée cachée, les suivantes arrivent face visible.</li>
+                <li>Dépasser 7,5 ne t'élimine pas tout de suite, et personne ne le sait : tu peux bluffer.</li>
+              </ul></div></li>
+            <li><span class="num">3</span><div><b>Le tour du banquier.</b> Il tire ses cartes face visible et <strong>défie</strong> les joueurs un par un. Il ne peut pas s'arrêter : à chaque action, il tire ou il défie. À un défi, la carte cachée du joueur est retournée et on compare.</div></li>
+          </ol>
+        </section>
+
+        <section class="rule">
+          <h3>Qui gagne un défi ?</h3>
+          <ul class="outcomes">
+            <li class="win"><span>✔</span><p>Ton total est plus haut que celui du banquier, sans dépasser 7,5 : <b>tu gagnes</b>.</p></li>
+            <li class="lose"><span>✖</span><p>Tu as dépassé 7,5, tu as moins que le banquier, ou c'est une <b>égalité</b> : <b>le banquier gagne</b>.</p></li>
+            <li class="boom"><span>💥</span><p>Si le banquier dépasse 7,5, il <b>saute</b> : tous les joueurs pas encore défiés gagnent, même ceux qui avaient dépassé.</p></li>
+          </ul>
+        </section>
+
+        <section class="rule">
+          <h3>Les gains</h3>
+          <div class="payouts">
+            <div><b>Victoire</b><span class="big">+1×</span><small>ta mise. Le banquier n'en paie que la moitié, le jeu ajoute le reste.</small></div>
+            <div class="natural"><b>7,5 naturel</b><span class="big">+1,5×</span><small>ta mise, avec un 7 et une figure en 2 cartes seulement.</small></div>
+            <div class="loss"><b>Défaite</b><span class="big">−1×</span><small>ta mise, que le banquier encaisse en entier.</small></div>
+          </div>
+        </section>
+
+        <section class="rule tips">
+          <h3>Bon à savoir</h3>
+          <ul>
+            <li>Le rôle de <b>banquier</b> tourne à chaque manche, vers la gauche.</li>
+            <li>À 0 jeton, tu deviens spectateur.</li>
+            <li>Déconnecté en pleine manche ? Reviens avec le même pseudo dans les 60 secondes pour retrouver ta place.</li>
+          </ul>
+        </section>
+      </article>
     </div>
   </section>
 

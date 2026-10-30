@@ -17,6 +17,7 @@ $('#nameForm').onsubmit = e => {
   localStorage.setItem('pseudo', me);
   socket.emit('hello', me);
   $('#nameForm').hidden = true;
+  $('#nameHint').textContent = `Connecté en tant que ${me}.`;
   $('#lobbyPane').hidden = false;
 };
 $('#createForm').onsubmit = e => {
