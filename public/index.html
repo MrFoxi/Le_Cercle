@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>7,5</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700;900&family=Inter:wght@400;600;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <section id="home">
+    <div class="hero">
+      <div class="hero-cards" aria-hidden="true"><span>7</span><span>R</span></div>
+      <h1>7,5</h1>
+      <p class="tagline">Le jeu de cartes en ligne</p>
+    </div>
+    <div class="panel">
+      <form id="nameForm">
+        <input id="pseudo" maxlength="20" placeholder="Ton pseudo" aria-label="Pseudo" required autocomplete="off">
+        <button class="gold">Entrer</button>
+      </form>
+      <div id="lobbyPane" hidden>
+        <form id="createForm">
+          <input id="lobbyName" maxlength="30" placeholder="Nom de ta table" aria-label="Nom du lobby" required>
+          <button class="gold">Créer</button>
+        </form>
+        <h2>Tables ouvertes</h2>
+        <ul id="lobbies"></ul>
+      </div>
+    </div>
+  </section>
+
+  <section id="game" hidden>
+    <div class="board">
+      <div class="table-wrap">
+        <div class="rail">
+          <div class="felt">
+            <div class="watermark" aria-hidden="true">7,5</div>
+            <div class="deck" aria-hidden="true"></div>
+            <div id="center" aria-live="polite"></div>
+          </div>
+        </div>
+        <div id="seats"></div>
+      </div>
+      <div id="actions"></div>
+    </div>
+    <aside id="log" aria-label="Journal"></aside>
+  </section>
+
+  <div id="toast" role="alert" hidden></div>
+  <script src="/socket.io/socket.io.js"></script>
+  <script src="client.js"></script>
+</body>
+</html>
