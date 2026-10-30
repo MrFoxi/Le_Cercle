@@ -113,4 +113,17 @@ assert.strictEqual(outcome(['5', '4'].map(c), 4), 'lose'); // au-dessus de 7,5
   assert.deepStrictEqual(t.players.map(p => p.name), ['A']);
 }
 
+// Le chef du lobby exclut ou bannit ; les autres ne peuvent pas
+{
+  const t = new Table('test');
+  ['A', 'B', 'C'].forEach(n => t.addPlayer(n));
+  assert.throws(() => t.kick('B', 'C'), /chef du lobby/);
+  assert.throws(() => t.kick('A', 'A'));
+  t.kick('A', 'B');
+  assert.deepStrictEqual(t.players.map(p => p.name), ['A', 'C']);
+  t.addPlayer('B'); // un exclu peut revenir
+  t.ban('A', 'B');
+  assert.throws(() => t.addPlayer('B'), /banni/);
+}
+
 console.log('Tous les tests passent.');

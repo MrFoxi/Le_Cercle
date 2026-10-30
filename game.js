@@ -35,6 +35,7 @@ class Table {
     this.round = null;
     this.log = []; // { r: n° de manche, k: type, t: texte }
     this.roundNo = 0;
+    this.banned = new Set(); // pseudos bannis par le chef du lobby
   }
 
   say(t, k = 'info') {
@@ -46,6 +47,7 @@ class Table {
   canPlay(p) { return p.connected && !p.left && p.chips > 0; }
 
   addPlayer(name) {
+    if (this.banned.has(name)) throw new Error('Tu as été banni de cette table');
     const p = this.get(name);
     if (p) {
       if (p.connected) throw new Error('Ce pseudo est déjà à cette table');
@@ -235,11 +237,11 @@ class Table {
     this.say(`Manche annulée (${reason}) : toutes les mises sont rendues`, 'lose');
   }
 
-  disconnect(name) {
+  disconnect(name, quiet = false) {
     const p = this.get(name);
     if (!p) return;
     p.connected = false;
-    this.say(`${name} s'est déconnecté`);
+    if (!quiet) this.say(`${name} s'est déconnecté`);
     const r = this.round;
     if (!r || this.phase === 'results') return;
     if (name === r.banker) return this.cancel('le banquier est parti');
@@ -253,15 +255,27 @@ class Table {
     // sinon il « reste » : son tour sera passé automatiquement s'il n'est pas revenu
   }
 
-  leave(name) {
+  leave(name, quiet = false) {
     const i = this.players.findIndex(p => p.name === name);
     if (i < 0) return;
-    if (this.players[i].connected) this.disconnect(name);
+    if (this.players[i].connected) this.disconnect(name, quiet);
     this.players[i].left = true;
-    this.say(`${name} quitte la table`);
+    if (!quiet) this.say(`${name} quitte la table`);
     // en pleine manche sa main doit encore être défiée : on le retire à la manche suivante
     if (this.phase === 'waiting') this.remove(i);
   }
+
+  // Le chef du lobby exclut un joueur ; banni, il ne peut plus revenir sous ce pseudo.
+  kick(name, target, ban = false) {
+    if (name !== this.host) throw new Error('Seul le chef du lobby peut exclure un joueur');
+    const p = this.get(target);
+    if (target === name || !p || p.left) throw new Error('Joueur introuvable');
+    if (ban) this.banned.add(target);
+    this.leave(target, true);
+    this.say(`${target} a été ${ban ? 'banni' : 'exclu'} par ${name}`, 'lose');
+  }
+
+  ban(name, target) { this.kick(name, target, true); }
 
   // État envoyé à un joueur : les cartes cachées des autres n'y figurent jamais.
   viewFor(me) {

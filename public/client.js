@@ -6,6 +6,7 @@ const act = (type, arg) => socket.emit('act', type, arg);
 const hue = name => [...name].reduce((h, c) => (h * 31 + c.charCodeAt(0)) % 360, 7);
 let me = null, state = null, seen = {}, toastTimer;
 const openRounds = new Set(); // manches passées que j'ai dépliées dans l'historique
+let tab = 'log', seenChat = 0; // onglet affiché à droite, dernier message de chat lu
 let kept = -1; // index de la carte que j'ai choisi de garder cachée pendant ce tour
 
 $('#pseudo').value = localStorage.getItem('pseudo') || '';
@@ -52,13 +53,22 @@ socket.on('state', s => {
   $('#home').hidden = !!s;
   $('#game').hidden = !s;
   if (s) render();
-  else seen = {};
+  else {
+    seen = {};
+    seenChat = 0;
+  }
 });
 
 $('#game').onclick = e => {
   const b = e.target.closest('button');
   if (!b) return;
   if (b.dataset.challenge) return act('challenge', b.dataset.challenge);
+  if (b.dataset.tab) {
+    tab = b.dataset.tab;
+    return render();
+  }
+  if (b.dataset.kick && confirm(`Exclure ${b.dataset.kick} de la table ?`)) return act('kick', b.dataset.kick);
+  if (b.dataset.ban && confirm(`Bannir ${b.dataset.ban} ? Il ne pourra plus revenir sur cette table.`)) return act('ban', b.dataset.ban);
   if (b.dataset.add) {
     const input = $('#bet'), max = Number(input.max);
     input.value = b.dataset.add === 'all' ? max : Math.min(max, Number(input.value || 0) + Number(b.dataset.add));
@@ -111,10 +121,13 @@ function render() {
       r && (r.delta >= 0 ? 'won' : 'lost')].filter(Boolean).join(' ');
     return `<div class="${cls}" style="--x:${Math.cos(a).toFixed(3)};--y:${Math.sin(a).toFixed(3)};--h:${hue(p.name)}">
       ${p.isBanker ? '<div class="banker-chip">BANQUIER</div>' : ''}
+      ${s.host === s.me && p.name !== s.me ? `<div class="mod">
+        <button data-kick="${esc(p.name)}" title="Exclure" aria-label="Exclure ${esc(p.name)}">✕</button>
+        <button data-ban="${esc(p.name)}" title="Bannir" aria-label="Bannir ${esc(p.name)}">⛔</button></div>` : ''}
       <div class="head">
         <span class="avatar">${esc(p.name[0].toUpperCase())}</span>
         <div class="who">
-          <div class="name">${esc(p.name)}${p.name === s.host ? ' <span class="crown" title="Hôte">♛</span>' : ''}</div>
+          <div class="name">${esc(p.name)}${p.name === s.host ? ' <span class="crown" title="Chef du lobby">♛</span>' : ''}</div>
           <div class="info"><span class="coin"></span>${p.chips}${p.chips === 0 ? ' · spectateur' : ''}${p.connected ? '' : ' · absent'}</div>
         </div>
       </div>
@@ -169,17 +182,38 @@ function render() {
   // Historique groupé par manche, la plus récente en haut et dépliée.
   const groups = new Map();
   for (const e of s.log) groups.set(e.r, [...(groups.get(e.r) || []), e]);
-  const scroll = $('#log .entries')?.scrollTop || 0;
-  $('#log').innerHTML = `<h2>${esc(s.lobby)}<small>Historique</small></h2><div class="entries">` + [...groups].reverse().map(([r, es]) => {
+  $('#lobbyTitle').textContent = s.lobby;
+  const scroll = $('#log').scrollTop;
+  $('#log').innerHTML = [...groups].reverse().map(([r, es]) => {
     const banker = es.find(e => e.k === 'round');
     return `<details data-r="${r}" ${r === s.roundNo || openRounds.has(r) ? 'open' : ''}>
       <summary><b>${r ? `Manche ${r}` : 'Avant la partie'}</b>${banker ? `<span>Banquier : ${esc(banker.t.replace(' est le banquier', ''))}</span>` : ''}</summary>
       ${es.filter(e => e.k !== 'round').map(e => `<div class="e ${e.k}">${esc(e.t)}</div>`).join('')}</details>`;
-  }).join('') + '</div>';
-  $('#log .entries').scrollTop = scroll;
+  }).join('');
+  $('#log').scrollTop = scroll;
+
+  // Onglets Historique / Chat, avec le nombre de messages non lus.
+  for (const t of document.querySelectorAll('[data-tab]')) t.setAttribute('aria-selected', t.dataset.tab === tab);
+  $('#log').hidden = tab !== 'log';
+  $('#chat').hidden = tab !== 'chat';
+  const box = $('#chatMsgs'), atBottom = box.scrollHeight - box.scrollTop - box.clientHeight < 40;
+  box.innerHTML = s.chat.length ? s.chat.map(m => `<div class="msg${m.name === s.me ? ' mine' : ''}" style="--h:${hue(m.name)}">
+    <b>${esc(m.name)}</b><span>${esc(m.text)}</span></div>`).join('') : '<p class="empty">Aucun message. Dis bonjour !</p>';
+  if (atBottom) box.scrollTop = box.scrollHeight;
+  const last = s.chat.at(-1)?.id || 0;
+  if (tab === 'chat') seenChat = last;
+  const unread = s.chat.filter(m => m.id > seenChat && m.name !== s.me).length;
+  $('#unread').hidden = !unread;
+  $('#unread').textContent = unread;
 }
 
 $('#log').addEventListener('toggle', e => {
   const r = Number(e.target.dataset.r);
   if (r !== state?.roundNo) e.target.open ? openRounds.add(r) : openRounds.delete(r);
 }, true);
+
+$('#chatForm').onsubmit = e => {
+  e.preventDefault();
+  socket.emit('chat', $('#chatInput').value);
+  $('#chatInput').value = '';
+};

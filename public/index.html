@@ -46,7 +46,23 @@
       </div>
       <div id="actions"></div>
     </div>
-    <aside id="log" aria-label="Journal"></aside>
+    <aside id="side">
+      <div class="side-head">
+        <h2 id="lobbyTitle"></h2>
+        <div class="tabs" role="tablist">
+          <button role="tab" data-tab="log" aria-selected="true">Historique</button>
+          <button role="tab" data-tab="chat" aria-selected="false">Chat <span id="unread" hidden></span></button>
+        </div>
+      </div>
+      <div id="log" class="pane"></div>
+      <div id="chat" class="pane" hidden>
+        <div id="chatMsgs" aria-live="polite"></div>
+        <form id="chatForm">
+          <input id="chatInput" maxlength="200" placeholder="Écris un message…" aria-label="Message" autocomplete="off">
+          <button class="gold">Envoyer</button>
+        </form>
+      </div>
+    </aside>
   </section>
 
   <div id="toast" role="alert" hidden></div>
