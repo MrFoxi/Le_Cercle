@@ -153,7 +153,7 @@ input { width: 100%; font: 600 1rem var(--sans); padding: 12px 14px; border-radi
 .col { padding: 0; border-radius: 0; background: transparent; }
 .col:hover:not(:disabled) { transform: none; filter: none; }
 /* Faisceau doré sur la colonne visée */
-.board.my-turn .col:hover { background: linear-gradient(180deg, rgba(245, 210, 122, .0) 0%, rgba(245, 210, 122, .14) 16%, rgba(245, 210, 122, .05) 100%); }
+body:not(.touch) .board.my-turn .col:hover { background: linear-gradient(180deg, rgba(245, 210, 122, .0) 0%, rgba(245, 210, 122, .14) 16%, rgba(245, 210, 122, .05) 100%); }
 .board:not(.my-turn) .col { cursor: default; }
 .col:focus-visible { outline: 3px solid var(--gold); outline-offset: -3px; }
 .col.full { animation: shake .3s; }
@@ -267,3 +267,8 @@ input { width: 100%; font: 600 1rem var(--sans); padding: 12px 14px; border-radi
   .face::after { inset: 4px; border-radius: 12px; }
   .disc::after { border-width: 1px; }
 }
+
+/* ---------- Mobile (écran tactile seulement) ---------- */
+.drop-btn { display: block; width: min(100%, 600px); margin: 14px auto 0; padding: 16px; font-size: 1.05rem; }
+body.touch { touch-action: manipulation; } /* pas de zoom au double toucher : le 2e toucher lâche le jeton */
+body.touch .board.my-turn .cols { touch-action: none; } /* glisser le doigt sur la grille déplace le jeton, pas la page */

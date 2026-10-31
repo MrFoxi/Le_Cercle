@@ -6,6 +6,10 @@ const esc = s => String(s ?? '').replace(/[&<>"']/g, c => `&#${c.charCodeAt(0)};
 const COLS = 7, ROWS = 6;
 const COLOR_NAME = { red: 'rubis', yellow: 'or' }; // jetons de casino : rubis (joue en premier) et or
 let state = null, toastTimer, shownMoves = -1, shownRound = -1, animating = false, hoverCol = null;
+// Téléphone ou tablette : le doigt glisse pour choisir la colonne, un 2e toucher (ou le bouton) lâche le jeton.
+const TOUCH = matchMedia('(pointer: coarse)').matches || new URLSearchParams(location.search).has('mobile');
+document.body.classList.toggle('touch', TOUCH);
+const buzz = p => TOUCH && navigator.vibrate?.(p);
 
 const store = {
   get: k => { try { return localStorage.getItem(k); } catch { return null; } },
@@ -209,26 +213,64 @@ function renderHover() {
   [...$('#preview').children].forEach((el, c) => (el.className = ok && c === col ? `ghost ${color}` : ''));
   for (const el of document.querySelectorAll('.slot.target')) el.classList.remove('target');
   if (ok) document.querySelector(`.slot[data-rc="${landingRow(col)}-${col}"]`)?.classList.add('target');
+  if (TOUCH) {
+    const btn = $('#dropBtn'), pick = mine && hoverCol !== null && landingRow(hoverCol) >= 0;
+    btn.hidden = !state || state.spectator || state.phase !== 'playing'; // gardé pendant toute la partie : la page ne saute pas
+    btn.disabled = !pick;
+    btn.textContent = pick ? `⬇ Lâcher le jeton en colonne ${hoverCol + 1}` : mine ? 'Touche ou glisse sur une colonne' : `Au tour de ${state?.turn}…`;
+  }
 }
-$('#cols').addEventListener('pointerover', e => { hoverCol = e.target.closest('.col') ? Number(e.target.closest('.col').dataset.col) : null; renderHover(); });
-$('#cols').addEventListener('pointerleave', () => { hoverCol = null; renderHover(); });
-$('#cols').addEventListener('focusin', e => { hoverCol = Number(e.target.dataset.col); renderHover(); });
-$('#cols').onclick = e => {
-  const b = e.target.closest('.col');
-  if (!b || !state) return;
-  const c = Number(b.dataset.col);
-  if (state.spectator || state.phase !== 'playing') return;
+$('#cols').addEventListener('pointerover', e => {
+  if (e.pointerType !== 'mouse') return;
+  hoverCol = e.target.closest('.col') ? Number(e.target.closest('.col').dataset.col) : null;
+  renderHover();
+});
+$('#cols').addEventListener('pointerleave', e => { if (e.pointerType === 'mouse') { hoverCol = null; renderHover(); } });
+$('#cols').addEventListener('focusin', e => { if (!TOUCH) { hoverCol = Number(e.target.dataset.col); renderHover(); } });
+
+// Doigt : la colonne suit le doigt tant qu'il glisse ; elle reste choisie quand on le lève.
+let dragging = false, chosenAtDown = null;
+const colAt = x => { const r = $('#cols').getBoundingClientRect(); return Math.max(0, Math.min(COLS - 1, Math.floor(((x - r.left) / r.width) * COLS))); };
+function touchCol(x) {
+  const c = colAt(x);
+  if (c === hoverCol) return;
+  hoverCol = c;
+  buzz(6);
+  renderHover();
+}
+$('#cols').addEventListener('pointerdown', e => {
+  if (e.pointerType === 'mouse' || !myTurn()) return;
+  dragging = true;
+  chosenAtDown = hoverCol;
+  touchCol(e.clientX);
+});
+$('#cols').addEventListener('pointermove', e => { if (dragging) touchCol(e.clientX); });
+for (const ev of ['pointerup', 'pointercancel']) $('#cols').addEventListener(ev, () => (dragging = false));
+
+function playCol(c) {
+  if (!state || state.spectator || state.phase !== 'playing') return;
   if (state.turn !== state.me) return toast('Attends ton tour');
   if (animating) return;
   if (landingRow(c) < 0) {
+    const b = $(`#cols .col[data-col="${c}"]`);
     b.classList.remove('full');
     void b.offsetWidth;
     b.classList.add('full');
     return toast('Cette colonne est pleine');
   }
   hoverCol = null;
+  buzz(25);
   act(null, 'play', c, state.moves);
+}
+$('#cols').onclick = e => {
+  const b = e.target.closest('.col');
+  if (!b) return;
+  const c = Number(b.dataset.col);
+  // Au doigt, le 1er toucher choisit la colonne ; on lâche en retouchant la même (ou avec le bouton).
+  if (TOUCH && e.pointerType !== 'mouse' && !(chosenAtDown === c && hoverCol === c)) return;
+  playCol(c);
 };
+$('#dropBtn').onclick = () => hoverCol !== null && playCol(hoverCol);
 
 function renderBoard(s) {
   const fresh = s.round !== shownRound, newMove = !fresh && s.moves === shownMoves + 1 && s.last;
