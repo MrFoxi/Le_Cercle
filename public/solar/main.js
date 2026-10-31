@@ -7,6 +7,7 @@ import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 import { buildWorld, BODIES, byId, STATION, BELT, KUIPER_RING, KM, EPOCH, nearest, collide, zoneName, hostOf, PLACES, visited, blocksSun, setEvent, shown, groundRadius, orbits, hiddenFrom } from './world.js';
+import { LOW } from './textures.js';
 import { buildShip, setThrust, setNavLights, Trail, envFor } from './ships.js';
 import { createProgress, CATALOG, COLORS, TITLES } from './progress.js';
 import { FACTS } from './facts.js';
@@ -24,6 +25,8 @@ const store = {
   set: (k, v) => { try { v === null ? localStorage.removeItem(k) : localStorage.setItem(k, v); } catch { /* stockage bloqué */ } },
 };
 const params = new URLSearchParams(location.search);
+document.body.classList.toggle('touch', LOW);
+if (LOW) $('#chatForm').msg.placeholder = 'Message aux pilotes…';
 const urlCode = params.get('salon')?.toUpperCase();
 const DEPART = params.get('depart'); // lu avant que l'adresse devienne ?salon=CODE
 const fmtKm = u => { const km = Math.max(0, u) * KM; return km >= 1e6 ? `${(km / 1e6).toLocaleString('fr-FR', { maximumFractionDigits: 2 })} M km` : `${Math.round(km).toLocaleString('fr-FR')} km`; };
@@ -227,6 +230,7 @@ $('#launchBtn').onclick = () => {
     radio(`Station Horizon : décollage autorisé, pilote ${state.me}. Bon vol !`);
   }
   lockPointer();
+  if (LOW) fullscreen(true);
 };
 function openStationHangar() {
   if (!me.docked) { toast('Le hangar est à la station Horizon : rejoins-la pour changer de vaisseau'); setDest({ body: 'horizon' }); return; }
@@ -237,6 +241,7 @@ function openStationHangar() {
   startPreview();
 }
 $('#hangarBtn').onclick = openStationHangar;
+$('#prompt').onclick = openStationHangar;
 
 function startPreview() {
   if (!preview) {
@@ -262,7 +267,8 @@ function startPreview() {
         if ($('#hangar').hidden) return void (preview.running = false);
         requestAnimationFrame(preview.loop);
         const w = canvas.clientWidth, h = canvas.clientHeight;
-        if (canvas.width !== Math.round(w * devicePixelRatio)) { r.setPixelRatio(devicePixelRatio); r.setSize(w, h, false); cam.aspect = w / h; cam.updateProjectionMatrix(); }
+        const dpr = Math.min(devicePixelRatio, 2);
+        if (canvas.width !== Math.round(w * dpr)) { r.setPixelRatio(dpr); r.setSize(w, h, false); cam.aspect = w / h; cam.updateProjectionMatrix(); }
         ship.rotation.y = t / 2600;
         ship.position.y = Math.sin(t / 900) * 0.25;
         setThrust(ship, 0.5, Math.sin(t / 1200) > 0.6);
@@ -276,9 +282,9 @@ function startPreview() {
 
 /* ---------- Rendu de l'espace ---------- */
 const view = $('#view');
-const lockPointer = () => view.requestPointerLock?.()?.catch?.(() => {}); // refusé sans clic récent : sans gravité
+const lockPointer = () => LOW || view.requestPointerLock?.()?.catch?.(() => {}); // refusé sans clic récent : sans gravité
 const renderer = new THREE.WebGLRenderer({ canvas: view, antialias: true, logarithmicDepthBuffer: true, powerPreference: 'high-performance' });
-renderer.setPixelRatio(Math.min(devicePixelRatio, 1.5));
+renderer.setPixelRatio(Math.min(devicePixelRatio, LOW ? 1 : 1.5)); // téléphone : la carte graphique est le point faible
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
 const scene = new THREE.Scene();
 const camera = new THREE.PerspectiveCamera(70, 1, 0.3, 2e6);
@@ -362,7 +368,10 @@ addEventListener('keydown', e => {
   if (e.code === 'Escape') { if (mapOpen) toggleMap(false); if (!$('#journal').hidden) $('#journal').hidden = true; return; }
   if (e.repeat) return;
   keys.add(e.code);
-  const k = e.code;
+  press(e.code);
+});
+// Une touche (ou un bouton tactile du même nom) : les actions instantanées
+function press(k) {
   if (k === 'KeyX') { me.tYaw += Math.PI; toast('Demi-tour', true); }
   if (k === 'KeyM') toggleMap();
   if (k === 'KeyH') $('#help').hidden = !$('#help').hidden;
@@ -377,7 +386,7 @@ addEventListener('keydown', e => {
     if (n === 6) emote('feux');
     if (n === 7) emote('artifice');
   }
-});
+}
 addEventListener('keyup', e => keys.delete(e.code));
 addEventListener('blur', () => keys.clear());
 let locked = false;
@@ -395,6 +404,52 @@ document.addEventListener('mousemove', e => {
   me.tPitch = clamp(me.tPitch - e.movementY * 0.0022, -1.35, 1.35);
 });
 addEventListener('pointerdown', () => startAudio());
+
+/* ---------- Commandes tactiles : joystick à gauche, visée au pouce droit, boutons ---------- */
+const fullscreen = on => (on ? document.documentElement.requestFullscreen?.({ navigationUI: 'hide' }).then(() => screen.orientation?.lock?.('landscape')) : document.exitFullscreen?.())?.catch?.(() => {});
+if (LOW) {
+  const stick = $('#stick'), knob = stick.firstElementChild, R = 55;
+  let stickId = null, aimId = null, ox = 0, oy = 0, ax = 0, ay = 0;
+  const setDir = (dx, dy) => { for (const [code, on] of [['KeyW', dy < -0.35], ['KeyS', dy > 0.35], ['KeyA', dx < -0.45], ['KeyD', dx > 0.45]]) on ? keys.add(code) : keys.delete(code); };
+  view.addEventListener('pointerdown', e => {
+    if (e.pointerType === 'mouse') return;
+    view.setPointerCapture(e.pointerId);
+    $('#moreMenu').hidden = true;
+    if (e.clientX < innerWidth * 0.45 && stickId === null) {
+      stickId = e.pointerId; ox = e.clientX; oy = e.clientY;
+      Object.assign(stick.style, { left: `${ox}px`, top: `${oy}px` });
+      stick.classList.add('on');
+    } else if (aimId === null) { aimId = e.pointerId; ax = e.clientX; ay = e.clientY; }
+  });
+  view.addEventListener('pointermove', e => {
+    if (e.pointerId === stickId) {
+      let dx = e.clientX - ox, dy = e.clientY - oy;
+      const d = Math.hypot(dx, dy);
+      if (d > R) { dx *= R / d; dy *= R / d; }
+      knob.style.transform = `translate(${dx}px, ${dy}px)`;
+      setDir(dx / R, dy / R);
+    } else if (e.pointerId === aimId) {
+      me.tYaw -= (e.clientX - ax) * 0.005;
+      me.tPitch = clamp(me.tPitch - (e.clientY - ay) * 0.005, -1.35, 1.35);
+      ax = e.clientX; ay = e.clientY;
+    }
+  });
+  const end = e => {
+    if (e.pointerId === stickId) { stickId = null; setDir(0, 0); knob.style.transform = ''; stick.classList.remove('on'); stick.style.left = stick.style.top = ''; }
+    if (e.pointerId === aimId) aimId = null;
+  };
+  view.addEventListener('pointerup', end);
+  view.addEventListener('pointercancel', end);
+  for (const b of document.querySelectorAll('[data-hold]')) {
+    b.onpointerdown = e => { b.setPointerCapture(e.pointerId); keys.add(b.dataset.hold); b.classList.add('on'); };
+    b.onpointerup = b.onpointercancel = () => { keys.delete(b.dataset.hold); b.classList.remove('on'); };
+  }
+  for (const b of document.querySelectorAll('[data-key]')) b.onclick = () => { $('#moreMenu').hidden = true; press(b.dataset.key); };
+  $('#moreBtn').onclick = () => ($('#moreMenu').hidden = !$('#moreMenu').hidden);
+  $('#fullBtn').hidden = !document.documentElement.requestFullscreen; // iPhone : pas de plein écran, mais « Ajouter à l'écran d'accueil »
+  $('#fullBtn').onclick = () => { $('#moreMenu').hidden = true; fullscreen(!document.fullscreenElement); };
+  $('#space').addEventListener('contextmenu', e => e.preventDefault()); // appui long : pas de menu du navigateur
+}
 
 /* ---------- Vol ---------- */
 const FWD = new V3(), RIGHT = new V3(), UP = new V3(), euler = new THREE.Euler(0, 0, 0, 'YXZ'), want = new V3(), rollQ = new THREE.Quaternion(), Z = new V3(0, 0, 1);
@@ -687,6 +742,7 @@ $('#chatForm').onsubmit = e => {
   e.target.msg.value = '';
   closeChat();
 };
+$('#chatClose').onclick = () => { $('#chatForm').msg.value = ''; closeChat(); };
 $('#chatForm').msg.onkeydown = e => { if (e.key === 'Escape') { e.target.value = ''; closeChat(); } };
 $('#quick').onclick = e => { const b = e.target.closest('[data-quick]'); if (b) say(QUICK[b.dataset.quick]); };
 $('#quick').innerHTML = QUICK.map((q, i) => `<button type="button" class="chip" data-quick="${i}"><kbd>${i + 1}</kbd> ${esc(q)}</button>`).join('');
@@ -980,6 +1036,7 @@ function toggleMap(open = !mapOpen) {
   $('#lockHint').hidden = locked || open;
 }
 $('#mapBtn').onclick = () => toggleMap();
+$('#mapClose').onclick = () => toggleMap(false);
 // Échelle en racine carrée : les planètes proches du Soleil restent lisibles, Pluton tient dans l'écran.
 // Ce qui est près d'une planète (lunes, station, pilotes) est dessiné autour d'elle.
 function mapGeom() {

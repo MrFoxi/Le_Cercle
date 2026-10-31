@@ -258,7 +258,7 @@ function material(maps, bumpScale) {
 
 // Sphère en relief (Lune, Mars) : la même fonction de hauteur que la texture, et un grain de sol qui se répète pour le détail de près.
 function terrainMesh(b, maps, height) {
-  const geo = new THREE.SphereGeometry(b.r, 768, 384), pos = geo.attributes.position, uv = geo.attributes.uv, nrm = geo.attributes.normal;
+  const geo = new THREE.SphereGeometry(b.r, TX.LOW ? 320 : 768, TX.LOW ? 160 : 384), pos = geo.attributes.position, uv = geo.attributes.uv, nrm = geo.attributes.normal;
   for (let i = 0; i < pos.count; i++) {
     const lon = uv.getX(i) * TAU, lat = (uv.getY(i) - 0.5) * Math.PI;
     const k = b.r * b.amp * (height(Math.cos(lat) * Math.cos(lon), Math.sin(lat), Math.cos(lat) * Math.sin(lon)) - 0.5);
@@ -559,7 +559,7 @@ export async function buildWorld(scene, progress = () => {}) {
         const a = rand() * TAU, d = BELT.inner + (BELT.outer - BELT.inner) * rand(), y = (rand() + rand() - 1) * BELT.half;
         return [V(Math.cos(a) * d, y, Math.sin(a) * d), 15 + 110 * rand() ** 3];
       }, 0x7d7266);
-      belt.add(dust(30000, 63, rand => { const a = rand() * TAU, d = BELT.inner + (BELT.outer - BELT.inner) * rand(); return [Math.cos(a) * d, (rand() + rand() - 1) * BELT.half * 1.5, Math.sin(a) * d]; }, 18, 0x6b6258, 0.4));
+      belt.add(dust(TX.LOW ? 10000 : 30000, 63, rand => { const a = rand() * TAU, d = BELT.inner + (BELT.outer - BELT.inner) * rand(); return [Math.cos(a) * d, (rand() + rand() - 1) * BELT.half * 1.5, Math.sin(a) * d]; }, 18, 0x6b6258, 0.4));
       const veil = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex(TX.nebula(70, [200, 170, 130])), blending: THREE.AdditiveBlending, depthWrite: false, transparent: true, opacity: 0.25 }));
       veil.scale.setScalar(KEPLER.r * 3.2);
       veil.position.copy(kc);
@@ -606,7 +606,7 @@ export async function buildWorld(scene, progress = () => {}) {
         const a = rand() * TAU, d = R.inner + (R.outer - R.inner) * rand();
         return [V(Math.cos(a) * d, (rand() + rand() - 1) * R.half, Math.sin(a) * d), 20 + 140 * rand() ** 3];
       }, 0xaab4c0);
-      kuiper.add(dust(30000, 114, rand => { const a = rand() * TAU, d = R.inner + (R.outer - R.inner) * rand(); return [Math.cos(a) * d, (rand() + rand() - 1) * R.half * 1.4, Math.sin(a) * d]; }, 40, 0x7f90a6, 0.35));
+      kuiper.add(dust(TX.LOW ? 10000 : 30000, 114, rand => { const a = rand() * TAU, d = R.inner + (R.outer - R.inner) * rand(); return [Math.cos(a) * d, (rand() + rand() - 1) * R.half * 1.4, Math.sin(a) * d]; }, 40, 0x7f90a6, 0.35));
       scene.add(kuiper);
       holders.push([kuiper, R]);
     },

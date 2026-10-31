@@ -45,10 +45,13 @@ function ramp(stops, t) {
   return stops.at(-1)[1];
 }
 
+// Téléphones et tablettes (ou ?mobile pour tester) : textures, relief et poussière allégés, commandes tactiles.
+export const LOW = matchMedia('(pointer: coarse)').matches || new URLSearchParams(location.search).has('mobile');
 const canvas = (w, h) => Object.assign(document.createElement('canvas'), { width: w, height: h });
 
 // fn(x, y, z, lat, lon) -> [r, g, b, a?, relief?, rugosité?] ; relief et rugosité donnent des textures à part si demandées.
 function paint(w, h, fn, { bump = false, rough = false } = {}) {
+  if (LOW) { w >>= 1; h >>= 1; }
   const make = () => { const c = canvas(w, h), ctx = c.getContext('2d'), img = ctx.createImageData(w, h); return { c, ctx, img, d: img.data }; };
   const col = make(), b = bump && make(), r = rough && make();
   for (let j = 0; j < h; j++) {

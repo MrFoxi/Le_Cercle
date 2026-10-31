@@ -2,7 +2,10 @@
 <html lang="fr">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <title>Solar Explorer</title>
   <link rel="icon" href="favicon.svg" type="image/svg+xml">
   <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -125,13 +128,38 @@
     <form id="chatForm" class="panel" hidden autocomplete="off">
       <input name="msg" maxlength="200" placeholder="Message aux pilotes… (Entrée pour envoyer, Échap pour fermer)" aria-label="Message">
       <div class="chips" id="quick"></div>
+      <button type="button" class="ghost small touch-only" id="chatClose">✕ Fermer</button>
     </form>
-    <p id="prompt" hidden><kbd>E</kbd> Entrer au hangar de la station</p>
+    <p id="prompt" hidden><kbd class="no-touch">E</kbd> Entrer au hangar de la station</p>
     <div class="hud-br"><canvas id="minimap" width="200" height="200"></canvas><small id="mmRange"></small></div>
     <button id="lockHint">🖱 Clique pour prendre les commandes</button>
+    <div id="touch" class="touch-only" aria-hidden="true">
+      <div id="stick"><i></i></div>
+      <button data-hold="ShiftLeft" class="tb big-tb">⚡<small>Boost</small></button>
+      <button data-hold="Space" class="tb">▲</button>
+      <button data-hold="KeyC" class="tb">▼</button>
+      <button id="moreBtn" class="tb">⋯</button>
+      <div id="moreMenu" class="panel" hidden>
+        <button data-key="KeyT">💬 Chat</button>
+        <button data-key="KeyP">📍 Ping « Viens ici »</button>
+        <button data-key="KeyX">↩ Demi-tour</button>
+        <button data-key="Digit5">🌀 Tonneau</button>
+        <button data-key="Digit6">💡 Salut des feux</button>
+        <button data-key="Digit7">🎆 Feu d’artifice</button>
+        <button id="fullBtn">⛶ Plein écran</button>
+      </div>
+    </div>
+    <div id="rotate" class="touch-only"><p>📱↻<br>Tourne ton téléphone à l’horizontale pour piloter.</p></div>
     <div id="help" class="panel" hidden>
       <h3>Commandes</h3>
-      <ul class="keys">
+      <ul class="keys touch-only">
+        <li>👈 Pouce gauche (joystick) : avancer, freiner, glisser sur les côtés</li>
+        <li>👉 Glisser le pouce droit : orienter le vaisseau</li>
+        <li>⚡ boost · ▲ monter · ▼ descendre</li>
+        <li>⋯ chat, ping, émotes, demi-tour, plein écran</li>
+        <li>Touche « Entrer au hangar » quand tu es à la station</li>
+      </ul>
+      <ul class="keys no-touch">
         <li><kbd>Z</kbd> avancer · <kbd>S</kbd> ralentir</li>
         <li><kbd>Q</kbd> <kbd>D</kbd> déplacement latéral</li>
         <li><kbd>Espace</kbd> monter · <kbd>Ctrl</kbd> ou <kbd>C</kbd> descendre</li>
@@ -153,7 +181,7 @@
     </div>
     <div id="map" hidden>
       <canvas id="mapCanvas"></canvas>
-      <div class="map-head"><h2>Système solaire</h2><p class="hint">Clique un astre, la station ou un pilote pour en faire ta destination. <kbd>M</kbd> ou <kbd>Échap</kbd> pour fermer.</p></div>
+      <div class="map-head"><h2>Système solaire</h2><p class="hint">Clique un astre, la station ou un pilote pour en faire ta destination. <kbd>M</kbd> ou <kbd>Échap</kbd> pour fermer.</p><button class="ghost small touch-only" id="mapClose">✕ Fermer</button></div>
       <div class="panel map-info" id="mapInfo" hidden></div>
     </div>
   </div>

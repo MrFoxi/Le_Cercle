@@ -7,6 +7,7 @@ Un seul serveur pour plusieurs projets : la page d'accueil (`/`) mène à chaque
   - chat, messages rapides, pings, émotes, téléportation vers un ami ;
   - journal d’exploration (vrais faits scientifiques), points, déblocages au hangar de la station (7 vaisseaux, peintures, traînées, effets de boost) et titres ;
   - événements en direct choisis par le serveur : pluie de météorites, comète de passage, tempête solaire ; musique et annonces radio.
+  - jouable sur téléphone et tablette : joystick au pouce gauche, visée au pouce droit, boutons boost, monter, descendre et menu ⋯ ; graphismes allégés (`?mobile` force ce mode sur ordinateur).
   Les positions, pings et émotes passent par un canal rapide à part. `SOLAR_FAST_EVENTS=1 npm start` rapproche les événements pour les tester ; `?depart=saturne` part près d’un astre.
 - `/bataille/` : **Bataille navale**, à deux en temps réel : modes Classique, Moderne (radar, drone, sonar, missiles, brouillage) et Rapide (8 × 8), flottes gardées secrètes par le serveur.
 - `/imposteur/` : **L’Imposteur**, de 3 à 12 joueurs en temps réel : civils, imposteurs (mot proche) et Mr. White (aucun mot), indices, discussion, vote secret. Aussi en mode soirée sur un seul appareil (`/imposteur/solo.html`).
