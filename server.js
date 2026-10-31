@@ -16,6 +16,7 @@ const io = sockets.of('/7-5'); // chaque projet du site a son propre canal Socke
 require('./cote/server')(sockets.of('/cote')); // Le Demi-Cercle
 require('./p4/server')(sockets.of('/p4')); // Puissance 4
 require('./imposteur/server')(sockets.of('/imposteur')); // L'Imposteur
+require('./bataille/server')(sockets.of('/bataille')); // Bataille navale
 
 const ACTIONS = ['start', 'bet', 'draw', 'reveal', 'stand', 'bankerDraw', 'challenge', 'kick', 'ban'];
 const GRACE_MS = 60000, RESULTS_MS = 6000;

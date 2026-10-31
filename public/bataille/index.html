@@ -1,0 +1,152 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Bataille navale</title>
+  <link rel="icon" href="favicon.svg" type="image/svg+xml">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Oxanium:wght@500;700;800&family=Inter:wght@400;600;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+  <script src="/socket.io/socket.io.js"></script>
+  <script type="module" src="client.js"></script>
+</head>
+<body>
+  <!-- Étape 1 : le pseudo -->
+  <section id="name" class="screen">
+    <a class="back" href="../">← Le Cercle</a>
+    <header class="hero">
+      <img src="favicon.svg" alt="" class="logo">
+      <h1>Bataille navale</h1>
+      <p class="tagline">Modern Warfare · 2 commandants</p>
+    </header>
+    <form class="panel narrow" id="nameForm">
+      <h2>Ton nom de code</h2>
+      <input name="pseudo" maxlength="20" required autocomplete="nickname" aria-label="Pseudo" placeholder="Ton pseudo">
+      <button class="primary">Continuer</button>
+    </form>
+  </section>
+
+  <!-- Étape 2 : page principale -->
+  <section id="home" class="screen wide" hidden>
+    <a class="back" href="../">← Le Cercle</a>
+    <header class="hero compact">
+      <img src="favicon.svg" alt="" class="logo">
+      <h1>Bataille navale</h1>
+    </header>
+    <p class="whoami">Commandant <b id="meName"></b> · <a href="#" id="changeName">changer de nom</a></p>
+    <div class="home-grid">
+      <form class="panel" id="createForm">
+        <h2>Créer un salon</h2>
+        <div class="privacy" role="radiogroup" aria-label="Visibilité du salon">
+          <label><input type="radio" name="vis" value="public" checked><span><b>🌍 Public</b><small>Visible dans la liste : tout le monde peut entrer ou regarder.</small></span></label>
+          <label><input type="radio" name="vis" value="private"><span><b>🔒 Privé</b><small>Caché de la liste : on n’entre qu’avec le code.</small></span></label>
+        </div>
+        <button class="primary">Créer le salon</button>
+      </form>
+      <form class="panel" id="joinForm">
+        <h2>Entrer avec un code</h2>
+        <p class="hint">Pour un salon privé, ou si un ami t’a envoyé son code.</p>
+        <input name="code" maxlength="5" required autocomplete="off" class="code-input" placeholder="ABCDE" aria-label="Code du salon">
+        <div class="row">
+          <button class="primary" name="mode" value="play">Jouer</button>
+          <button class="ghost" name="mode" value="watch">👁 Regarder</button>
+        </div>
+      </form>
+    </div>
+    <div class="panel games">
+      <h2>Salons en cours</h2>
+      <p class="hint">Les salons publics : affronte un commandant qui attend, ou regarde une bataille.</p>
+      <ul id="rooms"></ul>
+    </div>
+  </section>
+
+  <!-- Salon : attente du 2e joueur, choix du mode -->
+  <section id="wait" class="screen wide" hidden>
+    <button class="back" data-leave>← Quitter le salon</button>
+    <div class="lobby">
+      <div class="panel side">
+        <h2>Salon</h2>
+        <p class="tag-line" id="waitPrivacy"></p>
+        <div class="code" id="waitCode"></div>
+        <button class="ghost" id="copyLink">🔗 Copier le lien d’invitation</button>
+        <p class="notice" id="notice" hidden></p>
+        <ul class="players" id="waitPlayers"></ul>
+        <p class="hint" id="waitWatchers" hidden></p>
+        <button class="primary" id="startBtn"></button>
+      </div>
+      <div class="panel">
+        <h2>Mode de jeu</h2>
+        <p class="hint" id="modeWho"></p>
+        <div class="modes" id="modes"></div>
+        <div id="abilityList"></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Préparation de la flotte -->
+  <section id="setup" class="screen wide" hidden>
+    <div class="topbar">
+      <button class="back" data-leave>← Quitter</button>
+      <p class="brand" id="setupBrand"></p>
+      <span></span>
+    </div>
+    <header class="head">
+      <h2>Déploie ta flotte</h2>
+      <p class="hint">Choisis un navire, puis touche une case. Touche un navire posé pour le déplacer. <kbd>R</kbd> ou « Pivoter » pour le tourner.</p>
+    </header>
+    <div class="setup">
+      <div class="board-wrap" id="setupBoard"></div>
+      <div class="panel dock">
+        <h3>Navires</h3>
+        <ul id="dock"></ul>
+        <div class="row tools">
+          <button class="ghost small" id="rotateBtn">⟳ Pivoter</button>
+          <button class="ghost small" id="randomBtn">🎲 Aléatoire</button>
+          <button class="ghost small" id="clearBtn">✕ Tout retirer</button>
+        </div>
+        <button class="primary big" id="readyBtn">Valider ma flotte</button>
+        <p class="status-line" id="setupStatus"></p>
+      </div>
+    </div>
+  </section>
+
+  <!-- Bataille -->
+  <section id="battle" class="screen xwide" hidden>
+    <div class="topbar">
+      <button class="back" data-leave>← Quitter</button>
+      <p class="brand" id="battleBrand"></p>
+      <button class="ghost small" id="muteBtn"></button>
+    </div>
+    <p class="watching" id="watchBadge" hidden>👁 Tu observes cette bataille</p>
+    <div class="banner" id="banner" aria-live="polite"></div>
+    <div class="theatre">
+      <div class="panel zone" id="zoneA">
+        <div class="zone-head"><h3 id="titleA"></h3><span class="count" id="countA"></span></div>
+        <div class="board-wrap" id="boardA"></div>
+        <div class="armed" id="armed"></div>
+      </div>
+      <div class="side-stack">
+        <div class="panel zone small" id="zoneB">
+          <div class="zone-head"><h3 id="titleB"></h3><span class="count" id="countB"></span></div>
+          <div class="board-wrap" id="boardB"></div>
+        </div>
+        <div class="panel" id="abilityPanel" hidden>
+          <h3>Capacités spéciales</h3>
+          <div class="abilities" id="abilities"></div>
+        </div>
+        <div class="panel fleets" id="fleets"></div>
+        <div class="panel log">
+          <h3>Journal de bord</h3>
+          <ol id="history"></ol>
+        </div>
+      </div>
+    </div>
+    <div class="overlay" id="overlay" hidden></div>
+  </section>
+
+  <div id="fx" aria-hidden="true"></div>
+  <div id="toast" role="alert" hidden></div>
+</body>
+</html>
