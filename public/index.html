@@ -41,6 +41,21 @@
     .meta .live::before { content: ''; display: inline-block; width: 7px; height: 7px; margin-right: 6px; border-radius: 50%; background: currentColor; box-shadow: 0 0 8px currentColor; vertical-align: 1px; }
     .meta .live.zero { color: var(--muted); background: rgba(255, 255, 255, .04); }
     .meta .live.zero::before { box-shadow: none; opacity: .5; }
+    .search { display: flex; justify-content: center; align-items: center; gap: 10px; margin: -28px 0 28px; }
+    .search button {
+      width: 46px; height: 46px; border-radius: 50%; font-size: 1.2rem; cursor: pointer; color: inherit;
+      background: rgba(14, 18, 26, .62); border: 1px solid var(--line); transition: border-color .2s;
+    }
+    .search button:hover, .search button:focus-visible, .search button[aria-expanded="true"] { border-color: rgba(245, 210, 122, .6); outline: none; }
+    .search input {
+      width: min(420px, calc(100vw - 90px)); padding: 12px 16px; border-radius: 999px; font: 600 1rem 'Inter', system-ui, sans-serif;
+      color: var(--ink); background: rgba(14, 18, 26, .8); border: 1px solid rgba(245, 210, 122, .4); outline: none; animation: open .2s ease-out;
+    }
+    .search input:focus { border-color: var(--gold); box-shadow: 0 0 20px rgba(245, 210, 122, .15); }
+    .none { text-align: center; color: var(--muted); }
+    @keyframes open { from { opacity: 0; transform: scaleX(.6); } }
+    @media (prefers-reduced-motion: reduce) { .search input { animation: none; } }
+    .game[hidden] { display: none; }
     .game.soon { border-style: dashed; opacity: .6; }
     .game.soon .icon { width: 64px; height: 64px; display: grid; place-items: center; border-radius: 16px; border: 2px dashed var(--line); font-size: 1.8rem; color: var(--muted); }
   </style>
@@ -49,6 +64,11 @@
   <main>
     <h1>Le Cercle</h1>
     <p class="tagline">Jeux en ligne entre amis</p>
+    <div class="search">
+      <button id="searchBtn" aria-label="Rechercher un jeu" aria-expanded="false" aria-controls="searchInput">🔍</button>
+      <input id="searchInput" type="search" placeholder="Rechercher un jeu…" aria-label="Rechercher un jeu" hidden>
+    </div>
+    <p id="noGame" class="none" hidden>Aucun jeu ne correspond à ta recherche.</p>
     <div class="games">
       <a class="game" href="7-5/">
         <img src="7-5/favicon.svg" alt="">
@@ -135,6 +155,28 @@
     }
     online();
     setInterval(online, 15000);
+
+    // Recherche : filtre les cartes sur leur titre et leur description, sans tenir compte des accents ni des majuscules.
+    const btn = document.getElementById('searchBtn'), input = document.getElementById('searchInput');
+    const plain = s => s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
+    const cards = [...document.querySelectorAll('a.game')];
+    function filter() {
+      const q = plain(input.value.trim());
+      let shown = 0;
+      for (const c of cards) shown += !(c.hidden = !plain(c.textContent).includes(q));
+      document.querySelector('.game.soon').hidden = !!q;
+      document.getElementById('noGame').hidden = shown > 0;
+    }
+    btn.onclick = () => {
+      input.hidden = !input.hidden;
+      btn.setAttribute('aria-expanded', !input.hidden);
+      if (input.hidden) { input.value = ''; filter(); } else input.focus();
+    };
+    input.oninput = filter;
+    input.onkeydown = e => {
+      if (e.key === 'Escape') btn.click();
+      if (e.key === 'Enter') cards.find(c => !c.hidden)?.click(); // Entrée ouvre le premier jeu trouvé
+    };
   </script>
 </body>
 </html>
