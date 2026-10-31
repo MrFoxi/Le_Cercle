@@ -1,0 +1,113 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Mini-golf</title>
+  <link rel="icon" href="favicon.svg" type="image/svg+xml">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@600;800&family=Nunito:wght@400;700;900&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+  <script src="/socket.io/socket.io.js"></script>
+  <script src="physics.js"></script>
+  <script type="module" src="client.js"></script>
+</head>
+<body>
+  <!-- Pseudo -->
+  <section id="name" class="screen">
+    <a class="back" href="../">← Le Cercle</a>
+    <header class="hero">
+      <img src="favicon.svg" alt="" class="logo">
+      <h1>Mini-golf</h1>
+      <p class="tagline">Le Cercle · 5 trous entre amis, chacun son tour</p>
+    </header>
+    <form class="card narrow" id="nameForm">
+      <h2>Choisis ton pseudo</h2>
+      <input name="pseudo" maxlength="20" required autocomplete="nickname" aria-label="Pseudo" placeholder="Ton pseudo">
+      <button class="primary">Continuer</button>
+    </form>
+  </section>
+
+  <!-- Accueil -->
+  <section id="home" class="screen wide" hidden>
+    <a class="back" href="../">← Le Cercle</a>
+    <header class="hero compact">
+      <img src="favicon.svg" alt="" class="logo">
+      <h1>Mini-golf</h1>
+    </header>
+    <p class="whoami">Connecté en tant que <b id="meName"></b> · <a href="#" id="changeName">changer de pseudo</a></p>
+    <div class="home-grid">
+      <form class="card" id="createForm">
+        <h2>Créer un salon</h2>
+        <div class="privacy" role="radiogroup" aria-label="Visibilité du salon">
+          <label><input type="radio" name="vis" value="public" checked><span><b>🌍 Public</b><small>Visible dans la liste : tout le monde peut entrer ou regarder.</small></span></label>
+          <label><input type="radio" name="vis" value="private"><span><b>🔒 Privé</b><small>Caché de la liste : on n’entre qu’avec le code.</small></span></label>
+        </div>
+        <button class="primary">Créer le salon</button>
+      </form>
+      <form class="card" id="joinForm">
+        <h2>Entrer avec un code</h2>
+        <p class="hint">Pour un salon privé, ou si un ami t’a donné son code.</p>
+        <input name="code" maxlength="5" required autocomplete="off" class="code-input" placeholder="ABCDE" aria-label="Code du salon">
+        <div class="row">
+          <button class="primary" name="mode" value="play">Jouer</button>
+          <button class="ghost" name="mode" value="watch">👁 Regarder</button>
+        </div>
+      </form>
+    </div>
+    <div class="card games">
+      <h2>Salons en cours</h2>
+      <p class="hint">Les salons publics : rejoins une partie qui attend, ou regarde-la.</p>
+      <ul id="rooms"></ul>
+    </div>
+  </section>
+
+  <!-- Salon d'attente -->
+  <section id="wait" class="screen" hidden>
+    <button class="back" data-leave>← Quitter le salon</button>
+    <div class="card narrow">
+      <h2>Salon</h2>
+      <p class="privacy-tag" id="waitPrivacy"></p>
+      <div class="code" id="waitCode"></div>
+      <button class="ghost" id="copyLink">🔗 Copier le lien d’invitation</button>
+      <p class="notice" id="notice" hidden></p>
+      <ul class="players" id="waitPlayers"></ul>
+      <p class="hint" id="waitWatchers" hidden></p>
+      <button class="primary" id="startBtn"></button>
+      <p class="hint">5 trous : Moulin, Île aux palmiers, Station orbitale, Volcan, Pays des bonbons. De 1 à 8 joueurs.</p>
+    </div>
+  </section>
+
+  <!-- Partie -->
+  <section id="game" class="screen xwide" hidden>
+    <div class="topbar">
+      <button class="back" data-leave>← Quitter</button>
+      <div class="holebar">
+        <span class="chip big">Trou <b id="holeNo"></b>/5</span>
+        <b id="holeName"></b>
+        <span class="chip">Par <b id="par"></b></span>
+        <span class="chip">Tes coups <b id="myStrokes">0</b></span>
+      </div>
+      <button class="ghost small" id="muteBtn"></button>
+    </div>
+    <div class="layout">
+      <div class="course-wrap">
+        <p class="status" id="status" aria-live="polite"></p>
+        <canvas id="course" aria-label="Parcours de mini-golf vu du dessus"></canvas>
+        <div class="powerbar"><span>Puissance</span><div class="bar"><i id="power"></i></div><b id="powerPct">0 %</b></div>
+        <p class="hint" id="holeHint"></p>
+        <div class="overlay" id="overlay" hidden></div>
+      </div>
+      <aside class="card side">
+        <h3>Classement</h3>
+        <ol id="ranking"></ol>
+        <p class="hint" id="watchers"></p>
+      </aside>
+    </div>
+  </section>
+
+  <div id="toast" role="alert" hidden></div>
+  <div id="bigText" aria-hidden="true"></div>
+</body>
+</html>

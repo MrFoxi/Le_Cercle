@@ -21,6 +21,7 @@ require('./p4/server')(sockets.of('/p4')); // Puissance 4
 require('./imposteur/server')(sockets.of('/imposteur')); // L'Imposteur
 require('./bataille/server')(sockets.of('/bataille')); // Bataille navale
 require('./solar/server')(sockets.of('/solar')); // Solar Explorer
+require('./golf/server')(sockets.of('/golf')); // Mini-golf
 
 const ACTIONS = ['start', 'bet', 'draw', 'reveal', 'stand', 'bankerDraw', 'challenge', 'kick', 'ban'];
 const GRACE_MS = 60000, RESULTS_MS = 6000;
