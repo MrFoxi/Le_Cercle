@@ -43,6 +43,7 @@
       <p id="bestLine" class="best"></p>
       <button id="play" class="primary" disabled>Chargement de la carte…</button>
       <div class="links">
+        <button id="openBoard" class="ghost">🏆 Classement</button>
         <button id="openStats" class="ghost">📊 Statistiques</button>
         <button id="openSettings" class="ghost">⚙️ Paramètres</button>
       </div>
@@ -105,6 +106,15 @@
         <h3>À revoir</h3>
         <ul id="missed"></ul>
       </div>
+      <div id="boardBox" class="board">
+        <h3>🏆 Classement en ligne</h3>
+        <form id="boardForm">
+          <input id="boardName" maxlength="20" placeholder="Ton pseudo" aria-label="Ton pseudo" required>
+          <button class="primary">Envoyer mon score</button>
+        </form>
+        <p id="boardMsg" class="sub" aria-live="polite"></p>
+        <ol id="endBoard" class="ranking"></ol>
+      </div>
       <div class="row">
         <button id="again" class="primary">Rejouer</button>
         <button id="toMenu" class="ghost">← Menu</button>
@@ -115,6 +125,13 @@
   <dialog id="statsDlg">
     <h2>Statistiques</h2>
     <div id="statsBody"></div>
+    <form method="dialog"><button class="primary">Fermer</button></form>
+  </dialog>
+
+  <dialog id="boardDlg">
+    <h2>🏆 Classement</h2>
+    <p id="boardDlgSub" class="sub"></p>
+    <ol id="dlgBoard" class="ranking"></ol>
     <form method="dialog"><button class="primary">Fermer</button></form>
   </dialog>
 

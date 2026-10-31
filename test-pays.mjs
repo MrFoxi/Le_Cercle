@@ -77,3 +77,16 @@ const C = [
 }
 
 console.log('Tests du quiz des pays : OK');
+
+// Classement en ligne : scores plausibles acceptés, scores impossibles refusés
+{
+  const { check, COUNT } = (await import('module')).createRequire(import.meta.url)('./pays/api.js');
+  const ok = { key: 'Monde|0|0', name: 'Léa', points: 1500, found: 20, total: COUNT.Monde, seconds: 120 };
+  assert.strictEqual(check(ok), null);
+  assert.ok(check({ ...ok, points: 2100 })); // plus de 100 pts par pays
+  assert.ok(check({ ...ok, seconds: 5 })); // trop rapide
+  assert.ok(check({ ...ok, total: 3 }));
+  assert.ok(check({ ...ok, key: 'Lune|0|0' }));
+  assert.ok(check({ ...ok, key: 'Monde|180|0', seconds: 400 })); // dépasse le chrono
+  assert.ok(check({ ...ok, name: '' }));
+}

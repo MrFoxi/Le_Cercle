@@ -2,7 +2,7 @@
 /* global topojson */
 import { Quiz, MODES, CONTINENTS } from './quiz.js';
 import { createMap } from './map.js';
-import { loadStats, resetStats, recordGame, bestFor, loadSettings, saveSettings } from './stats.js';
+import { loadStats, resetStats, recordGame, bestFor, loadSettings, saveSettings, modeKey } from './stats.js';
 
 const $ = s => document.querySelector(s);
 const esc = s => String(s).replace(/[&<>"']/g, c => `&#${c.charCodeAt(0)};`);
@@ -190,7 +190,7 @@ function end() {
   clearInterval(timer);
   const q = quiz, record = recordGame(q);
   $('#endTitle').textContent = { done: q.skipped.length ? 'Partie terminée !' : 'Bravo, tout est trouvé !', time: 'Temps écoulé !', lives: 'Plus d’essais !' }[q.reason];
-  $('#endSub').textContent = `${q.options.scope}${q.options.time ? ` · ${clock(q.options.time)}` : ''}${q.options.lives ? ` · ${q.options.lives} erreur${q.options.lives > 1 ? 's' : ''} max` : ''}`;
+  $('#endSub').textContent = settingsLabel(q.options);
   $('#endPoints').textContent = q.points;
   $('#newBest').hidden = !record;
   $('#eGood').textContent = q.correct;
@@ -202,11 +202,67 @@ function end() {
   const review = [...new Set([...q.skipped, ...Object.keys(q.misses)])];
   $('#missedBox').hidden = !review.length;
   $('#missed').innerHTML = review.slice(0, 24).map(id => `<li>${esc(name(id))}</li>`).join('');
+  showEndBoard(q);
   show('end');
 }
 $('#again').onclick = () => start(quiz.options);
 $('#toMenu').onclick = $('#endBack').onclick = () => { quiz = null; show('menu'); syncMenu(); };
 $('#play').onclick = () => start(readOptions());
+
+/* ---------- Classement en ligne ---------- */
+const settingsLabel = o => `${o.scope}${o.time ? ` · ${clock(o.time)}` : ''}${o.lives ? ` · ${o.lives} erreur${o.lives > 1 ? 's' : ''} max` : ''}`;
+const boardHtml = (list, me) => list.length
+  ? list.map(e => `<li class="${e.name === me ? 'me' : ''}"><b>${esc(e.name)}</b><span>${e.points} pts</span><small>${e.found}/${e.total} · ${clock(e.seconds)}</small></li>`).join('')
+  : '<li class="empty">Personne pour l’instant : à toi de jouer !</li>';
+async function fetchBoard(o) {
+  const r = await fetch(`/api/pays/board?key=${encodeURIComponent(modeKey(o))}`);
+  if (!r.ok) throw new Error();
+  return r.json();
+}
+const loadPseudo = () => { try { return localStorage.getItem('pseudo') || ''; } catch { return ''; } };
+
+let lastGame = null;
+function showEndBoard(q) {
+  lastGame = q;
+  const ok = q.found.size > 0;
+  $('#boardForm').hidden = !ok;
+  $('#boardForm button').disabled = false;
+  $('#boardName').value = loadPseudo();
+  $('#boardMsg').textContent = ok ? '' : 'Trouve au moins un pays pour entrer au classement.';
+  $('#endBoard').innerHTML = '';
+  fetchBoard(q.options).then(list => { if (lastGame === q) $('#endBoard').innerHTML = boardHtml(list); })
+    .catch(() => { $('#boardMsg').textContent = 'Classement indisponible pour le moment.'; });
+}
+$('#boardForm').onsubmit = async e => {
+  e.preventDefault();
+  const q = lastGame, pseudo = $('#boardName').value.trim();
+  if (!q || !pseudo) return;
+  try { localStorage.setItem('pseudo', pseudo); } catch { /* stockage bloqué */ }
+  $('#boardForm button').disabled = true;
+  try {
+    const r = await fetch('/api/pays/board', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ key: modeKey(q.options), name: pseudo, points: q.points, found: q.found.size, total: q.total, seconds: Math.round(q.elapsed) }),
+    });
+    const res = await r.json();
+    if (!r.ok) throw new Error(res.error);
+    $('#endBoard').innerHTML = boardHtml(res.board, pseudo);
+    $('#boardMsg').textContent = res.improved ? `Tu es ${res.place === 1 ? '1er' : `${res.place}e`} du classement !`
+      : res.place ? `Ton meilleur score reste devant (${res.place}e place).` : 'Pas assez pour entrer dans le top 10, retente ta chance !';
+    $('#boardForm').hidden = true;
+  } catch (err) {
+    $('#boardMsg').textContent = err.message || 'Envoi impossible, réessaie.';
+    $('#boardForm button').disabled = false;
+  }
+};
+$('#openBoard').onclick = () => {
+  const o = readOptions();
+  $('#boardDlgSub').textContent = settingsLabel(o);
+  $('#dlgBoard').innerHTML = '<li class="empty">Chargement…</li>';
+  fetchBoard(o).then(list => { $('#dlgBoard').innerHTML = boardHtml(list, loadPseudo()); })
+    .catch(() => { $('#dlgBoard').innerHTML = '<li class="empty">Classement indisponible pour le moment.</li>'; });
+  $('#boardDlg').showModal();
+};
 
 /* ---------- Statistiques ---------- */
 const optionsLabel = key => {
