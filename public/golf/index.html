@@ -2,30 +2,34 @@
 <html lang="fr">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <title>Mini-golf</title>
   <link rel="icon" href="favicon.svg" type="image/svg+xml">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@600;800&family=Nunito:wght@400;700;900&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@600;700;800&family=Nunito:wght@400;700;800;900&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="style.css">
   <script src="/socket.io/socket.io.js"></script>
   <script src="physics.js"></script>
+  <script src="holes.js"></script>
+  <script src="looks.js"></script>
   <script type="module" src="client.js"></script>
 </head>
 <body>
+  <div class="sky" aria-hidden="true"><i></i><i></i><i></i></div>
+
   <!-- Pseudo -->
   <section id="name" class="screen">
     <a class="back" href="../">← Le Cercle</a>
     <header class="hero">
-      <img src="favicon.svg" alt="" class="logo">
+      <canvas class="hero-canvas" width="520" height="220" aria-hidden="true"></canvas>
       <h1>Mini-golf</h1>
-      <p class="tagline">Le Cercle · 5 trous entre amis, chacun son tour</p>
+      <p class="tagline">10 trous fous · de 1 à 8 joueurs · robots, paris, chaos</p>
     </header>
     <form class="card narrow" id="nameForm">
       <h2>Choisis ton pseudo</h2>
       <input name="pseudo" maxlength="20" required autocomplete="nickname" aria-label="Pseudo" placeholder="Ton pseudo">
-      <button class="primary">Continuer</button>
+      <button class="primary big">C’est parti ⛳</button>
     </form>
   </section>
 
@@ -33,10 +37,12 @@
   <section id="home" class="screen wide" hidden>
     <a class="back" href="../">← Le Cercle</a>
     <header class="hero compact">
-      <img src="favicon.svg" alt="" class="logo">
-      <h1>Mini-golf</h1>
+      <canvas class="hero-canvas small" width="360" height="150" aria-hidden="true"></canvas>
+      <div>
+        <h1>Mini-golf</h1>
+        <p class="whoami">Salut <b id="meName"></b> <span id="meTitle"></span> · <a href="#" id="changeName">changer de pseudo</a></p>
+      </div>
     </header>
-    <p class="whoami">Connecté en tant que <b id="meName"></b> · <a href="#" id="changeName">changer de pseudo</a></p>
     <div class="home-grid">
       <form class="card" id="createForm">
         <h2>Créer un salon</h2>
@@ -61,21 +67,52 @@
       <p class="hint">Les salons publics : rejoins une partie qui attend, ou regarde-la.</p>
       <ul id="rooms"></ul>
     </div>
+    <div class="profile-grid">
+      <div class="card" id="locker">
+        <div class="card-head"><h2>🎽 Vestiaire</h2><span class="pts" id="myPoints"></span></div>
+        <canvas id="lockerCanvas" width="420" height="200" aria-label="Aperçu de ta balle"></canvas>
+        <div id="lockerTabs" class="tabs" role="tablist"></div>
+        <div id="lockerItems" class="chips"></div>
+        <p class="hint">Gagne des points en jouant (birdies, trous en un, victoires, succès) pour débloquer les 🔒.</p>
+      </div>
+      <div class="card" id="profile">
+        <h2>🏆 Profil</h2>
+        <label class="field">Titre sous ton pseudo <select id="titleSelect"></select></label>
+        <div class="stats" id="stats"></div>
+        <h3>Succès <small id="achCount"></small></h3>
+        <ul class="achievements" id="achievements"></ul>
+      </div>
+    </div>
   </section>
 
   <!-- Salon d'attente -->
-  <section id="wait" class="screen" hidden>
+  <section id="wait" class="screen wide" hidden>
     <button class="back" data-leave>← Quitter le salon</button>
-    <div class="card narrow">
-      <h2>Salon</h2>
-      <p class="privacy-tag" id="waitPrivacy"></p>
-      <div class="code" id="waitCode"></div>
-      <button class="ghost" id="copyLink">🔗 Copier le lien d’invitation</button>
-      <p class="notice" id="notice" hidden></p>
-      <ul class="players" id="waitPlayers"></ul>
-      <p class="hint" id="waitWatchers" hidden></p>
-      <button class="primary" id="startBtn"></button>
-      <p class="hint">5 trous : Moulin, Île aux palmiers, Station orbitale, Volcan, Pays des bonbons. De 1 à 8 joueurs.</p>
+    <div class="wait-grid">
+      <div class="card">
+        <div class="card-head"><h2>Salon <span class="code" id="waitCode"></span></h2><button class="ghost small" id="copyLink">🔗 Copier le lien</button></div>
+        <p class="privacy-tag" id="waitPrivacy"></p>
+        <p class="notice" id="notice" hidden></p>
+        <ul class="players" id="waitPlayers"></ul>
+        <div class="row"><button class="ghost" id="addBot">🤖 Ajouter un robot</button></div>
+        <p class="hint" id="waitWatchers" hidden></p>
+        <button class="primary big" id="startBtn"></button>
+      </div>
+      <div class="card" id="settingsCard">
+        <h2>Réglages de la partie</h2>
+        <p class="hint" id="settingsHint"></p>
+        <h3>Parcours</h3>
+        <div class="options" id="optCourse"></div>
+        <h3>Mode de jeu</h3>
+        <div class="options" id="optMode"></div>
+        <h3>Options</h3>
+        <div class="toggles" id="optMore"></div>
+      </div>
+    </div>
+    <div class="card chat-card">
+      <h3>💬 Discussion</h3>
+      <ul class="chatlog" id="waitChat"></ul>
+      <form class="chatform" data-chat><input name="msg" maxlength="200" placeholder="Écrire un message…" autocomplete="off" aria-label="Message"><button class="primary small">Envoyer</button></form>
     </div>
   </section>
 
@@ -84,30 +121,60 @@
     <div class="topbar">
       <button class="back" data-leave>← Quitter</button>
       <div class="holebar">
-        <span class="chip big">Trou <b id="holeNo"></b>/5</span>
+        <span class="chip big">Trou <b id="holeNo"></b>/<b id="holeCount"></b></span>
         <b id="holeName"></b>
         <span class="chip">Par <b id="par"></b></span>
         <span class="chip">Tes coups <b id="myStrokes">0</b></span>
+        <span class="chip chaos" id="chaosChip" hidden></span>
+        <span class="chip wind" id="windChip" hidden><i>➤</i> <b></b></span>
       </div>
-      <button class="ghost small" id="muteBtn"></button>
+      <div class="tools">
+        <button class="ghost small" id="camBtn" title="Caméra qui suit la balle">🎥</button>
+        <button class="ghost small" id="musicBtn" title="Musique">🎵</button>
+        <button class="ghost small" id="soundBtn" title="Sons">🔊</button>
+      </div>
     </div>
     <div class="layout">
       <div class="course-wrap">
         <p class="status" id="status" aria-live="polite"></p>
-        <canvas id="course" aria-label="Parcours de mini-golf vu du dessus"></canvas>
-        <div class="powerbar"><span>Puissance</span><div class="bar"><i id="power"></i></div><b id="powerPct">0 %</b></div>
+        <div class="canvas-box">
+          <canvas id="course" aria-label="Parcours de mini-golf vu du dessus"></canvas>
+          <div class="banner" id="banner" hidden></div>
+          <div class="replay-tag" id="replayTag" hidden>🎬 Ralenti</div>
+          <div class="overlay" id="overlay" hidden></div>
+        </div>
+        <div class="controls">
+          <div class="powerbar"><span>Puissance</span><div class="bar"><i id="power"></i></div><b id="powerPct">0 %</b></div>
+          <div class="spin" role="group" aria-label="Effet">
+            <span>Effet</span>
+            <button class="ghost small" data-spin="-1" title="Effet à gauche (Q)">↺↺</button>
+            <button class="ghost small" data-spin="-0.5" title="Petit effet à gauche">↺</button>
+            <button class="ghost small on" data-spin="0" title="Sans effet">•</button>
+            <button class="ghost small" data-spin="0.5" title="Petit effet à droite">↻</button>
+            <button class="ghost small" data-spin="1" title="Effet à droite (E)">↻↻</button>
+          </div>
+        </div>
+        <div class="betbar" id="betbar" hidden></div>
+        <div class="emotes" id="emotes"></div>
         <p class="hint" id="holeHint"></p>
-        <div class="overlay" id="overlay" hidden></div>
       </div>
-      <aside class="card side">
-        <h3>Classement</h3>
-        <ol id="ranking"></ol>
-        <p class="hint" id="watchers"></p>
+      <aside class="side">
+        <div class="card">
+          <h3 id="rankTitle">Classement</h3>
+          <div id="teams"></div>
+          <ol id="ranking"></ol>
+          <p class="hint" id="watchers"></p>
+        </div>
+        <div class="card chat-card">
+          <h3>💬 Discussion</h3>
+          <ul class="chatlog" id="gameChat"></ul>
+          <form class="chatform" data-chat><input name="msg" maxlength="200" placeholder="Message…" autocomplete="off" aria-label="Message"><button class="primary small">↵</button></form>
+        </div>
       </aside>
     </div>
   </section>
 
-  <div id="toast" role="alert" hidden></div>
+  <div id="toasts" aria-live="polite"></div>
   <div id="bigText" aria-hidden="true"></div>
 </body>
 </html>
