@@ -1,0 +1,166 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Strategy Club</title>
+  <link rel="icon" href="favicon.svg" type="image/svg+xml">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@600;700&family=Inter:wght@400;600;800&family=Noto+Serif+JP:wght@700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+  <script src="/socket.io/socket.io.js"></script>
+  <script src="games/chess.js"></script>
+  <script src="games/draughts.js"></script>
+  <script src="games/shogi.js"></script>
+  <script src="games/go.js"></script>
+  <script type="module" src="client.js"></script>
+</head>
+<body>
+  <!-- Pseudo -->
+  <section id="name" class="screen">
+    <a class="back" href="../">← Le Cercle</a>
+    <header class="hero">
+      <img src="favicon.svg" alt="" class="logo">
+      <h1>Strategy Club</h1>
+      <p class="tagline">Échecs · Dames · Shogi · Go</p>
+    </header>
+    <form class="panel narrow" id="nameForm">
+      <h2>Ton nom au club</h2>
+      <input name="pseudo" maxlength="20" required autocomplete="nickname" aria-label="Pseudo" placeholder="Ton pseudo">
+      <button class="primary">Entrer au club</button>
+    </form>
+  </section>
+
+  <!-- Le club : choix du jeu -->
+  <section id="club" class="screen wide" hidden>
+    <div class="topbar">
+      <a class="back" href="../">← Le Cercle</a>
+      <button class="ghost small" data-open="looks">🎨 Apparence</button>
+    </div>
+    <header class="hero compact">
+      <img src="favicon.svg" alt="" class="logo">
+      <div><h1>Strategy Club</h1><p class="whoami">Bienvenue, <b id="meName"></b> · <a href="#" id="changeName">changer de nom</a></p></div>
+    </header>
+    <div class="cards" id="cards"></div>
+    <div class="club-grid">
+      <div class="panel">
+        <h2>Parties en cours</h2>
+        <p class="hint">Rejoins une place libre ou regarde une partie en direct.</p>
+        <ul class="rooms" id="rooms"></ul>
+      </div>
+      <form class="panel" id="joinForm">
+        <h2>Entrer avec un code</h2>
+        <p class="hint">Un ami t’a envoyé le code de son salon ?</p>
+        <input name="code" maxlength="5" required autocomplete="off" class="code-input" placeholder="ABCDE" aria-label="Code du salon">
+        <div class="row">
+          <button class="primary" name="mode" value="play">Jouer</button>
+          <button class="ghost" name="mode" value="watch">👁 Regarder</button>
+        </div>
+      </form>
+    </div>
+  </section>
+
+  <!-- Entrée d'un jeu : plateau qui se construit, puis les façons de jouer -->
+  <section id="hall" class="screen wide" hidden>
+    <div class="topbar">
+      <button class="back" id="hallBack">← Tous les jeux</button>
+      <button class="ghost small" data-open="looks">🎨 Apparence</button>
+    </div>
+    <div class="hall">
+      <div class="hall-board"><div id="hallBoard"></div></div>
+      <div class="hall-side">
+        <p class="kicker" id="hallKicker"></p>
+        <h1 id="hallTitle"></h1>
+        <p class="hall-desc" id="hallDesc"></p>
+        <div class="panel">
+          <h3>🤖 Contre un robot</h3>
+          <div class="chips" id="botLevels"></div>
+          <div class="opts" id="botOpts"></div>
+          <button class="primary big" id="playBot">Jouer contre le robot</button>
+        </div>
+        <div class="panel">
+          <h3>👥 Entre amis</h3>
+          <div class="row">
+            <button class="primary" data-create="public">Créer une partie publique</button>
+            <button class="ghost" data-create="private">🔒 Partie privée</button>
+          </div>
+          <ul class="rooms" id="hallRooms"></ul>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Salon : places, réglages, prêt -->
+  <section id="lobby" class="screen wide" hidden>
+    <div class="topbar">
+      <button class="back" data-leave>← Quitter le salon</button>
+      <p class="brand" id="lobbyBrand"></p>
+      <button class="ghost small" data-open="looks">🎨</button>
+    </div>
+    <p class="notice" id="lobbyNotice" hidden></p>
+    <div class="lobby">
+      <div class="panel">
+        <h2 id="lobbyTitle"></h2>
+        <div class="seats" id="seats"></div>
+        <button class="primary big" id="readyBtn"></button>
+        <p class="hint center" id="readyHint"></p>
+        <h3>Réglages de la partie</h3>
+        <div id="settings"></div>
+      </div>
+      <div class="side-stack">
+        <div class="panel invite">
+          <h3>Inviter</h3>
+          <p class="hint" id="privacyLine"></p>
+          <div class="code" id="roomCode"></div>
+          <button class="ghost" id="copyLink">🔗 Copier le lien d’invitation</button>
+          <p class="hint" id="watchers"></p>
+        </div>
+        <div class="panel chat"><h3>Discussion</h3><ol class="msgs"></ol><form class="say"><input maxlength="200" placeholder="Écrire un message…" aria-label="Message"><button class="ghost small">Envoyer</button></form></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Partie -->
+  <section id="play" class="screen xwide" hidden>
+    <div class="topbar">
+      <button class="back" data-leave>← Quitter</button>
+      <p class="brand" id="playBrand"></p>
+      <span class="watch-count" id="watchCount" title="Spectateurs"></span>
+    </div>
+    <p class="watching" id="watchBadge" hidden>👁 Tu regardes cette partie en spectateur</p>
+    <div class="table">
+      <div class="table-main">
+        <div class="bar" id="barTop"></div>
+        <div class="hand" id="handTop" hidden></div>
+        <div class="board-frame"><div id="board"></div></div>
+        <div class="hand" id="handBottom" hidden></div>
+        <div class="bar" id="barBottom"></div>
+        <div class="scoring" id="scoring" hidden></div>
+      </div>
+      <div class="side-stack">
+        <div class="panel status-panel">
+          <p class="turn" id="turnLine" aria-live="polite"></p>
+          <div class="row" id="playActions"></div>
+        </div>
+        <div class="panel history"><h3>Historique des coups</h3><ol id="moves"></ol></div>
+        <div class="panel chat"><h3>Discussion</h3><ol class="msgs"></ol><form class="say"><input maxlength="200" placeholder="Écrire un message…" aria-label="Message"><button class="ghost small">Envoyer</button></form></div>
+      </div>
+    </div>
+    <div class="overlay" id="overlay" hidden></div>
+  </section>
+
+  <!-- Choix pendant un coup : promotion -->
+  <dialog id="choiceDlg"><p id="choiceText"></p><div class="row" id="choiceBtns"></div></dialog>
+
+  <!-- Apparence -->
+  <dialog id="looksDlg">
+    <h2>Apparence</h2>
+    <div id="looksBody"></div>
+    <form method="dialog"><button class="primary">Fermer</button></form>
+  </dialog>
+
+  <div class="warp" id="warp" hidden></div>
+  <div id="toast" role="alert" hidden></div>
+</body>
+</html>
