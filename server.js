@@ -9,6 +9,9 @@ const app = express();
 app.get('/health', (req, res) => res.send('ok'));
 app.use('/api/size', require('./size/api')); // Size It Up : les vraies tailles restent côté serveur
 app.get('/imposteur/engine.js', (req, res) => res.type('js').send(require('./imposteur/engine'))); // règles de L'Imposteur pour le mode un seul appareil
+// Three.js pour Solar Explorer, servi depuis node_modules (pas de CDN)
+app.use('/vendor/three/build', express.static(path.join(__dirname, 'node_modules/three/build')));
+app.use('/vendor/three/addons', express.static(path.join(__dirname, 'node_modules/three/examples/jsm')));
 app.use(express.static(path.join(__dirname, 'public')));
 const server = http.createServer(app);
 const sockets = new Server(server);
@@ -17,6 +20,7 @@ require('./cote/server')(sockets.of('/cote')); // Le Demi-Cercle
 require('./p4/server')(sockets.of('/p4')); // Puissance 4
 require('./imposteur/server')(sockets.of('/imposteur')); // L'Imposteur
 require('./bataille/server')(sockets.of('/bataille')); // Bataille navale
+require('./solar/server')(sockets.of('/solar')); // Solar Explorer
 
 const ACTIONS = ['start', 'bet', 'draw', 'reveal', 'stand', 'bankerDraw', 'challenge', 'kick', 'ban'];
 const GRACE_MS = 60000, RESULTS_MS = 6000;

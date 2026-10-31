@@ -5,14 +5,15 @@
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
-    "test": "node test.js && node test-pays.mjs && node test-cote.js && node test-p4.js && node test-size.js && node test-imposteur.js && node test-bataille.js"
+    "test": "node test.js && node test-pays.mjs && node test-cote.js && node test-p4.js && node test-size.js && node test-imposteur.js && node test-bataille.js && node test-solar.js"
   },
   "engines": {
     "node": ">=18"
   },
   "dependencies": {
     "express": "^4.21.2",
-    "socket.io": "^4.8.1"
+    "socket.io": "^4.8.1",
+    "three": "^0.187.0"
   },
   "devDependencies": {
     "topojson-client": "^3.1.0",

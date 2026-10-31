@@ -1,0 +1,131 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Solar Explorer</title>
+  <link rel="icon" href="favicon.svg" type="image/svg+xml">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Oxanium:wght@500;700;800&family=Inter:wght@400;600;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+  <script type="importmap">{ "imports": { "three": "/vendor/three/build/three.module.js", "three/addons/": "/vendor/three/addons/" } }</script>
+  <script src="/socket.io/socket.io.js"></script>
+  <script type="module" src="main.js"></script>
+</head>
+<body>
+  <!-- Pseudo -->
+  <section id="name" class="screen">
+    <a class="back" href="../">← Le Cercle</a>
+    <header class="hero">
+      <img src="favicon.svg" alt="" class="logo">
+      <h1>Solar Explorer</h1>
+      <p class="tagline">Exploration spatiale · multijoueur</p>
+    </header>
+    <form class="panel narrow" id="nameForm">
+      <h2>Ton nom de pilote</h2>
+      <input name="pseudo" maxlength="20" required autocomplete="nickname" aria-label="Pseudo" placeholder="Ton pseudo">
+      <button class="primary">Continuer</button>
+      <p class="hint">Jeu prévu pour ordinateur : clavier et souris.</p>
+    </form>
+  </section>
+
+  <!-- Accueil : créer ou rejoindre un univers -->
+  <section id="home" class="screen wide" hidden>
+    <a class="back" href="../">← Le Cercle</a>
+    <header class="hero compact">
+      <img src="favicon.svg" alt="" class="logo">
+      <h1>Solar Explorer</h1>
+    </header>
+    <p class="whoami">Pilote <b id="meName"></b> · <a href="#" id="changeName">changer de nom</a></p>
+    <div class="home-grid">
+      <form class="panel" id="createForm">
+        <h2>Créer un univers</h2>
+        <div class="privacy" role="radiogroup" aria-label="Visibilité">
+          <label><input type="radio" name="vis" value="public" checked><span><b>🌍 Public</b><small>Visible dans la liste : n’importe quel pilote peut te rejoindre.</small></span></label>
+          <label><input type="radio" name="vis" value="private"><span><b>🔒 Privé</b><small>Caché : seuls tes amis avec le code ou le lien entrent.</small></span></label>
+        </div>
+        <button class="primary">Créer l’univers</button>
+      </form>
+      <form class="panel" id="joinForm">
+        <h2>Rejoindre des amis</h2>
+        <p class="hint">Entre le code de leur univers (ou ouvre leur lien d’invitation).</p>
+        <input name="code" maxlength="5" required autocomplete="off" class="code-input" placeholder="ABCDE" aria-label="Code de l’univers">
+        <button class="primary">Rejoindre</button>
+      </form>
+    </div>
+    <div class="panel games">
+      <h2>Univers ouverts</h2>
+      <ul id="rooms"></ul>
+    </div>
+  </section>
+
+  <!-- Hangar : choix et personnalisation du vaisseau -->
+  <section id="hangar" class="screen wide" hidden>
+    <button class="back" data-leave>← Quitter l’univers</button>
+    <div class="hangar">
+      <div class="preview-wrap"><canvas id="preview" aria-label="Aperçu du vaisseau"></canvas><p class="hint center">Univers <b id="hangarCode"></b> · <span id="hangarPilots"></span></p></div>
+      <div class="panel">
+        <h2>Hangar</h2>
+        <h3>Modèle</h3>
+        <div class="models" id="models"></div>
+        <h3>Couleur</h3>
+        <div class="swatches" id="swatches"></div>
+        <button class="primary big" id="launchBtn" disabled>Préparation du système solaire…</button>
+        <div class="bar"><i id="loadBar"></i></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- En vol -->
+  <div id="space" hidden>
+    <canvas id="view"></canvas>
+    <div id="labels" aria-hidden="true"></div>
+    <div id="destMark" hidden><i></i><b></b><small></small></div>
+    <div class="hud-top">
+      <b id="hudName"></b><span id="hudZone"></span>
+      <div id="hudDest"></div>
+    </div>
+    <div class="hud-tr">
+      <button class="hud-btn" id="mapBtn" title="Carte du système (M)">🗺 Carte <kbd>M</kbd></button>
+      <button class="hud-btn" id="inviteBtn" title="Copier le lien d’invitation">🔗 Inviter</button>
+      <button class="hud-btn" id="hangarBtn" title="Changer de vaisseau">🛠 Hangar</button>
+      <button class="hud-btn" id="soundBtn"></button>
+      <button class="hud-btn" id="helpBtn" title="Commandes (H)">❔</button>
+      <button class="hud-btn" data-leave title="Quitter l’univers">⏏</button>
+    </div>
+    <aside class="hud-side">
+      <h3>Pilotes <span id="pilotCount"></span></h3>
+      <ul id="pilots"></ul>
+      <p class="hint">Clique un pilote pour le retrouver.</p>
+    </aside>
+    <div class="hud-bl">
+      <div class="speed"><b id="spd">0</b><small>km/s</small></div>
+      <div class="gauge"><span>Boost</span><div class="bar"><i id="boostBar"></i></div></div>
+      <div class="gauge"><span>Coque</span><div class="bar hull"><i id="hullBar"></i></div></div>
+      <p id="shipState"></p>
+    </div>
+    <div class="hud-br"><canvas id="minimap" width="200" height="200"></canvas><small id="mmRange"></small></div>
+    <button id="lockHint">🖱 Clique pour prendre les commandes</button>
+    <div id="help" class="panel" hidden>
+      <h3>Commandes</h3>
+      <ul class="keys">
+        <li><kbd>Z</kbd> avancer · <kbd>S</kbd> ralentir</li>
+        <li><kbd>Q</kbd> <kbd>D</kbd> déplacement latéral</li>
+        <li><kbd>Espace</kbd> monter · <kbd>Ctrl</kbd> ou <kbd>C</kbd> descendre</li>
+        <li>🖱 Souris (ou flèches) : orienter le vaisseau</li>
+        <li><kbd>Maj</kbd> boost · <kbd>X</kbd> demi-tour</li>
+        <li><kbd>M</kbd> carte · <kbd>H</kbd> cette aide · <kbd>Échap</kbd> libérer la souris</li>
+      </ul>
+      <p class="hint">Loin des astres, le vaisseau passe en croisière et va beaucoup plus vite ; il ralentit tout seul en approchant.</p>
+    </div>
+    <div id="map" hidden>
+      <canvas id="mapCanvas"></canvas>
+      <div class="map-head"><h2>Système solaire</h2><p class="hint">Clique un astre, la station ou un pilote pour en faire ta destination. <kbd>M</kbd> ou <kbd>Échap</kbd> pour fermer.</p></div>
+      <div class="panel map-info" id="mapInfo" hidden></div>
+    </div>
+  </div>
+
+  <div id="toast" role="alert" hidden></div>
+</body>
+</html>

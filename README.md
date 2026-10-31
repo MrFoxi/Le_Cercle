@@ -2,6 +2,7 @@
 
 Un seul serveur pour plusieurs projets : la page d'accueil (`/`) mène à chaque jeu.
 
+- `/solar/` : **Solar Explorer**, exploration spatiale en 3D (Three.js) jusqu’à 16 pilotes par univers : vol à la troisième personne, 8 planètes et leurs lunes, ceinture d’astéroïdes, station Horizon, mini-carte et carte du système. Les positions des vaisseaux passent par un canal rapide à part.
 - `/bataille/` : **Bataille navale**, à deux en temps réel : modes Classique, Moderne (radar, drone, sonar, missiles, brouillage) et Rapide (8 × 8), flottes gardées secrètes par le serveur.
 - `/imposteur/` : **L’Imposteur**, de 3 à 12 joueurs en temps réel : civils, imposteurs (mot proche) et Mr. White (aucun mot), indices, discussion, vote secret. Aussi en mode soirée sur un seul appareil (`/imposteur/solo.html`).
 - `/size/` : **Size It Up**, jeu solo : mettre l’objet rouge à l’échelle de l’objet bleu, à l’œil nu.
@@ -41,6 +42,7 @@ Tout est en mémoire : un redémarrage du service efface les lobbys et les jeton
 - `public/index.html` : page d'accueil qui liste les projets.
 - `public/7-5/` : client du 7,5 (HTML/CSS/JS).
 - `lib/rooms.js` : salons temps réel communs aux jeux multijoueurs (code, lobby public ou privé, reconnexion par jeton, spectateurs, chat). Un jeu fournit sa classe `Room` et la liste de ses actions ; si la `Room` a un `deadline`, sa méthode `timeout()` est appelée à l’heure dite (étapes chronométrées).
+- `solar/` : Solar Explorer : `game.js` (pilotes, vaisseaux, validation des positions), `server.js` (canal `/solar`, relais des positions) ; client dans `public/solar/` (`world.js` astres, collisions et zones, `textures.js` textures dessinées par le code, `ships.js` vaisseaux, `main.js` vol, caméra, interface, cartes), tests dans `test-solar.js`. Three.js est servi depuis `node_modules` sur `/vendor/three/`.
 - `bataille/` : Bataille navale : `game.js` (flottes, tirs, capacités, ce que chacun a le droit de voir), `server.js` (canal `/bataille`) ; client dans `public/bataille/`, tests dans `test-bataille.js`.
 - `imposteur/` : L’Imposteur : `words.js` (paires de mots par catégorie : en ajouter une = une ligne), `game.js` (rôles, tours d’indices, vote et revote, Mr. White, victoires, cartes filtrées pour chaque joueur), `server.js` (canal `/imposteur`), `engine.js` (les mêmes règles servies au navigateur sur `/imposteur/engine.js` pour le mode un seul appareil) ; client dans `public/imposteur/` (`client.js` en ligne, `solo.js` un seul appareil, `ui.js` affichage commun), tests dans `test-imposteur.js`.
 - `size/` : Size It Up : `objects.js` (objets et dimensions réelles), `game.js` (paires, score), `api.js` (API `/api/size` : les vraies tailles ne sont envoyées qu’après validation) ; client dans `public/size/`, tests dans `test-size.js`.
