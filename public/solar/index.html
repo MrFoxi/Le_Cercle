@@ -66,11 +66,21 @@
     <div class="hangar">
       <div class="preview-wrap"><canvas id="preview" aria-label="Aperçu du vaisseau"></canvas><p class="hint center">Univers <b id="hangarCode"></b> · <span id="hangarPilots"></span></p></div>
       <div class="panel">
-        <h2>Hangar</h2>
+        <h2 id="hangarWhere">Hangar</h2>
+        <p class="hint" id="hangarPts"></p>
         <h3>Modèle</h3>
         <div class="models" id="models"></div>
         <h3>Couleur</h3>
         <div class="swatches" id="swatches"></div>
+        <h3>Peinture</h3>
+        <div class="chips" id="pick-paint"></div>
+        <h3>Traînée</h3>
+        <div class="chips" id="pick-trail"></div>
+        <h3>Effet de boost</h3>
+        <div class="chips" id="pick-boost"></div>
+        <h3>Titre</h3>
+        <div class="chips" id="pick-title"></div>
+        <p class="hint">Découvre des astres pour gagner des points : ils débloquent modèles, peintures et effets. Les titres se gagnent en explorant certaines régions.</p>
         <button class="primary big" id="launchBtn" disabled>Préparation du système solaire…</button>
         <div class="bar"><i id="loadBar"></i></div>
       </div>
@@ -85,26 +95,38 @@
     <div class="hud-top">
       <b id="hudName"></b><span id="hudZone"></span>
       <div id="hudDest"></div>
+      <div id="hudEvent"></div>
+      <div id="radio" hidden></div>
     </div>
+    <div id="stormFx" aria-hidden="true"></div>
     <div class="hud-tr">
       <button class="hud-btn" id="mapBtn" title="Carte du système (M)">🗺 Carte <kbd>M</kbd></button>
+      <button class="hud-btn" id="journalBtn" title="Journal d’exploration (J)">📖 Journal <kbd>J</kbd></button>
       <button class="hud-btn" id="inviteBtn" title="Copier le lien d’invitation">🔗 Inviter</button>
       <button class="hud-btn" id="hangarBtn" title="Changer de vaisseau">🛠 Hangar</button>
-      <button class="hud-btn" id="soundBtn"></button>
+      <button class="hud-btn" id="soundBtn" title="Sons"></button>
+      <button class="hud-btn" id="musicBtn" title="Musique"></button>
       <button class="hud-btn" id="helpBtn" title="Commandes (H)">❔</button>
       <button class="hud-btn" data-leave title="Quitter l’univers">⏏</button>
     </div>
     <aside class="hud-side">
       <h3>Pilotes <span id="pilotCount"></span></h3>
       <ul id="pilots"></ul>
-      <p class="hint">Clique un pilote pour le retrouver.</p>
+      <p class="hint">Clique un pilote pour le retrouver, ⤴ pour te téléporter près de lui.</p>
     </aside>
     <div class="hud-bl">
       <div class="speed"><b id="spd">0</b><small>km/s</small></div>
       <div class="gauge"><span>Boost</span><div class="bar"><i id="boostBar"></i></div></div>
       <div class="gauge"><span>Coque</span><div class="bar hull"><i id="hullBar"></i></div></div>
       <p id="shipState"></p>
+      <p id="alt"></p>
     </div>
+    <ul id="chatLog" aria-live="polite"></ul>
+    <form id="chatForm" class="panel" hidden autocomplete="off">
+      <input name="msg" maxlength="200" placeholder="Message aux pilotes… (Entrée pour envoyer, Échap pour fermer)" aria-label="Message">
+      <div class="chips" id="quick"></div>
+    </form>
+    <p id="prompt" hidden><kbd>E</kbd> Entrer au hangar de la station</p>
     <div class="hud-br"><canvas id="minimap" width="200" height="200"></canvas><small id="mmRange"></small></div>
     <button id="lockHint">🖱 Clique pour prendre les commandes</button>
     <div id="help" class="panel" hidden>
@@ -115,9 +137,19 @@
         <li><kbd>Espace</kbd> monter · <kbd>Ctrl</kbd> ou <kbd>C</kbd> descendre</li>
         <li>🖱 Souris (ou flèches) : orienter le vaisseau</li>
         <li><kbd>Maj</kbd> boost · <kbd>X</kbd> demi-tour</li>
-        <li><kbd>M</kbd> carte · <kbd>H</kbd> cette aide · <kbd>Échap</kbd> libérer la souris</li>
+        <li><kbd>M</kbd> carte · <kbd>J</kbd> journal · <kbd>H</kbd> cette aide · <kbd>Échap</kbd> libérer la souris</li>
+        <li><kbd>Entrée</kbd> chat · <kbd>1</kbd>–<kbd>4</kbd> messages rapides · <kbd>P</kbd> ping « Viens ici »</li>
+        <li><kbd>5</kbd> tonneau · <kbd>6</kbd> salut des feux · <kbd>7</kbd> feu d’artifice</li>
+        <li><kbd>E</kbd> hangar (à la station)</li>
       </ul>
       <p class="hint">Loin des astres, le vaisseau passe en croisière et va beaucoup plus vite ; il ralentit tout seul en approchant.</p>
+    </div>
+    <div id="journal" hidden>
+      <div class="journal-box panel">
+        <div class="journal-top"><h2>Journal d’exploration</h2><button class="ghost small" id="journalClose">✕ Fermer</button></div>
+        <p class="hint" id="journalHead"></p>
+        <ul id="journalList"></ul>
+      </div>
     </div>
     <div id="map" hidden>
       <canvas id="mapCanvas"></canvas>

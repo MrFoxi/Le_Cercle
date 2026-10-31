@@ -84,16 +84,44 @@ function craterField(seed, count, minR, maxR) {
   };
 }
 
-export function rocky({ seed, w = 1024, h = 512, stops, scale = 3, craters = 0, caps = 0 }) {
+// Relief d'un astre rocheux (0..1) : bosses fractales et cratères.
+// La même fonction donne la texture, le maillage en relief (Lune, Mars) et les collisions au ras du sol.
+export function rockyHeight({ seed, scale = 3, craters = 0 }) {
   const { fbm } = noiseFor(seed), crater = craters ? craterField(seed, craters, 0.02, 0.16) : () => 0;
+  return (x, y, z) => clamp(fbm(x * scale + 3, y * scale, z * scale, 6) * 0.8 + fbm(x * 18, y * 18, z * 18, 3) * 0.2 + crater(x, y, z) * 0.6);
+}
+
+// spot : grande tache claire (le « cœur » de Pluton) { lat, lon, r, color }
+export function rocky({ seed, w = 1024, h = 512, stops, scale = 3, craters = 0, caps = 0, spot = null }) {
+  const { fbm } = noiseFor(seed), height = rockyHeight({ seed, scale, craters });
+  const sp = spot && [Math.cos(spot.lat) * Math.cos(spot.lon), Math.sin(spot.lat), Math.cos(spot.lat) * Math.sin(spot.lon)];
   return paint(w, h, (x, y, z) => {
-    const base = fbm(x * scale + 3, y * scale, z * scale, 6), detail = fbm(x * 18, y * 18, z * 18, 3);
-    const height = clamp(base * 0.8 + detail * 0.2 + crater(x, y, z) * 0.6);
-    let c = ramp(stops, height);
+    const hh = height(x, y, z), detail = fbm(x * 18, y * 18, z * 18, 3);
+    let c = ramp(stops, hh);
     c = mix(c, [c[0] * 0.75, c[1] * 0.75, c[2] * 0.75], detail * 0.5);
     if (caps && Math.abs(y) > caps - fbm(x * 6, y * 6, z * 6, 3) * 0.06) c = mix(c, [235, 232, 228], 0.85);
-    return [c[0], c[1], c[2], 255, height];
+    if (sp) {
+      const d = Math.hypot(x - sp[0], y - sp[1], z - sp[2]) / spot.r + (fbm(x * 7, y * 7, z * 7, 4) - 0.5) * 0.6;
+      c = mix(c, spot.color, smooth(1, 0.7, d) * 0.9);
+    }
+    return [c[0], c[1], c[2], 255, hh];
   }, { bump: true });
+}
+
+// Petit relief qui se répète : grain du sol, visible seulement de très près.
+export function grain(seed = 9) {
+  const { noise } = noiseFor(seed), s = 256, c = canvas(s, s), ctx = c.getContext('2d'), img = ctx.createImageData(s, s);
+  const crat = craterField(seed, 60, 0.03, 0.12);
+  for (let j = 0; j < s; j++) for (let i = 0; i < s; i++) {
+    // tore : le motif se raccorde sur tous les bords
+    const a = (i / s) * TAU, b = (j / s) * TAU, x = Math.cos(a), y = Math.sin(a), z = Math.cos(b), w = Math.sin(b);
+    let v = 0.5 + (noise(x * 4 + 9, y * 4, z * 4 + w * 3) - 0.5) * 0.6 + (noise(x * 12, y * 12 + w * 9, z * 12) - 0.5) * 0.3;
+    v += crat(x * 0.7071, y * 0.7071, z * 0.7071 + w * 0.3) * 0.5;
+    const g = clamp(v) * 255;
+    img.data.set([g, g, g, 255], (j * s + i) * 4);
+  }
+  ctx.putImageData(img, 0, 0);
+  return c;
 }
 
 export function earth(seed = 7) {
