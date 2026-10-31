@@ -150,6 +150,9 @@ kbd { padding: 1px 6px; border-radius: 5px; border: 1px solid var(--line); backg
 .plane { fill: #d6e1ec; }
 .radar { fill: var(--cyan); }
 .ship.sunk svg { filter: grayscale(1) brightness(.45) sepia(1) hue-rotate(-40deg) saturate(3) drop-shadow(0 0 6px rgba(229, 52, 63, .6)); }
+/* Navire ennemi dévoilé par le drone : silhouette fantôme en pointillés */
+.ship.spotted { outline: 2px dashed var(--cyan); outline-offset: -3px; border-radius: 6px; }
+.ship.spotted svg { opacity: .7; filter: drop-shadow(0 0 6px var(--cyan)); }
 .ship.movable { pointer-events: auto; cursor: grab; }
 .ship.movable:hover svg { filter: drop-shadow(0 0 8px var(--cyan)); }
 

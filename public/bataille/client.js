@@ -184,7 +184,7 @@ const box = (r, c, h, w, n) => `left:${(c * 100) / n}%;top:${(r * 100) / n}%;wid
 function shipsHTML(ships, n, extra = '') {
   return ships.map(s => {
     const size = state.ships[s.id].size, v = s.dir === 'v';
-    return `<div class="ship ${v ? 'v' : 'h'}${s.sunk ? ' sunk' : ''} ${extra}" data-ship="${s.id}" style="${box(s.r, s.c, v ? size : 1, v ? 1 : size, n)};--L:${size}">${shipSVG(s.id, size)}</div>`;
+    return `<div class="ship ${v ? 'v' : 'h'}${s.sunk ? ' sunk' : s.spotted ? ' spotted' : ''} ${extra}" data-ship="${s.id}" style="${box(s.r, s.c, v ? size : 1, v ? 1 : size, n)};--L:${size}">${shipSVG(s.id, size)}</div>`;
   }).join('');
 }
 function marksHTML(marks, n) {
@@ -474,7 +474,7 @@ function describe(e, s) {
   if (e.kind === 'missiles') return `${who} ${you ? 'lances' : 'lance'} une frappe de missiles (${coord(...e.cells[0])}–${coord(...e.cells[2])}) : ${e.results.map(x => `${coord(x.r, x.c)} ${res(x)}`).join(', ')}`;
   if (e.kind === 'jam') return `${who} ${you ? 'brouilles' : 'brouille'} les capteurs adverses pour 2 tours`;
   const where = e.kind === 'drone' ? coord(...e.cells[0]) : `la zone ${coord(...e.cells[0])}–${coord(...e.cells.at(-1))}`;
-  const what = { drone: e.found ? '<b class="hit">navire repéré</b>' : 'case vide', radar: e.found ? '<b class="hit">contact radar</b>' : 'aucun navire', sonar: e.found ? '<b class="hit">sous-marin détecté</b>' : 'pas de sous-marin' }[e.kind];
+  const what = { drone: e.found ? `<b class="hit">${esc(s.ships[e.ship]?.name ?? 'navire')} repéré et dévoilé</b>` : 'case vide', radar: e.found ? '<b class="hit">contact radar</b>' : 'aucun navire', sonar: e.found ? '<b class="hit">sous-marin détecté</b>' : 'pas de sous-marin' }[e.kind];
   return `${who} ${you ? 'envoies' : 'envoie'} ${e.kind === 'drone' ? 'un drone sur' : e.kind === 'radar' ? 'le radar sur' : 'le sonar sur'} ${where} : ${what}`;
 }
 function renderHistory(s) {

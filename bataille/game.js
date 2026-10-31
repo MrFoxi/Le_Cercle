@@ -16,7 +16,7 @@ const MODES = {
 // Capacités du mode Moderne : nombre d'utilisations, et disponibles seulement après « from » actions de son camp.
 // Utiliser une capacité remplace le tir du tour.
 const ABILITIES = {
-  drone: { name: 'Drone de reconnaissance', charges: 2, from: 2, desc: 'Survole une case : indique si elle cache un navire. Aucun dégât.' },
+  drone: { name: 'Drone de reconnaissance', charges: 1, from: 2, desc: 'Survole une case : s’il y trouve un navire, il le dévoile en entier. Aucun dégât.' },
   radar: { name: 'Radar', charges: 2, from: 3, desc: 'Balaye une zone de 3 × 3 : indique si au moins un navire s’y trouve, sans dire où.' },
   sonar: { name: 'Sonar', charges: 1, from: 4, desc: 'Écoute une zone de 5 × 5 : indique si le sous-marin ennemi s’y cache.' },
   jam: { name: 'Brouillage', charges: 1, from: 4, turns: 2, desc: 'Brouille les capteurs ennemis : ni radar, ni sonar, ni drone pendant ses 2 prochains tours.' },
@@ -102,7 +102,7 @@ class Room {
     this.round++;
     this.sides = {};
     for (const p of this.players) {
-      this.sides[p.name] = { ships: null, received: {}, actions: 0, shots: 0, hits: 0, jammed: 0, charges: Object.fromEntries(Object.entries(ABILITIES).map(([k, a]) => [k, a.charges])) };
+      this.sides[p.name] = { ships: null, received: {}, actions: 0, shots: 0, hits: 0, jammed: 0, spotted: [], charges: Object.fromEntries(Object.entries(ABILITIES).map(([k, a]) => [k, a.charges])) };
     }
     this.history = [];
     this.turn = this.winner = this.rematch = this.notice = null;
@@ -186,7 +186,11 @@ class Room {
     } else {
       this.cell(r, c);
       const occupied = ([i, j]) => foe.ships.some(s => s.cells.some(([x, y]) => x === i && y === j));
-      if (type === 'drone') entry = { kind: 'drone', cells: [[r, c]], found: occupied([r, c]) };
+      if (type === 'drone') {
+        const ship = foe.ships.find(s => s.cells.some(([i, j]) => i === r && j === c));
+        if (ship && !foe.spotted.includes(ship.id)) foe.spotted.push(ship.id); // navire dévoilé en entier au tireur
+        entry = { kind: 'drone', cells: [[r, c]], found: !!ship, ...(ship && { ship: ship.id }) };
+      }
       if (type === 'radar') {
         const cells = zone(r, c, 1, n);
         entry = { kind: 'radar', cells, found: cells.some(occupied) };
@@ -246,16 +250,18 @@ class Room {
     this.rematch = null;
   }
 
-  // Ce qu'un joueur voit d'une grille : toute sa flotte chez lui ; chez l'ennemi, seulement ses tirs et les navires coulés.
+  // Ce qu'un joueur voit d'une grille : toute sa flotte chez lui ; chez l'ennemi, ses tirs, les navires coulés et ceux repérés par drone.
+  // viewer null = spectateur : il voit les deux flottes.
   board(owner, viewer) {
     const s = this.sides[owner];
     if (!s) return null;
     const sunk = (s.ships ?? []).filter(x => x.hits.length === x.cells.length);
-    const reveal = owner === viewer || this.phase === 'over';
+    const reveal = !viewer || owner === viewer || this.phase === 'over';
     const sunkCells = new Set(sunk.flatMap(x => x.cells.map(([r, c]) => key(r, c))));
     return {
       ready: !!s.ships,
-      ships: (reveal ? s.ships ?? [] : sunk).map(x => ({ id: x.id, r: x.r, c: x.c, dir: x.dir, hits: x.hits.length, sunk: x.hits.length === x.cells.length })),
+      ships: (s.ships ?? []).filter(x => reveal || s.spotted.includes(x.id) || x.hits.length === x.cells.length)
+        .map(x => ({ id: x.id, r: x.r, c: x.c, dir: x.dir, hits: x.hits.length, sunk: x.hits.length === x.cells.length, spotted: !reveal && s.spotted.includes(x.id) })),
       marks: Object.entries(s.received).map(([k, v]) => [...k.split(',').map(Number), sunkCells.has(k) ? 'sunk' : v]),
       fleet: this.rules.fleet.map(id => ({ id, sunk: sunk.some(x => x.id === id) })), // état public de la flotte : on sait ce qui est coulé
       shots: s.shots, hits: s.hits, actions: s.actions, jammed: s.jammed,

@@ -56,10 +56,10 @@ const fleet = r => LAYOUT.filter(s => r.rules.fleet.includes(s.id)).map((s, i) =
   assert.strictEqual(v.boards.B.marks.filter(m => m[2] === 'sunk').length, 2);
   assert.strictEqual(v.boards.A.ships.length, 5); // sa propre flotte, entière
   assert.ok(v.boards.B.fleet.find(s => s.id === 'patrouilleur').sunk);
-  // Un spectateur ne voit aucune flotte entière
+  // Un spectateur voit les deux flottes en entier
   r.addSpectator('S');
   const s = r.viewFor('S');
-  assert.ok(s.spectator && s.boards.A.ships.length === 0 && s.boards.B.ships.length === 1);
+  assert.ok(s.spectator && s.boards.A.ships.length === 5 && s.boards.B.ships.length === 5);
   assert.throws(() => r.fire('S', 0, 0, 5), /pas ton tour/);
 }
 
@@ -104,8 +104,12 @@ const fleet = r => LAYOUT.filter(s => r.rules.fleet.includes(s.id)).map((s, i) =
   assert.throws(() => r.ability('A', 'drone', { r: 0, c: 0 }, move()), /après ton 2ᵉ tour/);
   for (let k = 0; k < 6; k++) { r.fire('A', 1, 9 - k, move()); pass(); } // A tire 6 fois dans l'eau (ligne 1)
   r.ability('A', 'drone', { r: 0, c: 0 }, move());
-  assert.deepStrictEqual(r.history.at(-1), { n: 13, by: 'A', kind: 'drone', cells: [[0, 0]], found: true });
+  assert.deepStrictEqual(r.history.at(-1), { n: 13, by: 'A', kind: 'drone', cells: [[0, 0]], found: true, ship: 'porteavions' });
   assert.strictEqual(r.sides.B.received['0,0'], undefined, 'le drone ne fait pas de dégâts');
+  // Le navire repéré est dévoilé en entier à A, et seulement à lui
+  assert.deepStrictEqual(r.viewFor('A').boards.B.ships.map(x => [x.id, x.spotted]), [['porteavions', true]]);
+  assert.strictEqual(r.viewFor('B').boards.A.ships.length, 0, 'B ne voit rien de plus chez A');
+  assert.ok(!r.viewFor('B').boards.B.ships.some(x => x.spotted), 'B voit sa flotte normalement');
   pass();
   r.ability('A', 'radar', { r: 9, c: 9 }, move()); // coin vide : 2 × 2 cases visibles du 3 × 3
   assert.strictEqual(r.history.at(-1).found, false);
