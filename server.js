@@ -23,6 +23,9 @@ require('./imposteur/server')(sockets.of('/imposteur')); // L'Imposteur
 require('./bataille/server')(sockets.of('/bataille')); // Bataille navale
 require('./solar/server')(sockets.of('/solar')); // Solar Explorer
 require('./golf/server')(sockets.of('/golf')); // Mini-golf
+// Nombre de personnes connectées à chaque jeu multijoueur, pour la page d'accueil.
+const ONLINE = ['7-5', 'cote', 'p4', 'imposteur', 'bataille', 'solar', 'golf'];
+app.get('/api/online', (req, res) => res.json(Object.fromEntries(ONLINE.map(n => [n, sockets.of('/' + n).sockets.size]))));
 
 const ACTIONS = ['start', 'bet', 'draw', 'reveal', 'stand', 'bankerDraw', 'challenge', 'kick', 'ban'];
 const GRACE_MS = 60000, RESULTS_MS = 6000;

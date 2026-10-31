@@ -35,6 +35,12 @@
     .game h2 { margin: 4px 0 0; font: 900 1.5rem 'Playfair Display', Georgia, serif; color: var(--gold); }
     .game p { margin: 0; color: #d6dbe1; line-height: 1.5; }
     .game .go { margin-top: auto; padding-top: 8px; font-weight: 800; color: var(--gold); }
+    .meta { display: flex; flex-wrap: wrap; gap: 6px; font-size: .78rem; font-weight: 700; }
+    .meta span { padding: 4px 10px; border-radius: 999px; background: rgba(255, 255, 255, .06); color: var(--muted); }
+    .meta .live { color: #8ff0a4; background: rgba(80, 220, 120, .12); }
+    .meta .live::before { content: ''; display: inline-block; width: 7px; height: 7px; margin-right: 6px; border-radius: 50%; background: currentColor; box-shadow: 0 0 8px currentColor; vertical-align: 1px; }
+    .meta .live.zero { color: var(--muted); background: rgba(255, 255, 255, .04); }
+    .meta .live.zero::before { box-shadow: none; opacity: .5; }
     .game.soon { border-style: dashed; opacity: .6; }
     .game.soon .icon { width: 64px; height: 64px; display: grid; place-items: center; border-radius: 16px; border: 2px dashed var(--line); font-size: 1.8rem; color: var(--muted); }
   </style>
@@ -48,54 +54,63 @@
         <img src="7-5/favicon.svg" alt="">
         <h2>Le Cercle du 7,5</h2>
         <p>Le jeu de cartes « sept et demi » : approche 7,5 sans le dépasser et bats le banquier. De 2 à 8 joueurs.</p>
+        <div class="meta"><span>👥 2 à 8 joueurs</span><span class="live" data-game="7-5" hidden></span></div>
         <span class="go">Jouer →</span>
       </a>
       <a class="game" href="pays/">
         <img src="pays/favicon.svg" alt="">
         <h2>Trouve le pays</h2>
         <p>Quiz de géographie : un nom de pays s’affiche, clique dessus sur la carte du monde. 197 pays, 4 modes de jeu.</p>
+        <div class="meta"><span>👥 Solo</span><span class="live" data-game="pays" hidden></span></div>
         <span class="go">Jouer →</span>
       </a>
       <a class="game" href="cote/">
         <img src="cote/favicon.svg" alt="">
         <h2>Le Demi-Cercle</h2>
         <p>À deux : un thème, un mot, une aiguille entre MAUVAIS et BON. Devine où ton adversaire classe son mot. 68 thèmes, 10 manches.</p>
+        <div class="meta"><span>👥 2 joueurs</span><span class="live" data-game="cote" hidden></span></div>
         <span class="go">Jouer →</span>
       </a>
       <a class="game" href="p4/">
         <img src="p4/favicon.svg" alt="">
         <h2>Puissance 4</h2>
         <p>Le classique à deux : fais tomber tes jetons et aligne-en 4 avant ton adversaire. Revanches et spectateurs.</p>
+        <div class="meta"><span>👥 2 joueurs</span><span class="live" data-game="p4" hidden></span></div>
         <span class="go">Jouer →</span>
       </a>
       <a class="game" href="size/">
         <img src="size/favicon.svg" alt="">
         <h2>Size It Up</h2>
         <p>Une girafe à côté d’un bus : à quelle taille la dessinerais-tu ? Redimensionne l’objet rouge à l’œil nu. 10 manches, 100 points chacune.</p>
+        <div class="meta"><span>👥 Solo</span><span class="live" data-game="size" hidden></span></div>
         <span class="go">Jouer →</span>
       </a>
       <a class="game" href="imposteur/">
         <img src="imposteur/favicon.svg" alt="">
         <h2>L’Imposteur</h2>
         <p>Civils, imposteurs et Mr. White : un mot secret, des indices, des soupçons et un vote. Démasque les intrus avant qu’ils ne te bluffent. En ligne, ou en soirée sur un seul téléphone. De 3 à 12 joueurs.</p>
+        <div class="meta"><span>👥 3 à 12 joueurs</span><span class="live" data-game="imposteur" hidden></span></div>
         <span class="go">Jouer →</span>
       </a>
       <a class="game" href="bataille/">
         <img src="bataille/favicon.svg" alt="">
         <h2>Bataille navale</h2>
         <p>La bataille navale version guerre moderne, à deux : missiles, radar, drone, sonar et brouillage. Trois modes : classique, moderne, rapide.</p>
+        <div class="meta"><span>👥 2 joueurs</span><span class="live" data-game="bataille" hidden></span></div>
         <span class="go">Jouer →</span>
       </a>
       <a class="game" href="solar/">
         <img src="solar/favicon.svg" alt="">
         <h2>Solar Explorer</h2>
         <p>Pilote ton vaisseau en 3D dans le système solaire et explore-le avec tes amis : planètes, anneaux de Saturne, astéroïdes, station spatiale.</p>
+        <div class="meta"><span>👥 1 à 16 joueurs</span><span class="live" data-game="solar" hidden></span></div>
         <span class="go">Jouer →</span>
       </a>
       <a class="game" href="golf/">
         <img src="golf/favicon.svg" alt="">
         <h2>Mini-golf</h2>
         <p>Mini-golf vu du dessus, de 1 à 8 joueurs et des robots : 10 trous fous, balles qui se cognent, 5 modes de jeu, chaos, paris, vestiaire et succès.</p>
+        <div class="meta"><span>👥 1 à 8 joueurs</span><span class="live" data-game="golf" hidden></span></div>
         <span class="go">Jouer →</span>
       </a>
       <div class="game soon">
@@ -105,5 +120,21 @@
       </div>
     </div>
   </main>
+  <script>
+    // Joueurs connectés en ce moment, rafraîchi toutes les 15 s.
+    async function online() {
+      try {
+        const counts = await (await fetch('/api/online')).json();
+        for (const el of document.querySelectorAll('.live')) {
+          const n = counts[el.dataset.game];
+          el.hidden = n === undefined;
+          el.textContent = `${n} en ligne`;
+          el.classList.toggle('zero', !n);
+        }
+      } catch { /* serveur injoignable : on laisse les pastilles cachées */ }
+    }
+    online();
+    setInterval(online, 15000);
+  </script>
 </body>
 </html>
