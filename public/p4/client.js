@@ -155,6 +155,7 @@ socket.on('rooms', list => {
 
 /* ---------- Dans un salon ---------- */
 socket.on('state', s => {
+  if (s.moves !== state?.moves || s.turn !== state?.turn) remoteCol = sentCol = null; // nouveau coup : le survol repart de zéro
   state = s;
   if (s.phase === 'lobby') return renderWait(s);
   renderGame(s);
@@ -196,12 +197,18 @@ $('#preview').innerHTML = Array.from({ length: COLS }, () => '<span></span>').jo
 const myTurn = () => state?.phase === 'playing' && state.turn === state.me && !animating;
 const landingRow = c => { for (let r = ROWS - 1; r >= 0; r--) if (!state.board[r][c]) return r; return -1; };
 
+// Jeton au-dessus de la grille, à la couleur du joueur qui a la main : le sien quand c'est son tour,
+// sinon celui de l'adversaire, à la colonne qu'il survole (vu en direct par l'adversaire et les spectateurs).
+let remoteCol = null, sentCol = null;
+socket.on('hover', c => { remoteCol = c; renderHover(); });
 function renderHover() {
-  const color = state?.players.find(p => p.name === state.me)?.color;
-  const ok = hoverCol !== null && myTurn() && landingRow(hoverCol) >= 0;
-  [...$('#preview').children].forEach((el, c) => (el.className = ok && c === hoverCol ? `ghost ${color}` : ''));
+  const mine = myTurn(), col = mine ? hoverCol : remoteCol;
+  if (mine && hoverCol !== sentCol) socket.emit('hover', (sentCol = hoverCol));
+  const color = state?.players.find(p => p.name === state.turn)?.color;
+  const ok = col !== null && state?.phase === 'playing' && !animating && (mine || state.turn !== state.me) && landingRow(col) >= 0;
+  [...$('#preview').children].forEach((el, c) => (el.className = ok && c === col ? `ghost ${color}` : ''));
   for (const el of document.querySelectorAll('.slot.target')) el.classList.remove('target');
-  if (ok) document.querySelector(`.slot[data-rc="${landingRow(hoverCol)}-${hoverCol}"]`)?.classList.add('target');
+  if (ok) document.querySelector(`.slot[data-rc="${landingRow(col)}-${col}"]`)?.classList.add('target');
 }
 $('#cols').addEventListener('pointerover', e => { hoverCol = e.target.closest('.col') ? Number(e.target.closest('.col').dataset.col) : null; renderHover(); });
 $('#cols').addEventListener('pointerleave', () => { hoverCol = null; renderHover(); });

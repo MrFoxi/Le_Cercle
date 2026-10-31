@@ -161,7 +161,7 @@ input { width: 100%; font: 600 1rem var(--sans); padding: 12px 14px; border-radi
 
 /* ---------- Jetons de casino : rubis et or ---------- */
 .disc, .token, .preview .ghost { --c: #b8142f; --c-hi: #ff6f86; --c-lo: #5c0613; --stripe: #f4e3c0; --glow: rgba(220, 40, 70, .5); --emblem: #f4e3c0; }
-.yellow { --c: #d9a63a; --c-hi: #fff1c4; --c-lo: #7a5418; --stripe: #16110a; --glow: rgba(245, 200, 90, .5); --emblem: #2a1a00; }
+.yellow, .preview .ghost.yellow { --c: #d9a63a; --c-hi: #fff1c4; --c-lo: #7a5418; --stripe: #16110a; --glow: rgba(245, 200, 90, .5); --emblem: #2a1a00; }
 .disc, .token, .preview .ghost {
   background:
     radial-gradient(circle at 38% 32%, rgba(255, 255, 255, .35), transparent 32%),
