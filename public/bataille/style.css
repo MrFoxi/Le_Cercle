@@ -150,9 +150,9 @@ kbd { padding: 1px 6px; border-radius: 5px; border: 1px solid var(--line); backg
 .plane { fill: #d6e1ec; }
 .radar { fill: var(--cyan); }
 .ship.sunk svg { filter: grayscale(1) brightness(.45) sepia(1) hue-rotate(-40deg) saturate(3) drop-shadow(0 0 6px rgba(229, 52, 63, .6)); }
-/* Navire ennemi dévoilé par le drone : silhouette fantôme en pointillés */
-.ship.spotted { outline: 2px dashed var(--cyan); outline-offset: -3px; border-radius: 6px; }
-.ship.spotted svg { opacity: .7; filter: drop-shadow(0 0 6px var(--cyan)); }
+/* Navire ennemi dévoilé par le drone : en rouge */
+.ship.spotted { outline: 2px dashed var(--sunk); outline-offset: -3px; border-radius: 6px; }
+.ship.spotted svg { filter: sepia(1) saturate(6) hue-rotate(-50deg) brightness(.9) drop-shadow(0 0 6px var(--sunk)); }
 .ship.movable { pointer-events: auto; cursor: grab; }
 .ship.movable:hover svg { filter: drop-shadow(0 0 8px var(--cyan)); }
 
@@ -210,6 +210,11 @@ kbd { padding: 1px 6px; border-radius: 5px; border: 1px solid var(--line); backg
 .banner.mine small { color: #6b3a00; }
 .dots::after { content: ''; display: inline-block; width: 1.2em; text-align: left; animation: dots 1.2s steps(4) infinite; }
 .theatre { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(300px, .8fr); gap: 16px; align-items: start; }
+/* Spectateur : seulement les deux grilles, côte à côte et de même taille */
+.spectating #fleets, .spectating #battle .log, .spectating #abilityPanel { display: none !important; }
+.spectating .theatre { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.spectating .zone.small .board-wrap { max-width: none; }
+@media (max-width: 640px) { .spectating .theatre { grid-template-columns: minmax(0, 1fr); } }
 .side-stack { display: flex; flex-direction: column; gap: 14px; }
 .zone { padding: 16px; transition: box-shadow .3s; }
 .zone.live { box-shadow: 0 0 0 1.5px rgba(54, 215, 255, .6), 0 24px 60px rgba(0, 0, 0, .45), 0 0 50px rgba(54, 215, 255, .12); }

@@ -203,7 +203,8 @@ socket.on('state', s => {
   const prev = state;
   state = s;
   if (s.phase === 'lobby') return renderLobby(s);
-  if (s.phase === 'setup') return renderSetup(s, prev);
+  // Le spectateur suit le déploiement directement sur les deux grilles de bataille.
+  if (s.phase === 'setup') return s.spectator ? renderBattle(s) : renderSetup(s, prev);
   // Une nouvelle action pendant qu'on regarde : on l'anime avant d'afficher son résultat.
   const fresh = s.round === shown.round && s.moves === shown.moves + 1 && s.history.length;
   if (fresh && !busy) return play(s.history.at(-1), prev);
@@ -259,6 +260,7 @@ function randomFleet() {
   return Object.keys(out).length === fleetIds().length ? out : randomFleet();
 }
 
+let sentDraft = null;
 function renderSetup(s) {
   show('setup');
   $('#overlay').hidden = true;
@@ -266,14 +268,9 @@ function renderSetup(s) {
   if (setupRound !== s.round) { placed = {}; selected = fleetIds()[0]; dir = 'h'; setupRound = s.round; }
   const n = s.rules.size, mine = s.boards[s.me], foe = s.players.find(p => p.name !== s.me);
   $('#setupBrand').textContent = `Mode ${s.rules.name} · Grille ${n} × ${n}`;
-  if (s.spectator) {
-    mountBoard($('#setupBoard'), n, 'spectate');
-    $('#dock').innerHTML = '';
-    $('#setupStatus').textContent = 'Les commandants déploient leur flotte…';
-    for (const b of document.querySelectorAll('#setup .tools, #readyBtn')) b.hidden = true;
-    return;
-  }
   const done = mine?.ready;
+  const draft = JSON.stringify(Object.entries(placed).map(([id, p]) => ({ id, ...p })));
+  if (!done && draft !== sentDraft) { sentDraft = draft; act(null, 'draft', JSON.parse(draft)); } // les spectateurs suivent le placement en direct
   for (const b of document.querySelectorAll('#setup .tools, #readyBtn')) b.hidden = done;
   const board = mountBoard($('#setupBoard'), n, `setup-${s.round}`);
   const ships = done ? mine.ships : Object.entries(placed).map(([id, p]) => ({ id, ...p }));
@@ -355,14 +352,14 @@ function renderBattle(s) {
   shown = { round: s.round, moves: s.moves };
   const [a, b] = layout(s), n = s.rules.size, me = s.boards[s.me];
   $('#battleBrand').textContent = `Mode ${s.rules.name} · Bataille ${s.round}`;
-  $('#watchBadge').hidden = !s.spectator;
+  document.body.classList.toggle('spectating', s.spectator);
   for (const [zone, owner] of [['A', a], ['B', b]]) {
     const bd = s.boards[owner], board = mountBoard($(`#board${zone}`), n, owner);
     board.querySelector('.ships').innerHTML = shipsHTML(bd.ships, n);
     board.querySelector('.marks').innerHTML = marksHTML(bd.marks, n);
     board.querySelector('.scans').innerHTML = scansHTML(foeOf(s, owner), n);
     const sunk = bd.fleet.filter(x => x.sunk).length;
-    $(`#count${zone}`).textContent = `${sunk} / ${bd.fleet.length} coulés`;
+    $(`#count${zone}`).textContent = s.phase === 'setup' ? (bd.ready ? '✓ flotte prête' : 'déploiement…') : `${sunk} / ${bd.fleet.length} coulés`;
     $(`#title${zone}`).innerHTML = s.spectator ? `Flotte de ${esc(owner)}` : owner === s.me ? 'Ta flotte' : `Zone ennemie · ${esc(owner)}`;
   }
   const myTurn = s.phase === 'battle' && s.turn === s.me;
@@ -370,7 +367,8 @@ function renderBattle(s) {
   $('#zoneA').classList.toggle('live', myTurn);
   const thinking = '<span class="dots"></span>';
   $('#banner').className = `banner ${myTurn ? 'mine' : ''}`;
-  $('#banner').innerHTML = s.phase === 'over' ? `🏁 Bataille terminée : victoire de <b>${esc(s.winner)}</b>`
+  $('#banner').innerHTML = s.phase === 'setup' ? '⚓ Les commandants déploient leur flotte…'
+    : s.phase === 'over' ? `🏁 Bataille terminée : victoire de <b>${esc(s.winner)}</b>`
     : s.spectator ? `🎯 <b>${esc(s.turn)}</b> vise${thinking}`
     : myTurn ? (me.jammed && s.rules.abilities ? '🎯 À toi de tirer, commandant ! <small>📶 capteurs brouillés</small>' : '🎯 À toi de tirer, commandant !')
     : `⏳ <b>${esc(s.turn)}</b> réfléchit${thinking}`;

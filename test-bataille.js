@@ -13,6 +13,19 @@ function battle(mode = 'moderne') {
 }
 const fleet = r => LAYOUT.filter(s => r.rules.fleet.includes(s.id)).map((s, i) => ({ ...s, r: i * 2 }));
 
+// Placement en direct : visible des spectateurs, jamais de l'adversaire
+{
+  const r = battle();
+  r.addSpectator('S');
+  r.draft('A', LAYOUT.slice(0, 2));
+  assert.deepStrictEqual(r.viewFor('S').boards.A.ships.map(s => s.id), ['porteavions', 'cuirasse']);
+  assert.strictEqual(r.viewFor('B').boards.A.ships.length, 0);
+  assert.throws(() => r.draft('A', [{ id: 'cuirasse', r: 9, c: 9, dir: 'h' }]), /sort de la grille/);
+  r.placeFleet('A', LAYOUT);
+  assert.throws(() => r.draft('A', []), /déjà validée/);
+  assert.strictEqual(r.viewFor('S').boards.A.ships.length, 5);
+}
+
 // Placement : hors grille, chevauchement, navire manquant ou en double refusés
 {
   const r = battle();

@@ -102,7 +102,7 @@ class Room {
     this.round++;
     this.sides = {};
     for (const p of this.players) {
-      this.sides[p.name] = { ships: null, received: {}, actions: 0, shots: 0, hits: 0, jammed: 0, spotted: [], charges: Object.fromEntries(Object.entries(ABILITIES).map(([k, a]) => [k, a.charges])) };
+      this.sides[p.name] = { ships: null, received: {}, actions: 0, shots: 0, hits: 0, jammed: 0, spotted: [], draft: [], charges: Object.fromEntries(Object.entries(ABILITIES).map(([k, a]) => [k, a.charges])) };
     }
     this.history = [];
     this.turn = this.winner = this.rematch = this.notice = null;
@@ -111,11 +111,31 @@ class Room {
 
   // Flotte : [{ id, r, c, dir: 'h' | 'v' }], un navire par type de la flotte du mode, sans chevauchement ni débordement.
   placeFleet(name, layout) {
+    const side = this.setupSide(name);
+    if (!Array.isArray(layout) || layout.length !== this.rules.fleet.length) throw new Error('Place tous tes navires');
+    side.ships = this.parseFleet(layout);
+    if (this.players.every(p => this.sides[p.name].ships)) {
+      this.phase = 'battle';
+      this.turn = this.players[(this.round + 1) % 2].name; // on alterne qui ouvre le feu
+    }
+  }
+
+  // Placement en cours (pas encore validé) : montré en direct aux spectateurs seulement.
+  draft(name, layout) {
+    const side = this.setupSide(name);
+    if (!Array.isArray(layout)) throw new Error('Flotte invalide');
+    side.draft = this.parseFleet(layout);
+  }
+
+  setupSide(name) {
     if (this.phase !== 'setup') throw new Error('Ce n’est pas le moment de placer la flotte');
     const side = this.sides[name];
     if (side.ships) throw new Error('Ta flotte est déjà validée');
+    return side;
+  }
+
+  parseFleet(layout) {
     const { size, fleet } = this.rules;
-    if (!Array.isArray(layout) || layout.length !== fleet.length) throw new Error('Place tous tes navires');
     const used = new Set(), ships = [];
     for (const s of layout) {
       if (!fleet.includes(s?.id) || ships.some(x => x.id === s.id)) throw new Error('Flotte invalide');
@@ -128,11 +148,7 @@ class Room {
       }
       ships.push({ id: s.id, r: s.r, c: s.c, dir: s.dir, cells, hits: [] });
     }
-    side.ships = ships;
-    if (this.players.every(p => this.sides[p.name].ships)) {
-      this.phase = 'battle';
-      this.turn = this.players[(this.round + 1) % 2].name; // on alterne qui ouvre le feu
-    }
+    return ships;
   }
 
   // Vérifs communes aux actions de bataille ; moveNo évite qu'un clic envoyé deux fois joue deux tours.
@@ -255,12 +271,12 @@ class Room {
   board(owner, viewer) {
     const s = this.sides[owner];
     if (!s) return null;
-    const sunk = (s.ships ?? []).filter(x => x.hits.length === x.cells.length);
+    const all = s.ships ?? (viewer ? [] : s.draft), sunk = all.filter(x => x.hits.length === x.cells.length);
     const reveal = !viewer || owner === viewer || this.phase === 'over';
     const sunkCells = new Set(sunk.flatMap(x => x.cells.map(([r, c]) => key(r, c))));
     return {
       ready: !!s.ships,
-      ships: (s.ships ?? []).filter(x => reveal || s.spotted.includes(x.id) || x.hits.length === x.cells.length)
+      ships: all.filter(x => reveal || s.spotted.includes(x.id) || x.hits.length === x.cells.length)
         .map(x => ({ id: x.id, r: x.r, c: x.c, dir: x.dir, hits: x.hits.length, sunk: x.hits.length === x.cells.length, spotted: !reveal && s.spotted.includes(x.id) })),
       marks: Object.entries(s.received).map(([k, v]) => [...k.split(',').map(Number), sunkCells.has(k) ? 'sunk' : v]),
       fleet: this.rules.fleet.map(id => ({ id, sunk: sunk.some(x => x.id === id) })), // état public de la flotte : on sait ce qui est coulé
