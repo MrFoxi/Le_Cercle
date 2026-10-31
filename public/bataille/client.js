@@ -15,6 +15,15 @@ const store = {
 const urlCode = new URLSearchParams(location.search).get('salon')?.toUpperCase();
 const wait = ms => new Promise(r => setTimeout(r, ms));
 const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
+// Téléphone ou tablette : visée en deux temps, barre d'actions en bas, onglets entre les grilles, vibrations.
+const TOUCH = matchMedia('(pointer: coarse)').matches || new URLSearchParams(location.search).has('mobile');
+document.body.classList.toggle('touch', TOUCH);
+const buzz = p => TOUCH && navigator.vibrate?.(p);
+function tapFlash(cell) {
+  cell.classList.remove('tap');
+  void cell.offsetWidth; // relance l'animation
+  cell.classList.add('tap');
+}
 
 function show(id) {
   for (const s of document.querySelectorAll('.screen')) s.hidden = s.id !== id;
@@ -99,6 +108,7 @@ function reset() {
   shown = { round: -1, moves: -1 };
   $('#overlay').hidden = true;
   history.replaceState(null, '', location.pathname);
+  keepAwake(false);
   entry();
 }
 socket.on('closed', msg => { toast(msg); reset(); });
@@ -199,9 +209,18 @@ function scansHTML(by, n) {
 }
 
 /* ---------- Dans un salon ---------- */
+let wasMine = false;
+const TITLE = document.title;
 socket.on('state', s => {
   const prev = state;
   state = s;
+  keepAwake(['setup', 'battle'].includes(s.phase));
+  const mine = s.phase === 'battle' && s.turn === s.me && !s.spectator;
+  if (mine && !wasMine && TOUCH) {
+    buzz([60, 40, 60]);
+    if (document.hidden) document.title = '🎯 À toi ! · Bataille navale';
+  }
+  wasMine = mine;
   if (s.phase === 'lobby') return renderLobby(s);
   // Le spectateur suit le déploiement directement sur les deux grilles de bataille.
   if (s.phase === 'setup') return s.spectator ? renderBattle(s) : renderSetup(s, prev);
@@ -243,6 +262,7 @@ $('#modes').onclick = e => { const b = e.target.closest('[data-setmode]'); if (b
 
 /* ---------- Déploiement ---------- */
 let placed = {}, selected = null, dir = 'h', setupRound = -1;
+let pending = null; // mobile : navire montré en fantôme, posé au 2e toucher
 const fleetIds = () => state.rules.fleet;
 const cellsOf = (id, p) => Array.from({ length: state.ships[id].size }, (_, i) => (p.dir === 'v' ? [p.r + i, p.c] : [p.r, p.c + i]));
 function fits(id, p, others = placed) {
@@ -265,7 +285,8 @@ function renderSetup(s) {
   show('setup');
   $('#overlay').hidden = true;
   shown = { round: s.round, moves: 0 };
-  if (setupRound !== s.round) { placed = {}; selected = fleetIds()[0]; dir = 'h'; setupRound = s.round; }
+  if (setupRound !== s.round) { placed = {}; selected = fleetIds()[0]; dir = 'h'; setupRound = s.round; pending = null; }
+  if (!selected) pending = null;
   const n = s.rules.size, mine = s.boards[s.me], foe = s.players.find(p => p.name !== s.me);
   $('#setupBrand').textContent = `Mode ${s.rules.name} · Grille ${n} × ${n}`;
   const done = mine?.ready;
@@ -283,6 +304,32 @@ function renderSetup(s) {
   const foeReady = foe && s.boards[foe.name]?.ready;
   $('#setupStatus').innerHTML = done ? `✓ Flotte validée. ${foeReady ? 'Le combat commence…' : `En attente de <b>${esc(foe?.name)}</b>…`}`
     : `${foe ? `${esc(foe.name)} : ${foeReady ? '<b class="ok">flotte prête</b>' : 'déploiement en cours…'}` : ''}`;
+  renderSetupBar(done, all);
+}
+// Mobile : barre fixe en bas avec le navire en cours, Pivoter, Poser, puis Valider.
+function renderSetupBar(done, all) {
+  if (!TOUCH) return;
+  const ship = selected && state.ships[selected], ok = pending && fits(selected, pending);
+  $('#setupBar').innerHTML = done ? ''
+    : ship ? `<span class="what"><b>${esc(ship.name)}</b><small>${pending ? (ok ? 'touche encore pour poser' : 'pas de place ici') : 'touche la grille'}</small></span>
+      <button class="ghost" data-sb="rotate">⟳ Pivoter</button><button class="primary" data-sb="place" ${ok ? '' : 'disabled'}>✓ Poser</button>`
+    : all ? '<button class="primary" data-sb="ready">✓ Valider ma flotte</button>' : '';
+}
+$('#setupBar').onclick = e => {
+  const k = e.target.closest('[data-sb]')?.dataset.sb;
+  if (k === 'rotate') rotate();
+  if (k === 'place' && pending) placeShip(pending);
+  if (k === 'ready') $('#readyBtn').click();
+};
+function placeShip(p) {
+  if (!fits(selected, p)) return toast('Pas de place ici : les navires ne peuvent pas se chevaucher');
+  placed[selected] = p;
+  sfx.click();
+  buzz(15);
+  pending = null;
+  selected = fleetIds().find(id => !placed[id]) ?? null;
+  $('#setupBoard .aim').innerHTML = '';
+  renderSetup(state);
 }
 function aimSetup(r, c) {
   const board = $('#setupBoard .board');
@@ -296,7 +343,7 @@ $('#setupBoard').addEventListener('pointermove', e => {
   const cell = document.elementsFromPoint(e.clientX, e.clientY).find(el => el.classList?.contains('cell'));
   if (cell && e.pointerType === 'mouse') aimSetup(+cell.dataset.r, +cell.dataset.c);
 });
-$('#setupBoard').addEventListener('pointerleave', () => { const a = $('#setupBoard .aim'); if (a) a.innerHTML = ''; });
+$('#setupBoard').addEventListener('pointerleave', () => { const a = $('#setupBoard .aim'); if (a && !pending) a.innerHTML = ''; });
 $('#setupBoard').addEventListener('click', e => {
   if (!state || state.boards[state.me]?.ready) return;
   const ship = e.target.closest('.ship'), under = document.elementsFromPoint(e.clientX, e.clientY).find(el => el.classList?.contains('cell'));
@@ -304,30 +351,36 @@ $('#setupBoard').addEventListener('click', e => {
     selected = ship.dataset.ship;
     dir = placed[selected].dir;
     delete placed[selected];
+    pending = null;
+    $('#setupBoard .aim').innerHTML = '';
     sfx.click();
     return renderSetup(state);
   }
   const cell = under;
   if (!cell || !selected) return;
   const p = aimSetup(+cell.dataset.r, +cell.dataset.c);
-  if (!fits(selected, p)) return toast('Pas de place ici : les navires ne peuvent pas se chevaucher');
-  placed[selected] = p;
-  sfx.click();
-  selected = fleetIds().find(id => !placed[id]) ?? null;
-  $('#setupBoard .aim').innerHTML = '';
-  renderSetup(state);
+  // Mobile : le 1er toucher montre le navire, le 2e au même endroit le pose.
+  if (TOUCH && (pending?.r !== p.r || pending?.c !== p.c || pending?.dir !== p.dir)) {
+    pending = p;
+    tapFlash(cell);
+    return renderSetup(state);
+  }
+  placeShip(p);
 });
 $('#dock').onclick = e => {
   const b = e.target.closest('[data-pick]');
   if (!b) return;
   selected = b.dataset.pick;
   if (placed[selected]) { dir = placed[selected].dir; delete placed[selected]; }
+  pending = null;
+  $('#setupBoard .aim').innerHTML = '';
   renderSetup(state);
 };
 function rotate() {
   if (state?.phase !== 'setup') return;
   dir = dir === 'h' ? 'v' : 'h';
   armDir = armDir === 'h' ? 'v' : 'h';
+  if (pending) pending = aimSetup(pending.r, pending.c);
   renderSetup(state);
 }
 $('#rotateBtn').onclick = rotate;
@@ -336,12 +389,14 @@ document.addEventListener('keydown', e => {
   if (state?.phase === 'setup') rotate();
   if (state?.phase === 'battle') { armDir = armDir === 'h' ? 'v' : 'h'; renderArmed(); }
 });
-$('#randomBtn').onclick = () => { placed = randomFleet(); selected = null; sfx.click(); renderSetup(state); };
-$('#clearBtn').onclick = () => { placed = {}; selected = fleetIds()[0]; renderSetup(state); };
+const dropPending = () => { pending = null; $('#setupBoard .aim').innerHTML = ''; };
+$('#randomBtn').onclick = () => { placed = randomFleet(); selected = null; dropPending(); sfx.click(); renderSetup(state); };
+$('#clearBtn').onclick = () => { placed = {}; selected = fleetIds()[0]; dropPending(); renderSetup(state); };
 $('#readyBtn').onclick = e => act(e.target, 'placeFleet', Object.entries(placed).map(([id, p]) => ({ id, ...p })));
 
 /* ---------- Bataille ---------- */
 let armed = 'fire', armDir = 'h';
+let aimed = null; // mobile : case visée, en attente de confirmation
 const foeOf = (s, name) => s.players.find(p => p.name !== name)?.name;
 // Pour un joueur : en grand la zone ennemie (où il tire), en petit sa flotte. Pour un spectateur : les deux flottes.
 const layout = s => (s.spectator ? [s.players[1]?.name, s.players[0]?.name] : [foeOf(s, s.me), s.me]);
@@ -362,7 +417,10 @@ function renderBattle(s) {
     $(`#count${zone}`).textContent = s.phase === 'setup' ? (bd.ready ? '✓ flotte prête' : 'déploiement…') : `${sunk} / ${bd.fleet.length} coulés`;
     $(`#title${zone}`).innerHTML = s.spectator ? `Flotte de ${esc(owner)}` : owner === s.me ? 'Ta flotte' : `Zone ennemie · ${esc(owner)}`;
   }
+  if (TOUCH) for (const z of ['A', 'B']) $(`#tab${z}`).innerHTML = `${$(`#title${z}`).innerHTML}<small>${$(`#count${z}`).textContent}</small>`;
   const myTurn = s.phase === 'battle' && s.turn === s.me;
+  if (!myTurn) aimed = null;
+  if (!aimed && TOUCH) $('#boardA .aim').innerHTML = '';
   $('#boardA .board').classList.toggle('target', myTurn);
   $('#zoneA').classList.toggle('live', myTurn);
   const thinking = '<span class="dots"></span>';
@@ -399,24 +457,40 @@ $('#abilities').onclick = e => {
   const b = e.target.closest('[data-arm]');
   if (!b) return;
   sfx.click();
-  if (b.dataset.arm === 'jam') {
+  if (b.dataset.arm === 'jam' && !TOUCH) {
     if (state.turn !== state.me) return toast('Attends ton tour');
     if (confirm('Brouiller les capteurs ennemis pendant ses 2 prochains tours ? Cela remplace ton tir.')) act(null, 'ability', 'jam', {}, state.moves);
     return;
   }
   armed = b.dataset.arm;
+  if (TOUCH) $('#boardA .aim').innerHTML = '';
+  if (aimed && armed !== 'jam') drawAim(aimed.r, aimed.c);
   renderAbilities(state);
   renderArmed();
 };
 function renderArmed() {
   if (!state || state.spectator || state.phase !== 'battle') return void ($('#armed').innerHTML = '');
   const a = state.abilities[armed];
+  if (TOUCH) return renderArmedTouch(a);
   $('#armed').innerHTML = armed === 'fire' ? '🎯 Touche une case de la zone ennemie pour tirer.'
     : `${ICON[armed]} <b>${esc(a.name)}</b> : ${esc(a.desc)} ${armed === 'missiles' ? `<button class="ghost small" id="armRotate">⟳ ${armDir === 'h' ? 'Horizontal' : 'Vertical'}</button>` : ''}<button class="ghost small" id="armCancel">Annuler</button>`;
 }
+// Mobile : la barre du bas dit ce qui est visé et porte le bouton qui confirme.
+function renderArmedTouch(a) {
+  const rot = armed === 'missiles' ? `<button class="ghost small" id="armRotate">⟳ ${armDir === 'h' ? 'Horiz.' : 'Vert.'}</button>` : '';
+  const cancel = armed !== 'fire' ? '<button class="ghost small" id="armCancel" aria-label="Revenir au tir simple">✕</button>' : '';
+  const label = armed === 'fire' ? '🎯 Tir' : `${ICON[armed]} <b>${esc(a.name)}</b>`;
+  $('#armed').innerHTML = state.turn !== state.me ? '⏳ Attends ton tour…'
+    : armed === 'jam' ? `<span class="what">${label} : brouille ses capteurs 2 tours</span><button class="primary" id="armJam">Brouiller</button>${cancel}`
+    : aimed ? `<span class="what">${label} en <b>${coord(aimed.r, aimed.c)}</b></span>${rot}<button class="primary" id="armGo">${armed === 'fire' ? '🎯 Tirer' : 'Lancer'}</button>${cancel}`
+    : `<span class="what">${label} : touche une case pour viser</span>${rot}${cancel}`;
+}
 $('#armed').onclick = e => {
-  if (e.target.id === 'armRotate') { armDir = armDir === 'h' ? 'v' : 'h'; renderArmed(); }
-  if (e.target.id === 'armCancel') { armed = 'fire'; renderAbilities(state); renderArmed(); }
+  const id = e.target.closest('button')?.id;
+  if (id === 'armRotate') { armDir = armDir === 'h' ? 'v' : 'h'; if (aimed) drawAim(aimed.r, aimed.c); renderArmed(); }
+  if (id === 'armCancel') { armed = 'fire'; if (aimed) drawAim(aimed.r, aimed.c); renderAbilities(state); renderArmed(); }
+  if (id === 'armGo' && aimed) fireAt(aimed.r, aimed.c);
+  if (id === 'armJam') { armed = 'fire'; act(null, 'ability', 'jam', {}, state.moves); renderAbilities(state); renderArmed(); }
 };
 // Cases visées selon l'arme choisie (aperçu au survol).
 function targetCells(r, c) {
@@ -429,30 +503,45 @@ function targetCells(r, c) {
   if (armed === 'missiles') return [0, 1, 2].map(k => (armDir === 'v' ? [r + k, c] : [r, c + k]));
   return [[r, c]];
 }
+function drawAim(r, c) {
+  const n = state.rules.size, cells = targetCells(r, c), bad = cells.some(([i, j]) => i >= n || j >= n);
+  $('#boardA .aim').innerHTML = cells.filter(([i, j]) => i < n && j < n).map(([i, j]) => `<div class="reticle ${armed}${bad ? ' bad' : ''}" style="${box(i, j, 1, 1, n)}"></div>`).join('')
+    + `<div class="crosshair" style="--r:${r};--c:${c};--n:${n}"></div>`;
+}
 $('#boardA').addEventListener('pointermove', e => {
   const cell = e.target.closest('.cell'), board = $('#boardA .board');
-  if (!cell || !board.classList.contains('target')) return;
-  const n = state.rules.size, cells = targetCells(+cell.dataset.r, +cell.dataset.c);
-  const bad = cells.some(([i, j]) => i >= n || j >= n);
-  board.querySelector('.aim').innerHTML = cells.filter(([i, j]) => i < n && j < n).map(([i, j]) => `<div class="reticle ${armed}${bad ? ' bad' : ''}" style="${box(i, j, 1, 1, n)}"></div>`).join('')
-    + `<div class="crosshair" style="--r:${cell.dataset.r};--c:${cell.dataset.c};--n:${n}"></div>`;
+  if (!cell || !board.classList.contains('target') || e.pointerType !== 'mouse') return;
+  drawAim(+cell.dataset.r, +cell.dataset.c);
 });
-$('#boardA').addEventListener('pointerleave', () => { const a = $('#boardA .aim'); if (a) a.innerHTML = ''; });
+$('#boardA').addEventListener('pointerleave', () => { const a = $('#boardA .aim'); if (a && !aimed) a.innerHTML = ''; });
 $('#boardA').addEventListener('click', e => {
   const cell = e.target.closest('.cell');
   if (!cell || !state || state.spectator || state.phase !== 'battle') return;
   if (state.turn !== state.me) return toast('Attends ton tour : l’ennemi réfléchit');
   if (busy) return;
   const r = +cell.dataset.r, c = +cell.dataset.c;
-  if (armed === 'fire') {
-    if (state.boards[layout(state)[0]].marks.some(([i, j]) => i === r && j === c)) return toast('Tu as déjà tiré sur cette case');
-    act(null, 'fire', r, c, state.moves);
-  } else {
+  if (armed === 'jam') return;
+  if (armed === 'fire' && state.boards[layout(state)[0]].marks.some(([i, j]) => i === r && j === c)) return toast('Tu as déjà tiré sur cette case');
+  // Mobile : le 1er toucher vise, le 2e sur la même case (ou le bouton Tirer) confirme.
+  if (TOUCH && (aimed?.r !== r || aimed?.c !== c)) {
+    aimed = { r, c };
+    drawAim(r, c);
+    tapFlash(cell);
+    buzz(8);
+    return renderArmed();
+  }
+  fireAt(r, c);
+});
+function fireAt(r, c) {
+  if (armed === 'fire') act(null, 'fire', r, c, state.moves);
+  else {
     act(null, 'ability', armed, { r, c, dir: armDir }, state.moves);
     armed = 'fire'; // une capacité sert une fois : on revient au tir simple
   }
+  aimed = null;
   $('#boardA .aim').innerHTML = '';
-});
+  renderArmed();
+}
 
 function fleetList(s, owner) {
   const bd = s.boards[owner], mine = owner === s.me;
@@ -515,7 +604,8 @@ async function missile(from, to, drone = false) {
 }
 function origin(by, target) {
   // Depuis un navire encore à flot du tireur s'il est visible, sinon depuis le bord de la zone visée.
-  const ship = [...document.querySelectorAll(`.board[data-owner="${CSS.escape(by)}"] .ship:not(.sunk)`)][Math.floor(Math.random() * 3)];
+  // (sur mobile, la grille du tireur peut être cachée par les onglets : on ne garde que les navires visibles)
+  const ship = [...document.querySelectorAll(`.board[data-owner="${CSS.escape(by)}"] .ship:not(.sunk)`)].filter(el => el.offsetWidth)[Math.floor(Math.random() * 3)];
   if (ship) return center(ship);
   const b = document.querySelector(`.board[data-owner="${CSS.escape(target)}"]`).getBoundingClientRect();
   return { x: b.left + b.width / 2, y: b.top - 40 };
@@ -528,6 +618,8 @@ async function play(e, prev) {
   const s = state, target = foeOf(s, e.by);
   // Pendant l'animation, la grille visée reste dans son état d'avant le tir, et la zone scannée reste cachée : pas de spoiler.
   hidden = new Set(e.results ? [] : [`scan${e.n}`]);
+  const tab = layout(s)[0] === target ? 'A' : 'B';
+  if (TOUCH) setTab(tab); // on montre la grille visée
   renderBattle({ ...s, phase: 'battle', turn: e.by, history: s.history.slice(0, -1), boards: { ...s.boards, [target]: prev?.boards?.[target] ?? s.boards[target] } });
   busy = true;
   try {
@@ -537,6 +629,7 @@ async function play(e, prev) {
         const to = center(cellEl(target, x.r, x.c));
         await missile(origin(e.by, target), to);
         if (x.res === 'miss') { burst('splash', to); sfx.splash(); } else { burst(x.res === 'sunk' ? 'boom big' : 'boom', to, 1400); (x.res === 'sunk' ? sfx.sunk : sfx.boom)(); }
+        if (x.res !== 'miss' && !s.spectator) buzz(target === s.me ? (x.res === 'sunk' ? [250, 80, 350] : 160) : (x.res === 'sunk' ? [60, 40, 120] : 40));
       }));
       if (e.results.some(x => x.res === 'sunk')) {
         document.querySelector(`.board[data-owner="${CSS.escape(target)}"]`).closest('.zone').classList.add('shake');
@@ -563,8 +656,40 @@ async function play(e, prev) {
     hidden = new Set();
     document.querySelectorAll('.zone.shake').forEach(z => z.classList.remove('shake'));
     renderBattle(state);
+    // Mobile : après le tir ennemi, retour sur la zone où l'on vise.
+    if (TOUCH && tab === 'B' && !state.spectator) setTimeout(() => { if (!busy) setTab('A'); }, 900);
   }
 }
+
+/* ---------- Mobile : onglets, panneaux repliables, barres du bas, écran allumé ---------- */
+function setTab(t) {
+  document.body.dataset.tab = t;
+  for (const z of ['A', 'B']) $(`#tab${z}`).setAttribute('aria-selected', z === t);
+}
+setTab('A');
+$('#tabs').onclick = e => { const t = e.target.closest('[data-tab]')?.dataset.tab; if (t) { sfx.click(); setTab(t); } };
+if (TOUCH) {
+  $('#battleBar').append($('#armed'), $('#abilityPanel'));
+  document.addEventListener('click', e => e.target.closest('.log h3, #fleets h3')?.closest('.panel').classList.toggle('open'));
+  // La page garde de la place sous la barre fixe, quelle que soit sa hauteur.
+  for (const bar of document.querySelectorAll('.touchbar')) {
+    new ResizeObserver(() => (bar.closest('.screen').style.paddingBottom = `${bar.offsetHeight + 20}px`)).observe(bar);
+  }
+}
+let lock = null;
+async function keepAwake(on) {
+  if (!TOUCH || !('wakeLock' in navigator)) return;
+  if (on && !lock && !document.hidden) {
+    lock = await navigator.wakeLock.request('screen').catch(() => null);
+    lock?.addEventListener('release', () => (lock = null));
+  }
+  if (!on && lock) { lock.release(); lock = null; }
+}
+document.addEventListener('visibilitychange', () => {
+  if (document.hidden) return;
+  document.title = TITLE;
+  keepAwake(['setup', 'battle'].includes(state?.phase));
+});
 
 /* ---------- Fin de bataille ---------- */
 function renderOver(s) {

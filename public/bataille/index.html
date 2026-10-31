@@ -94,7 +94,7 @@
     </div>
     <header class="head">
       <h2>Déploie ta flotte</h2>
-      <p class="hint">Choisis un navire, puis touche une case. Touche un navire posé pour le déplacer. <kbd>R</kbd> ou « Pivoter » pour le tourner.</p>
+      <p class="hint">Choisis un navire, puis touche une case. Touche un navire posé pour le déplacer. <span class="no-touch"><kbd>R</kbd> ou « Pivoter » pour le tourner.</span><span class="only-touch">Un premier toucher montre le navire, un second le pose.</span></p>
     </header>
     <div class="setup">
       <div class="board-wrap" id="setupBoard"></div>
@@ -110,6 +110,7 @@
         <p class="status-line" id="setupStatus"></p>
       </div>
     </div>
+    <div class="touchbar" id="setupBar"></div>
   </section>
 
   <!-- Bataille -->
@@ -120,6 +121,10 @@
       <button class="ghost small" id="muteBtn"></button>
     </div>
     <div class="banner" id="banner" aria-live="polite"></div>
+    <div class="tabs" id="tabs" role="tablist">
+      <button role="tab" data-tab="A" id="tabA"></button>
+      <button role="tab" data-tab="B" id="tabB"></button>
+    </div>
     <div class="theatre">
       <div class="panel zone" id="zoneA">
         <div class="zone-head"><h3 id="titleA"></h3><span class="count" id="countA"></span></div>
@@ -142,6 +147,7 @@
         </div>
       </div>
     </div>
+    <div class="touchbar" id="battleBar"></div>
     <div class="overlay" id="overlay" hidden></div>
   </section>
 

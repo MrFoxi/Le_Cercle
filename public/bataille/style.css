@@ -322,3 +322,56 @@ body.jammed::after {
   .stats { font-size: .78rem; }
   .brand { font-size: .62rem; letter-spacing: .06em; text-align: right; }
 }
+
+/* ---------- Mobile (écran tactile seulement) ---------- */
+.only-touch, .tabs, .touchbar { display: none; }
+body.touch .only-touch { display: inline; }
+body.touch .no-touch { display: none; }
+body.touch #toast { bottom: auto; top: 14px; }
+body.touch { touch-action: manipulation; } /* pas de zoom au double toucher : le 2e toucher confirme */
+body.touch .cell.tap { animation: tap .35s ease-out; }
+@keyframes tap { from { background: rgba(142, 240, 255, .45); } }
+/* Barre fixe en bas : navire à poser, ou arme + bouton de tir + capacités */
+body.touch .touchbar:not(:empty) {
+  display: flex; flex-direction: column; gap: 8px; position: fixed; left: 0; right: 0; bottom: 0; z-index: 25;
+  padding: 10px max(12px, env(safe-area-inset-left)) max(10px, env(safe-area-inset-bottom));
+  background: rgba(6, 14, 24, .96); border-top: 1px solid rgba(54, 215, 255, .35); box-shadow: 0 -12px 30px rgba(0, 0, 0, .5); backdrop-filter: blur(8px);
+}
+body.touch #setupBar { flex-direction: row; align-items: center; }
+body.touch .touchbar button { min-height: 46px; }
+body.touch .touchbar .what { flex: 1; min-width: 0; display: flex; flex-direction: column; font-size: .9rem; }
+body.touch .touchbar .what small { color: var(--muted); font-size: .75rem; }
+body.touch #setupBar > .primary:only-child { flex: 1; }
+body.spectating #battleBar { display: none; }
+body.touch #armed { margin: 0; min-height: 46px; flex-wrap: nowrap; font-size: .85rem; }
+body.touch #armed .what { flex-direction: row; flex-wrap: wrap; gap: 0 4px; }
+body.touch #armed .primary { min-width: 110px; }
+body.touch #abilityPanel { padding: 0; background: none; border: 0; box-shadow: none; backdrop-filter: none; }
+body.touch #abilityPanel::before, body.touch #abilityPanel h3 { display: none; }
+body.touch .abilities { display: flex; gap: 6px; overflow-x: auto; scrollbar-width: none; }
+body.touch .ab { flex: 0 0 auto; width: 84px; padding: 6px 4px; }
+body.touch .ab b { font-size: .68rem; }
+body.touch .ab span { font-size: 1.1rem; }
+/* Journal et flottes repliés : on les ouvre en touchant leur titre */
+body.touch .log h3, body.touch #fleets h3 { cursor: pointer; margin: 0; }
+body.touch .log h3::after, body.touch #fleets h3::after { content: ' ▸'; }
+body.touch .log.open h3::after, body.touch #fleets.open h3::after { content: ' ▾'; }
+body.touch .log:not(.open) ol, body.touch #fleets:not(.open) ul { display: none; }
+body.touch #fleets.open h3 { margin-bottom: 8px; }
+/* Petit écran : une grille à la fois, aussi grande que possible */
+@media (max-width: 980px) {
+  body.touch .tabs { display: flex; gap: 6px; margin: 0 0 8px; }
+  body.touch .tabs button { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; padding: 8px 6px; font: 700 .8rem var(--mono); text-transform: uppercase; background: rgba(255, 255, 255, .03); box-shadow: inset 0 0 0 1.5px var(--line); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  body.touch .tabs small { color: var(--hit); font-size: .68rem; }
+  body.touch .tabs [aria-selected="true"] { color: var(--cyan); background: rgba(54, 215, 255, .1); box-shadow: inset 0 0 0 2px var(--cyan); }
+  body.touch[data-tab="A"] #zoneB, body.touch[data-tab="B"] #zoneA { display: none; }
+  body.touch .zone-head { display: none; }
+  body.touch .zone.small .board-wrap { max-width: none; }
+  body.touch.spectating .theatre { grid-template-columns: minmax(0, 1fr); }
+  body.touch .screen.xwide { padding: 8px 8px 0; }
+  body.touch .zone { padding: 8px; }
+  body.touch .banner { margin: 6px auto 8px; padding: 8px 12px; font-size: .92rem; }
+  body.touch .side-stack { gap: 10px; }
+  body.touch .setup { gap: 10px; }
+  body.touch #setup .head { margin: 4px 0 8px; }
+}
