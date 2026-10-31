@@ -99,6 +99,9 @@ label { display: flex; flex-direction: column; gap: 6px; font-size: .85rem; font
 .chip input:focus-visible + span { outline: 2px solid var(--gold); outline-offset: 2px; }
 .chip input:disabled + span { cursor: default; }
 .readonly .chip { cursor: default; }
+.readonly .chip input:not(:checked) + span { opacity: .45; }
+.chip.flash span { animation: chipFlash .9s ease-out; }
+@keyframes chipFlash { 0% { transform: scale(1.18); box-shadow: 0 0 0 4px rgba(245, 210, 122, .8); } 100% { transform: none; } }
 
 /* ---------- Partie ---------- */
 #game { max-width: 900px; padding-top: 14px; }

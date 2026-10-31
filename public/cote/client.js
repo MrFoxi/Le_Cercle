@@ -171,8 +171,10 @@ $('#themeList').onchange = e => {
 $('#allThemes').onclick = () => send(catalog.map(t => t.id));
 $('#noThemes').onclick = () => send([]);
 
+let shownThemes = null; // thèmes affichés juste avant : ceux qui changent clignotent chez l'invité
 function renderThemes(s) {
-  const host = s.me === s.host, chosen = new Set(s.themes);
+  const host = s.me === s.host, chosen = new Set(s.themes), before = shownThemes;
+  shownThemes = chosen;
   $('#themeCount').textContent = chosen.size
     ? `${chosen.size} thème${chosen.size > 1 ? 's' : ''} sélectionné${chosen.size > 1 ? 's' : ''} sur ${catalog.length}`
     : 'Aucun thème sélectionné';
@@ -183,7 +185,8 @@ function renderThemes(s) {
     for (const i of inputs) {
       i.checked = chosen.has(i.value);
       i.disabled = !host;
-      i.closest('.chip').hidden = !host && !i.checked; // l'invité ne voit que les thèmes retenus
+      const chip = i.closest('.chip');
+      if (!host && before && before.has(i.value) !== i.checked) { chip.classList.remove('flash'); void chip.offsetWidth; chip.classList.add('flash'); }
       n += i.checked;
     }
     const all = fs.querySelector('[data-cat]');
@@ -191,7 +194,6 @@ function renderThemes(s) {
     all.indeterminate = n > 0 && n < inputs.length;
     all.disabled = !host;
     fs.querySelector('legend small').textContent = `${n} / ${inputs.length}`;
-    fs.hidden = !host && !n;
   }
 }
 
