@@ -1,6 +1,6 @@
 // 3D Pinball : menu, partie, commandes (clavier, souris, tactile), interface, progression, classement.
 import { TABLES, tableById } from './tables.js';
-import { createGame, update, setFlipper, plunge, shake, ballReady, lights } from './game.js';
+import { createGame, update, setFlipper, plunge, shake, ballReady, lights, progress } from './game.js';
 import { createView, SKINS, LOW } from './render.js';
 import { startAudio, play, rolling, music, volume, setVolume } from './audio.js';
 
@@ -12,7 +12,7 @@ document.body.classList.toggle('touch', TOUCH);
 
 /* ---------- Profil (navigateur) ---------- */
 const KEY = 'pinball-profile';
-const blank = () => ({ best: {}, games: 0, total: 0, bestCombo: 0, seconds: 0, bumpers: 0, ramps: 0, missions: 0, jackpots: 0, trophies: {}, skin: 'chrome', sound: { sfx: 0.8, music: 0.45 } });
+const blank = () => ({ best: {}, games: 0, total: 0, bestCombo: 0, seconds: 0, bumpers: 0, ramps: 0, missions: 0, jackpots: 0, trophies: {}, played: {}, skin: 'chrome', sound: { sfx: 0.8, music: 0.45 } });
 let profile = blank();
 try { profile = { ...blank(), ...JSON.parse(localStorage.getItem(KEY)) }; } catch { /* profil illisible : on repart de zéro */ }
 const save = () => { try { localStorage.setItem(KEY, JSON.stringify(profile)); } catch { /* navigation privée */ } };
@@ -29,6 +29,7 @@ const TROPHIES = [
   { id: 'toutes', name: 'Perfectionniste', desc: 'Toutes les missions (hors finale) en une partie.', test: g => g.table.missions.filter(m => !m.final).every(m => g.missions[m.id]) },
   { id: 'rampes', name: 'Pilote de rampes', desc: '50 rampes au total.', test: (g, p) => p.ramps >= 50 },
   { id: 'fidele', name: 'Habitué', desc: 'Joue 10 parties.', test: (g, p) => p.games >= 10 },
+  { id: 'monde', name: 'Tour du monde', desc: 'Joue une partie sur chacune des 5 tables.', test: (g, p) => TABLES.every(t => p.played[t.id]) },
 ];
 // Billes à débloquer : chacune liée à un succès.
 const SKIN_UNLOCK = { chrome: null, or: 'million', neon: 'multiball', feu: 'jackpot' };
@@ -47,13 +48,16 @@ function toast(text) {
 
 /* ---------- Menu ---------- */
 let selected = 'arcade', tab = 'board';
+// Une table s'ouvre avec un score suffisant sur la précédente.
+const isOpen = t => !t.unlock || (profile.best[t.unlock.from] || 0) >= t.unlock.score;
+const unlockText = t => `${fmt(t.unlock.score)} pts sur ${tableById(t.unlock.from).name}`;
 function renderMenu() {
   show('menu');
-  $('#tables').innerHTML = TABLES.map(t => `<button class="tcard ${t.id}${t.soon ? ' soon' : ''}${t.id === selected ? ' on' : ''}" data-table="${t.id}" ${t.soon ? 'aria-disabled="true"' : ''}>
+  $('#tables').innerHTML = TABLES.map(t => `<button class="tcard ${t.id}${isOpen(t) ? '' : ' soon'}${t.id === selected ? ' on' : ''}" data-table="${t.id}" ${isOpen(t) ? '' : 'aria-disabled="true"'}>
     <span class="tart"></span><b>${esc(t.name)}</b><small>${esc(t.tagline)}</small>
-    ${t.soon ? '<i>Bientôt</i>' : `<i>Record : ${fmt(profile.best[t.id] || 0)}</i>`}</button>`).join('');
+    ${isOpen(t) ? `<i>Record : ${fmt(profile.best[t.id] || 0)}</i>` : `<i>🔒 ${unlockText(t)}</i>`}</button>`).join('');
   const t = tableById(selected);
-  $('#tableInfo').innerHTML = `<p class="kicker">Table 1</p><h2>${esc(t.name)}</h2><p class="hint">${esc(t.tagline)}</p>
+  $('#tableInfo').innerHTML = `<p class="kicker">Table ${TABLES.indexOf(t) + 1}</p><h2>${esc(t.name)}</h2><p class="hint">${esc(t.tagline)}</p>
     <h3>Missions</h3><ol class="mlist">${t.missions.map(m => `<li class="${m.final ? 'boss' : ''}"><b>${esc(m.name)}</b> <small>+${fmt(m.bonus)}</small><p>${esc(m.desc)}</p></li>`).join('')}</ol>
     <p class="record">Ton record : <b>${fmt(profile.best[t.id] || 0)}</b></p>
     <button class="primary big" id="playBtn">▶ Jouer (3 billes)</button>
@@ -63,7 +67,8 @@ function renderMenu() {
 $('#tables').onclick = e => {
   const b = e.target.closest('[data-table]');
   if (!b) return;
-  if (b.classList.contains('soon')) return toast('Cette table arrive bientôt !');
+  const t = tableById(b.dataset.table);
+  if (!isOpen(t)) return toast(`Table verrouillée : ${unlockText(t)}`);
   selected = b.dataset.table;
   renderMenu();
 };
@@ -138,14 +143,19 @@ function startGame(id) {
   const table = tableById(id);
   startAudio();
   show('game');
-  if (viewTable !== id) { view = createView($('#view'), table); viewTable = id; }
+  if (viewTable !== id) {
+    // Nouvelle table : l'ancienne scène est libérée, et un canevas neuf évite d'empiler les contextes 3D.
+    if (view) { view.dispose(); const fresh = $('#view').cloneNode(); $('#view').replaceWith(fresh); bindCanvas(); }
+    view = createView($('#view'), table);
+    viewTable = id;
+  }
   view.resize();
   view.setSkin(skinOpen(profile.skin) ? profile.skin : 'chrome');
   g = createGame(table);
   paused = ended = false;
   $('#pause').hidden = $('#end').hidden = true;
   $('#hBest').textContent = fmt(profile.best[id] || 0);
-  music(true);
+  music(true, id);
   last = performance.now();
 }
 
@@ -173,7 +183,7 @@ function setPaused(on) {
   paused = on;
   $('#pause').hidden = !on;
   $('#pauseSound').innerHTML = soundHTML();
-  music(!on);
+  music(!on, viewTable);
   rolling(0);
   for (const side of ['L', 'R']) { held[side].clear(); setFlipper(g, side, false); }
   last = performance.now();
@@ -193,7 +203,8 @@ addEventListener('keyup', e => {
   if (['ArrowDown', 'Enter', 'KeyS'].includes(e.code)) chargeEnd();
 });
 // Souris : clic (maintenu) pour lancer
-$('#view').addEventListener('pointerdown', e => { if (e.pointerType === 'mouse') chargeStart(); });
+const bindCanvas = () => $('#view').addEventListener('pointerdown', e => { if (e.pointerType === 'mouse') chargeStart(); });
+bindCanvas();
 addEventListener('pointerup', e => { if (e.pointerType === 'mouse') chargeEnd(); });
 // Tactile : moitiés d'écran pour les flippers, boutons Lancer et Secouer
 for (const z of $$('[data-flip]')) {
@@ -215,23 +226,13 @@ $('#pause').addEventListener('click', e => {
 
 /* ---------- Interface pendant la partie ---------- */
 let lastMissions = '', lastMsg = null;
-function progress(id) {
-  if (id === 'arc') return ['A', 'R', 'C'].map((l, i) => (i < g.arc.step ? `<b>${l}</b>` : l)).join(' ');
-  if (id === 'ramps') return `${+g.rampsDone.left + +g.rampsDone.right}/2`;
-  if (id === 'drops') return `${Object.values(g.drops).filter(Boolean).length}/3`;
-  if (id === 'combo') return `meilleur ×${g.bestCombo}`;
-  if (id === 'multiball') return g.multiball ? 'en cours !' : `${g.locks}/2 ${g.doorOpen ? '· trou ouvert' : ''}`;
-  if (id === 'million') return `${Math.min(100, Math.floor(g.score / 10000))} %`;
-  if (id === 'super') return g.multiball ? `${Math.min(3, g.jackpotRamps)}/3 rampes` : 'en multiball';
-  return '';
-}
 function hud() {
   $('#hScore').textContent = fmt(g.score);
   $('#hBalls').textContent = `${g.balls - g.ball + 1}`;
   $('#hMult').textContent = g.mult;
   $('#hCombo').hidden = g.combo < 2;
   $('#hCombo b').textContent = `×${g.combo}`;
-  const html = g.table.missions.map(m => `<li class="${g.missions[m.id] ? 'done' : ''}${m.final ? ' boss' : ''}"><span>${g.missions[m.id] ? '✔' : '○'}</span><b>${esc(m.name)}</b><small>${progress(m.id)}</small></li>`).join('');
+  const html = g.table.missions.map(m => `<li class="${g.missions[m.id] ? 'done' : ''}${m.final ? ' boss' : ''}"><span>${g.missions[m.id] ? '✔' : '○'}</span><b>${esc(m.name)}</b><small>${progress(g, m)}</small></li>`).join('');
   if (html !== lastMissions) { $('#missions').innerHTML = `<h3>Missions</h3><ul>${html}</ul>`; lastMissions = html; }
   const msg = g.messages.at(-1);
   if (msg && msg !== lastMsg) {
@@ -278,13 +279,14 @@ async function endGame() {
   rolling(0);
   play({ kind: 'gameover' });
   const id = viewTable, seconds = Math.round((g.endedAt - g.startedAt) / 1000);
-  const record = g.score > (profile.best[id] || 0);
+  const before = profile.best[id] || 0, record = g.score > before;
   if (record) profile.best[id] = g.score;
   Object.assign(profile, {
-    games: profile.games + 1, total: profile.total + g.score, bestCombo: Math.max(profile.bestCombo, g.bestCombo), seconds: profile.seconds + seconds,
+    played: { ...profile.played, [id]: true }, games: profile.games + 1, total: profile.total + g.score, bestCombo: Math.max(profile.bestCombo, g.bestCombo), seconds: profile.seconds + seconds,
     bumpers: profile.bumpers + g.stats.bumpers, ramps: profile.ramps + g.stats.ramps,
     missions: profile.missions + Object.values(g.missions).filter(Boolean).length, jackpots: profile.jackpots + g.jackpots,
   });
+  const opened = TABLES.filter(t => t.unlock?.from === id && before < t.unlock.score && g.score >= t.unlock.score); // seuil franchi pour la première fois
   const fresh = TROPHIES.filter(t => !profile.trophies[t.id] && t.test(g, profile));
   for (const t of fresh) profile.trophies[t.id] = Date.now();
   save();
@@ -298,6 +300,7 @@ async function endGame() {
     <h3>Missions</h3><ul class="mdone">${g.table.missions.map(m => `<li class="${g.missions[m.id] ? 'done' : ''}">${g.missions[m.id] ? '✔' : '✗'} ${esc(m.name)}</li>`).join('')}</ul>
     ${fresh.length ? `<h3>Nouveaux succès</h3><ul class="mdone">${fresh.map(t => `<li class="done">🏅 ${esc(t.name)}</li>`).join('')}</ul>` : ''}
     ${unlockedSkins.length ? `<p class="record-new">Nouvelle bille débloquée : ${unlockedSkins.map(esc).join(', ')}</p>` : ''}
+    ${opened.length ? `<p class="record-new">🔓 Nouvelle table débloquée : ${opened.map(t => esc(t.name)).join(', ')}</p>` : ''}
     <h3>Classement mondial</h3>
     <form id="boardForm" class="row"><input id="boardName" maxlength="20" placeholder="Ton pseudo" required value="${esc(pseudo())}"><button class="primary">Envoyer mon score</button></form>
     <p class="hint" id="boardMsg"></p><div id="endBoard"></div>

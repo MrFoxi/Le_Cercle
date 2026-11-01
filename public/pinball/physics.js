@@ -45,7 +45,9 @@ function rampAt(r, s) {
 export function createWorld(table) {
   return {
     walls: table.walls.map(w => ({ e: 0.45, r: 0.3, active: true, ...w })),
-    circles: table.circles.map(c => ({ e: 0.5, active: true, ...c })),
+    circles: table.circles.map(c => ({ e: 0.5, active: true, ...c, x0: c.x, y0: c.y, vx: 0, vy: 0 })),
+    fields: (table.fields || []).map(f => ({ ...f })),
+    portals: (table.portals || []).map(p => ({ ...p })),
     flippers: table.flippers.map(f => ({ e: 0.32, ...f, angle: f.rest, omega: 0, pressed: false })),
     triggers: table.triggers.map(t => ({ active: true, ...t })),
     ramps: table.ramps.map(r => ({ ...r, pts: sampleRamp(r.points) })),
@@ -60,7 +62,7 @@ export function createWorld(table) {
 
 let nextId = 1;
 export function addBall(w, x, y, vx = 0, vy = 0) {
-  const b = { id: nextId++, x, y, z: 0, vx, vy, ramp: null, held: false, still: 0 };
+  const b = { id: nextId++, x, y, z: 0, vx, vy, ramp: null, held: false, still: 0, cool: 0, cd: {} };
   w.balls.push(b);
   return b;
 }
@@ -128,7 +130,9 @@ function hitWall(w, b, s) {
     const out = Math.hypot(b.vx, b.vy);
     if (out > KICK_MAX) { b.vx *= KICK_MAX / out; b.vy *= KICK_MAX / out; }
   }
-  if (speed > 6 || (s.kick && speed > 0)) w.events.push({ type: 'hit', obj: s, ball: b, speed, x: qx, y: qy });
+  // Une cible ne compte que sur un vrai choc : la bille qui roule en la frôlant ne la déclenche pas.
+  const min = s.kind === 'target' || s.kind === 'drop' ? 30 : 6;
+  if (speed > min || (s.kind === 'sling' && speed > 0)) w.events.push({ type: 'hit', obj: s, ball: b, speed, x: qx, y: qy });
 }
 
 function hitCircle(w, b, c) {
@@ -139,7 +143,7 @@ function hitCircle(w, b, c) {
   nx /= d; ny /= d;
   b.x = c.x + nx * rad;
   b.y = c.y + ny * rad;
-  const speed = bounce(b, nx, ny, c.e);
+  const speed = bounce(b, nx, ny, c.e, c.vx, c.vy); // un obstacle mobile pousse la bille avec sa propre vitesse
   // Bumper : la bille repart toujours fort, même si elle l'a juste effleuré.
   if (c.kick) {
     // Bumper : la bille repart toujours à la même vitesse vers l'extérieur, qu'elle arrive lente ou rapide.
@@ -196,8 +200,36 @@ function crosses(x0, y0, x1, y1, t) {
   return u >= 0 && u <= 1 && v >= 0 && v <= 1;
 }
 
+// Jet de vapeur actif à cet instant ? (allumé une fraction « duty » de chaque période)
+export const jetOn = (f, t) => ((t + (f.phase || 0)) % f.period) < f.period * f.duty;
+
+// Zones de force : aspiration (trou noir), répulsion (lave), jet (vapeur).
+function fields(w, b, h) {
+  for (const f of w.fields) {
+    const dx = f.x - b.x, dy = f.y - b.y, d = Math.hypot(dx, dy) || 0.01;
+    if (d > f.r) continue;
+    let on = true;
+    if (f.kind === 'pull') { const a = f.k / Math.max(d, 1.5); b.vx += (dx / d) * a * h; b.vy += (dy / d) * a * h; }
+    else if (f.kind === 'repel') { b.vx -= (dx / d) * f.k * h; b.vy -= (dy / d) * f.k * h; }
+    else if (f.kind === 'jet') { on = jetOn(f, w.time); if (on) { b.vx += f.force[0] * h; b.vy += f.force[1] * h; } }
+    if (on && f.kind !== 'pull' && !(b.cd[f.id] > w.time)) {
+      b.cd[f.id] = w.time + 0.5;
+      w.events.push({ type: 'field', obj: f, ball: b, x: b.x, y: b.y });
+    }
+  }
+}
+
 /* ---------- Un sous-pas ---------- */
 function substep(w, h) {
+  // Obstacles mobiles : position et vitesse à l'instant t (va-et-vient sinusoïdal)
+  for (const c of w.circles) {
+    if (!c.move) continue;
+    const m = c.move, om = 2 * Math.PI * m.freq, ph = om * w.time + (m.phase || 0);
+    c.x = c.x0 + (m.ax || 0) * Math.sin(ph);
+    c.y = c.y0 + (m.ay || 0) * Math.sin(ph);
+    c.vx = (m.ax || 0) * om * Math.cos(ph);
+    c.vy = (m.ay || 0) * om * Math.cos(ph);
+  }
   for (const f of w.flippers) {
     const target = f.pressed && !w.flippersDead ? f.up : f.rest;
     const before = f.angle, dir = Math.sign(target - f.angle);
@@ -209,6 +241,7 @@ function substep(w, h) {
     if (b.ramp) { rampStep(w, b, h); continue; }
     const x0 = b.x, y0 = b.y;
     b.vy -= G * h;
+    if (w.fields.length) fields(w, b, h);
     const sp0 = Math.hypot(b.vx, b.vy), slow = 1 - (0.12 + DRAG * sp0) * h; // roulement + freinage des grandes vitesses
     b.vx *= slow;
     b.vy *= slow;
@@ -231,8 +264,19 @@ function substep(w, h) {
       }
       w.events.push({ type: 'trigger', obj: t, ball: b, speed: Math.hypot(b.vx, b.vy), forward: along > 0 });
     }
+    // Portails : la bille ressort ailleurs, dans la direction du portail de sortie, sans perdre sa vitesse.
+    for (const p of w.portals) {
+      if (b.cool > w.time || (p.up && b.vy <= 0) || Math.hypot(b.x - p.x, b.y - p.y) > p.r) continue; // up : seulement une bille tirée vers le haut
+      const v = Math.max(180, Math.hypot(b.vx, b.vy));
+      b.x = p.to.x; b.y = p.to.y;
+      b.vx = p.to.dir[0] * v; b.vy = p.to.dir[1] * v;
+      b.cool = w.time + 0.6;
+      w.events.push({ type: 'portal', obj: p, ball: b, x: p.to.x, y: p.to.y });
+      break;
+    }
     for (const s of w.saucers) {
       const d = Math.hypot(b.x - s.x, b.y - s.y);
+      if (s.maxSpeed && Math.hypot(b.vx, b.vy) > s.maxSpeed && !b.escape) continue; // un piège n'attrape que les billes lentes
       if (b.escape) { if (d > s.r + 1.5) b.escape = false; continue; } // bille éjectée : pas reprise avant d'être sortie
       if (!s.active || b.ramp || d > s.r) continue;
       b.held = true;

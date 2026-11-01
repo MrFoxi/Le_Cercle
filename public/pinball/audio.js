@@ -86,6 +86,14 @@ export function play(fx) {
     case 'jackpot': arp([523, 659, 784, 1047, 784, 1047, 1319, 1568, 2093], 0.08, { vol: 0.12 }); noise(1.2, { vol: 0.15, freq: 6000, slide: 800 }); break;
     case 'shake': tone(55, 0.15, { vol: 0.35 }); break;
     case 'tilt': tone(110, 0.8, { type: 'sawtooth', vol: 0.15 }); tone(116, 0.8, { type: 'sawtooth', vol: 0.15 }); break;
+    case 'portal': tone(300, 0.4, { type: 'sine', vol: 0.15, slide: 1800 }); tone(1200, 0.3, { type: 'triangle', vol: 0.06, slide: 300, delay: 0.15 }); break;
+    case 'jet': noise(0.5, { vol: 0.3, freq: 3000, type: 'highpass', slide: 1200 }); break;
+    case 'burn': noise(0.35, { vol: 0.22, freq: 5000, type: 'highpass' }); tone(90, 0.2, { vol: 0.15, slide: 60 }); break;
+    case 'mover': tone(260, 0.12, { type: 'square', vol: 0.06, slide: 520 }); noise(0.1, { vol: 0.2, freq: 1200 }); break;
+    case 'trap': tone(400, 0.6, { type: 'sawtooth', vol: 0.1, slide: 70 }); noise(0.4, { vol: 0.2, freq: 300, type: 'lowpass' }); break;
+    case 'slot': for (let i = 0; i < 10; i++) tone(700 + (i % 3) * 140, 0.04, { type: 'square', vol: 0.05, delay: i * 0.06 }); break;
+    case 'roulette': for (let i = 0; i < 16; i++) noise(0.02, { vol: 0.2, freq: 4000, delay: i * 0.05 * (1 + i * 0.12) }); break;
+    case 'secret': arp([392, 466, 587, 698, 932], 0.1, { type: 'triangle', vol: 0.09 }); break;
     case 'gameover': arp([523, 494, 440, 392, 349, 330], 0.14, { vol: 0.08 }); break;
     default:
   }
@@ -99,22 +107,34 @@ export function rolling(speed) {
   rollFilter.frequency.setTargetAtTime(180 + speed * 1.4, t, 0.05);
 }
 
-// Musique d'arcade : basse et arpège en boucle, programmés un peu à l'avance.
+// Musique de chaque table : basse, accords en arpège et percussions, programmés un peu à l'avance.
+const THEMES = {
+  arcade: { step: 0.16, bass: [110, 110, 146.8, 130.8], chords: [[440, 523, 659], [440, 523, 659], [587, 698, 880], [523, 659, 784]], bassType: 'triangle', lead: 'square', leadVol: 0.035, kick: [0, 4] },
+  space: { step: 0.22, bass: [55, 43.65, 65.4, 49], chords: [[440, 523, 659], [349, 440, 523], [523, 659, 784], [392, 494, 587]], bassType: 'sine', lead: 'triangle', leadVol: 0.05, kick: [0], echo: true },
+  casino: { step: 0.19, bass: [65.4, 73.4, 82.4, 98], chords: [[523, 659, 784, 988], [587, 698, 880, 1047], [659, 784, 988, 1175], [784, 988, 1175, 1319]], bassType: 'triangle', lead: 'sine', leadVol: 0.05, kick: [0, 3, 6], swing: true },
+  jungle: { step: 0.15, bass: [98, 98, 110, 87.3], chords: [[392, 440, 587], [392, 523, 587], [440, 523, 659], [349, 440, 523]], bassType: 'sine', lead: 'sine', leadVol: 0.07, kick: [0, 3, 5, 6], tom: true },
+  volcan: { step: 0.14, bass: [82.4, 82.4, 98, 73.4], chords: [[330, 494, 659], [330, 494, 659], [392, 587, 784], [294, 440, 587]], bassType: 'sawtooth', lead: 'sawtooth', leadVol: 0.025, kick: [0, 2, 4, 6] },
+};
 let musicTimer = null, beat = 0;
-const BASS = [110, 110, 146.8, 130.8], CHORDS = [[440, 523, 659], [440, 523, 659], [587, 698, 880], [523, 659, 784]];
-export function music(on) {
+export function music(on, theme = 'arcade') {
   if (!ac) return;
   clearInterval(musicTimer);
   musicTimer = null;
   if (!on) return;
+  const T = THEMES[theme] || THEMES.arcade;
   let next = ac.currentTime + 0.1;
   musicTimer = setInterval(() => {
     while (next < ac.currentTime + 0.3) {
-      const bar = Math.floor(beat / 8) % 4, i = beat % 8;
-      tone(BASS[bar] * (i % 2 ? 2 : 1), 0.22, { type: 'triangle', vol: 0.16, delay: next - ac.currentTime, out: musicGain });
-      if (i % 2 === 0) tone(CHORDS[bar][(i / 2) % 3] * 2, 0.12, { type: 'square', vol: 0.035, delay: next - ac.currentTime, out: musicGain });
-      if (i === 0 || i === 4) noise(0.05, { vol: 0.06 * volume.music, freq: 120, type: 'lowpass', delay: next - ac.currentTime });
-      next += 0.16;
+      const bar = Math.floor(beat / 8) % 4, i = beat % 8, d = next - ac.currentTime;
+      tone(T.bass[bar] * (i % 2 ? 2 : 1), T.step * 1.4, { type: T.bassType, vol: T.bassType === 'sawtooth' ? 0.08 : 0.16, delay: d, out: musicGain });
+      if (i % 2 === 0) {
+        const note = T.chords[bar][(i / 2) % T.chords[bar].length] * 2;
+        tone(note, T.step * 0.8, { type: T.lead, vol: T.leadVol, delay: d, out: musicGain });
+        if (T.echo) tone(note, T.step * 1.6, { type: 'sine', vol: T.leadVol * 0.4, delay: d + T.step * 1.5, out: musicGain });
+      }
+      if (T.kick.includes(i)) noise(0.05, { vol: 0.06 * volume.music, freq: 120, type: 'lowpass', delay: d });
+      if (T.tom && i % 4 === 2) tone(180, 0.12, { vol: 0.08 * volume.music, slide: 90, delay: d });
+      next += T.swing && i % 2 ? T.step * 0.7 : T.swing ? T.step * 1.3 : T.step;
       beat++;
     }
   }, 100);

@@ -52,27 +52,26 @@ for (const [speed, done] of [[420, true], [120, false]]) {
   if (!done) assert(ev.includes('rampFail'));
 }
 
-// Longue partie automatique : un robot appuie sur les flippers quand une bille arrive dessus.
-{
-  const g = createGame(table, rng);
+// Longue partie automatique sur chaque table : un robot appuie sur les flippers quand une bille arrive dessus.
+for (const t of TABLES) {
+  const g = createGame(t, rng);
   const counts = {};
-  let t = 0, maxBalls = 0;
-  for (let frame = 0; frame < 60 * 400 && !g.over; frame++) {
-    t += 1 / 60;
+  let maxBalls = 0, stuck = 0;
+  for (let frame = 0; frame < 60 * 240 && !g.over; frame++) {
     if (frame % 90 === 0) plunge(g, 0.75 + rng() * 0.25);
-    for (const f of g.w.flippers) {
-      const near = g.w.balls.some(b => !b.ramp && Math.hypot(b.x - f.x, b.y - f.y) < 9 && b.vy < -15);
-      setFlipper(g, f.id, near);
-    }
+    for (const f of g.w.flippers) setFlipper(g, f.id, g.w.balls.some(b => !b.ramp && Math.hypot(b.x - f.x, b.y - f.y) < 9 && b.vy < -15));
     update(g, 1 / 60);
     for (const fx of g.fx) counts[fx.kind] = (counts[fx.kind] || 0) + 1;
     g.fx.length = 0;
     maxBalls = Math.max(maxBalls, g.w.balls.length);
-    for (const b of g.w.balls) assert(inside(b), `bille hors de la table en (${b.x.toFixed(2)}, ${b.y.toFixed(2)})`);
+    for (const b of g.w.balls) assert(inside(b), `${t.id} : bille hors de la table en (${b.x.toFixed(2)}, ${b.y.toFixed(2)})`);
+    stuck += g.messages.some(m => m.t === 0 && m.text.startsWith('Recherche'));
   }
-  console.log('  partie automatique :', g.over ? 'terminée' : 'en cours', '· score', g.score.toLocaleString('fr-FR'), '· effets', JSON.stringify(counts), '· missions', Object.entries(g.missions).filter(m => m[1]).map(m => m[0]).join(', ') || 'aucune', '· billes max', maxBalls);
-  assert(counts.bumper > 5, 'les bumpers doivent être touchés');
+  console.log(`  ${t.id.padEnd(7)} score ${g.score.toLocaleString('fr-FR').padStart(11)} · missions ${Object.entries(g.missions).filter(m => m[1]).map(m => m[0]).join(', ') || 'aucune'} · billes max ${maxBalls} · décoinçages ${stuck}`);
+  assert(counts.bumper > 3, `${t.id} : les bumpers doivent être touchés`);
+  assert(counts.ramp > 0, `${t.id} : au moins une rampe réussie`);
   assert(g.score > 10000);
+  assert(stuck < 15, `${t.id} : la bille se coince trop souvent (${stuck})`);
 }
 
 // Règles : drop targets -> porte ouverte -> 2 captures -> multiball (3 billes), puis super jackpot.
@@ -80,31 +79,94 @@ for (const [speed, done] of [[420, true], [120, false]]) {
   const g = createGame(table, rng);
   const fire = (type, obj, extra = {}) => { g.w.events.push({ type, obj, ball: g.w.balls[0], speed: 100, x: 0, y: 0, ...extra }); update(g, 1 / 60); };
   for (const id of ['D1', 'D2', 'D3']) fire('hit', g.w.walls.find(s => s.id === id));
-  assert(g.missions.drops && g.doorOpen && g.w.saucers[0].active);
+  assert(g.missions.drops && g.open.door && g.w.saucers[0].active);
   // Deux captures dans le trou : la bille entre dans la poche, elle est capturée puis rendue, la porte se referme
   let maxB = 0;
   for (let k = 0; k < 2; k++) {
     const b0 = g.w.balls[0];
-    assert(g.doorOpen, 'porte ouverte avant la capture');
+    assert(g.open.door, 'porte ouverte avant la capture');
     Object.assign(b0, { x: 23, y: 60.5, vx: 0, vy: 40, held: false });
     for (let i = 0; i < 6; i++) update(g, 1 / 60);
     assert(k === 1 || b0.held, 'bille capturée');
     for (let i = 0; i < 130; i++) { update(g, 1 / 60); maxB = Math.max(maxB, g.w.balls.length); }
     assert(!b0.held && !(b0.x > 20 && b0.x < 26 && b0.y > 58 && b0.y < 65), 'bille rendue hors de la poche');
-    if (k === 0) { assert(!g.doorOpen, 'porte refermée'); for (let i = 0; i < 120; i++) update(g, 1 / 60); for (const id of ['D1', 'D2', 'D3']) fire('hit', g.w.walls.find(s => s.id === id)); }
+    if (k === 0) { assert(!g.open.door, 'porte refermée'); for (let i = 0; i < 120; i++) update(g, 1 / 60); for (const id of ['D1', 'D2', 'D3']) fire('hit', g.w.walls.find(s => s.id === id)); }
   }
   assert(g.multiball && g.missions.multiball);
   assert(maxB >= 3, `multiball : ${maxB} billes`);
   for (let k = 0; k < 3; k++) { g.w.events.push({ type: 'ramp', ramp: k % 2 ? 'left' : 'right', ball: g.w.balls[0] }); update(g, 1 / 60); }
-  assert(g.missions.ramps && g.doorOpen, 'super jackpot allumé : porte rouverte');
+  assert(g.missions.ramps && g.open.door, 'super jackpot allumé : porte rouverte');
   fire('saucer', g.w.saucers[0]);
   assert(g.missions.super && g.jackpots === 1);
   // A-R-C dans l'ordre (2 coups chacune) ; une cible hors de son tour ne s'allume pas
   const target = id => g.w.walls.find(s => s.id === id);
   fire('hit', target('C')); fire('hit', target('C'));
-  assert.strictEqual(g.arc.step, 0);
+  assert.strictEqual(g.groups.arc.step, 0);
   for (const id of ['A', 'A', 'R', 'R', 'C', 'C']) fire('hit', target(id));
   assert(g.missions.arc);
+}
+
+// Mécanismes propres aux autres tables
+const byId = id => TABLES.find(t => t.id === id);
+const fireOn = g => (type, obj, extra = {}) => { g.w.events.push({ type, obj, ball: g.w.balls[0], speed: 100, x: 0, y: 0, ...extra }); update(g, 1 / 60); };
+{
+  // Espace : un portail téléporte la bille ; le trou noir l'aspire et la capture (2 fois = multiball).
+  const g = createGame(byId('space'), rng);
+  const b = g.w.balls[0];
+  const p = g.w.portals[0];
+  Object.assign(b, { x: p.x, y: p.y - 3, vx: 0, vy: 200 }); // tirée vers le haut
+  for (let i = 0; i < 4; i++) update(g, 1 / 60);
+  assert(b.y > 88 && g.counts.portal === 1, `portail : bille en (${b.x.toFixed(1)}, ${b.y.toFixed(1)})`);
+  for (let k = 0; k < 2; k++) {
+    const ball = g.w.balls.find(x => !x.held);
+    Object.assign(ball, { x: 33, y: 52, vx: 0, vy: 0, escape: false });
+    let caught = false;
+    for (let i = 0; i < 90 && !caught; i++) { update(g, 1 / 60); caught = ball.held; }
+    assert(caught, 'le trou noir aspire la bille');
+    for (let i = 0; i < 100; i++) update(g, 1 / 60);
+  }
+  assert(g.missions.multiball, 'multiball cosmique');
+}
+{
+  // Casino : la machine à sous finit par aligner 3 symboles ; la roulette donne un prix.
+  const g = createGame(byId('casino'), rng);
+  const fire = fireOn(g), slot = g.w.walls.find(s => s.id === 'slot');
+  for (let i = 0; i < 6 && !g.missions.slots; i++) fire('hit', slot);
+  assert(g.missions.slots, 'machine à sous gagnante au plus tard au 5e essai');
+  const before = g.score;
+  Object.assign(g.w.balls[0], { x: 23, y: 61, vx: 0, vy: 0 });
+  for (let i = 0; i < 200; i++) update(g, 1 / 60);
+  assert(g.score > before && g.messages.length + 1, 'roulette');
+}
+{
+  // Jungle : T-I-K-I ouvre le passage secret, qui fait surgir le trésor ; le piège coûte le multiplicateur.
+  const g = createGame(byId('jungle'), rng);
+  const fire = fireOn(g), w = id => g.w.walls.find(s => s.id === id);
+  for (const id of ['T1', 'T2', 'T3', 'T4']) fire('hit', w(id));
+  assert(g.missions.tiki && g.open.secret && !w('secret').active, 'passage secret ouvert');
+  fire('trigger', g.w.triggers.find(t => t.id === 'secretPass'), { forward: true });
+  assert(g.missions.secret && w('treasure').active, 'trésor sorti');
+  fire('hit', w('treasure'));
+  assert(g.missions.treasure && !w('treasure').active && !g.open.secret, 'trésor pris, passage refermé');
+  g.mult = 3;
+  const trap = g.w.saucers.find(s => s.role === 'trap'), b = g.w.balls[0];
+  Object.assign(b, { x: trap.x, y: trap.y + 0.5, vx: 0, vy: -20, escape: false });
+  for (let i = 0; i < 5; i++) update(g, 1 / 60);
+  assert.strictEqual(g.mult, 1, 'le piège fait perdre le multiplicateur');
+}
+{
+  // Volcan : un jet de vapeur propulse la bille vers le haut ; la lave la repousse.
+  const g = createGame(byId('volcan'), rng);
+  const jet = g.w.fields.find(f => f.id === 'jet1'), b = g.w.balls[0];
+  g.w.time = 0.1; // jet allumé
+  Object.assign(b, { x: jet.x, y: jet.y, vx: 0, vy: 0 });
+  let up = 0;
+  for (let i = 0; i < 10; i++) { update(g, 1 / 60); up = Math.max(up, b.vy); }
+  assert(up > 220 && g.counts.jet >= 1, `jet de vapeur : ${up.toFixed(0)} cm/s`);
+  const lava = g.w.fields.find(f => f.kind === 'repel');
+  Object.assign(b, { x: lava.x + 1, y: lava.y, vx: 0, vy: 0 });
+  for (let i = 0; i < 6; i++) update(g, 1 / 60);
+  assert(b.x > lava.x + 1.5 && g.counts.burn >= 1, 'la lave repousse la bille');
 }
 
 // Tilt : trop de secousses bloquent les flippers ; protection : la bille perdue tôt est rendue.

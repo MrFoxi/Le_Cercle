@@ -5,7 +5,7 @@ import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
 import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
-import { R } from './physics.js';
+import { R, jetOn } from './physics.js';
 
 export const LOW = matchMedia('(pointer: coarse)').matches || /[?&](low|mobile)/.test(location.search);
 const TILT = (7 * Math.PI) / 180;
@@ -21,45 +21,134 @@ export const SKINS = {
 
 const std = (color, o = {}) => new THREE.MeshStandardMaterial({ color, roughness: 0.4, metalness: 0, ...o });
 
+// Hasard reproductible (le décor est le même à chaque partie)
+const seeded = seed => () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
+
+// Fonds peints : un par univers.
+const PAINTERS = {
+  arcade(x, P, col, c) {
+    const bg = x.createLinearGradient(0, 0, 0, c.height);
+    bg.addColorStop(0, '#2a0b4d'); bg.addColorStop(0.5, col.felt); bg.addColorStop(1, '#090418');
+    x.fillStyle = bg; x.fillRect(0, 0, c.width, c.height);
+    const [cx, cy] = P(23, 64);
+    for (let i = 0; i < 36; i++) {
+      const a = (i / 36) * Math.PI * 2;
+      x.fillStyle = i % 2 ? 'rgba(255,46,136,.07)' : 'rgba(34,211,238,.05)';
+      x.beginPath(); x.moveTo(cx, cy); x.arc(cx, cy, 1600, a, a + Math.PI / 36); x.fill();
+    }
+    x.strokeStyle = 'rgba(255,46,136,.35)'; x.lineWidth = 3;
+    for (let i = 0; i <= 12; i++) { const [ax, ay] = P(23 + (i - 6) * 1.5, 36); const [bx, by] = P(23 + (i - 6) * 7, 4); x.beginPath(); x.moveTo(ax, ay); x.lineTo(bx, by); x.stroke(); }
+    for (let j = 0; j < 7; j++) { const yy = 36 - j * j * 0.75; const [ax, ay] = P(0, yy); const [bx] = P(46, yy); x.beginPath(); x.moveTo(ax, ay); x.lineTo(bx, ay); x.stroke(); }
+    x.lineWidth = 8; x.strokeStyle = col.c;
+    x.beginPath(); x.arc(cx, cy + 40, 230, 0, Math.PI * 2); x.stroke();
+  },
+  space(x, P, col, c) {
+    const rnd = seeded(42);
+    const bg = x.createLinearGradient(0, 0, 0, c.height);
+    bg.addColorStop(0, '#02030f'); bg.addColorStop(0.5, col.felt); bg.addColorStop(1, '#000005');
+    x.fillStyle = bg; x.fillRect(0, 0, c.width, c.height);
+    for (const [px, py, r, color] of [[14, 70, 420, 'rgba(138,92,255,.28)'], [34, 40, 380, 'rgba(34,211,238,.18)'], [28, 95, 300, 'rgba(255,77,216,.15)']]) {
+      const [gx, gy] = P(px, py), gr = x.createRadialGradient(gx, gy, 0, gx, gy, r);
+      gr.addColorStop(0, color); gr.addColorStop(1, 'rgba(0,0,0,0)');
+      x.fillStyle = gr; x.fillRect(0, 0, c.width, c.height);
+    }
+    for (let i = 0; i < 900; i++) { x.fillStyle = `rgba(255,255,255,${0.3 + rnd() * 0.7})`; const r = rnd() < 0.08 ? 3 : 1.4; x.fillRect(rnd() * c.width, rnd() * c.height, r, r); }
+    x.strokeStyle = 'rgba(255,179,107,.25)'; x.setLineDash([14, 12]); x.lineWidth = 3;
+    for (const r of [120, 200, 290]) { x.beginPath(); x.ellipse(...P(23, 70), r * 1.3, r * 0.55, -0.25, 0, Math.PI * 2); x.stroke(); }
+    x.setLineDash([]);
+  },
+  casino(x, P, col, c) {
+    const [cx, cy] = P(23, 62);
+    const bg = x.createRadialGradient(cx, cy, 50, cx, cy, 1700);
+    bg.addColorStop(0, '#0f6b3d'); bg.addColorStop(1, col.felt);
+    x.fillStyle = bg; x.fillRect(0, 0, c.width, c.height);
+    x.strokeStyle = 'rgba(255,204,51,.08)'; x.lineWidth = 2;
+    for (let i = -40; i < 80; i++) { x.beginPath(); x.moveTo(i * 40, 0); x.lineTo(i * 40 + c.height, c.height); x.stroke(); x.beginPath(); x.moveTo(i * 40, 0); x.lineTo(i * 40 - c.height, c.height); x.stroke(); }
+    // La roue de roulette peinte autour du trou
+    for (let i = 0; i < 37; i++) {
+      const a = (i / 37) * Math.PI * 2;
+      x.fillStyle = i === 0 ? 'rgba(0,160,70,.6)' : i % 2 ? 'rgba(227,27,59,.45)' : 'rgba(10,10,10,.55)';
+      x.beginPath(); x.moveTo(cx, cy); x.arc(cx, cy, 190, a, a + (Math.PI * 2) / 37); x.fill();
+    }
+    x.fillStyle = col.felt; x.beginPath(); x.arc(cx, cy, 120, 0, Math.PI * 2); x.fill();
+    x.strokeStyle = '#ffcc33'; x.lineWidth = 6; x.beginPath(); x.arc(cx, cy, 192, 0, Math.PI * 2); x.stroke();
+    x.font = '120px serif'; x.textAlign = 'center'; x.textBaseline = 'middle';
+    const rnd = seeded(7);
+    for (const s of ['♠', '♥', '♦', '♣', '♠', '♥', '♦', '♣']) { x.fillStyle = s === '♥' || s === '♦' ? 'rgba(227,27,59,.25)' : 'rgba(0,0,0,.25)'; x.fillText(s, ...P(6 + rnd() * 34, 20 + rnd() * 70)); }
+  },
+  jungle(x, P, col, c) {
+    const rnd = seeded(11);
+    const bg = x.createLinearGradient(0, 0, 0, c.height);
+    bg.addColorStop(0, '#0a2410'); bg.addColorStop(0.5, col.felt); bg.addColorStop(1, '#06140a');
+    x.fillStyle = bg; x.fillRect(0, 0, c.width, c.height);
+    // Dalles du temple au centre
+    x.strokeStyle = 'rgba(255,231,160,.12)'; x.lineWidth = 3;
+    for (let r = 0; r < 14; r++) for (let k = 0; k < 6; k++) { const [px, py] = P(10 + k * 4.4 + (r % 2) * 2.2, 40 + r * 2.4); x.strokeRect(px, py, 84, 44); }
+    // Rivière et feuillage
+    x.strokeStyle = 'rgba(60,140,200,.25)'; x.lineWidth = 40;
+    x.beginPath(); x.moveTo(...P(46, 95)); x.bezierCurveTo(...P(30, 80), ...P(40, 60), ...P(28, 40)); x.stroke();
+    for (let i = 0; i < 160; i++) {
+      const edge = rnd() < 0.5 ? rnd() * 10 : 36 + rnd() * 10;
+      const [px, py] = P(edge, rnd() * 110);
+      x.save(); x.translate(px, py); x.rotate(rnd() * Math.PI * 2);
+      x.fillStyle = `rgba(${40 + rnd() * 60},${120 + rnd() * 100},${50 + rnd() * 40},.35)`;
+      x.beginPath(); x.ellipse(0, 0, 60 + rnd() * 50, 18 + rnd() * 12, 0, 0, Math.PI * 2); x.fill();
+      x.restore();
+    }
+  },
+  volcan(x, P, col, c) {
+    const rnd = seeded(5);
+    const bg = x.createLinearGradient(0, 0, 0, c.height);
+    bg.addColorStop(0, '#2b0a04'); bg.addColorStop(0.5, col.felt); bg.addColorStop(1, '#080202');
+    x.fillStyle = bg; x.fillRect(0, 0, c.width, c.height);
+    x.fillStyle = 'rgba(0,0,0,.35)';
+    x.beginPath(); x.moveTo(...P(4, 60)); x.lineTo(...P(18, 92)); x.lineTo(...P(28, 92)); x.lineTo(...P(42, 60)); x.fill();
+    // Fissures de lave lumineuses
+    x.strokeStyle = '#ff6a00'; x.shadowColor = '#ff3d00'; x.shadowBlur = 25; x.lineCap = 'round';
+    for (let i = 0; i < 22; i++) {
+      let px = rnd() * c.width, py = rnd() * c.height;
+      x.lineWidth = 2 + rnd() * 6;
+      x.beginPath(); x.moveTo(px, py);
+      for (let k = 0; k < 6; k++) { px += (rnd() - 0.5) * 160; py += (rnd() - 0.3) * 120; x.lineTo(px, py); }
+      x.stroke();
+    }
+    x.shadowBlur = 0;
+  },
+};
+
 // Décor peint de la table (texture dessinée par le code).
 function playfieldTexture(table) {
   const S = 20, c = document.createElement('canvas');
   c.width = W * S; c.height = H * S;
   const x = c.getContext('2d'), P = (px, py) => [px * S, (H - py) * S];
   const col = table.colors;
-  const bg = x.createLinearGradient(0, 0, 0, c.height);
-  bg.addColorStop(0, '#2a0b4d'); bg.addColorStop(0.5, col.felt); bg.addColorStop(1, '#090418');
-  x.fillStyle = bg; x.fillRect(0, 0, c.width, c.height);
-  // Rayons de soleil rétro depuis le centre
-  const [cx, cy] = P(23, 64);
-  for (let i = 0; i < 36; i++) {
-    const a = (i / 36) * Math.PI * 2;
-    x.fillStyle = i % 2 ? 'rgba(255,46,136,.07)' : 'rgba(34,211,238,.05)';
-    x.beginPath(); x.moveTo(cx, cy);
-    x.arc(cx, cy, 1600, a, a + Math.PI / 36); x.fill();
-  }
-  // Grille néon en perspective en bas
-  x.strokeStyle = 'rgba(255,46,136,.35)'; x.lineWidth = 3;
-  for (let i = 0; i <= 12; i++) { const [ax, ay] = P(23 + (i - 6) * 1.5, 36); const [bx, by] = P(23 + (i - 6) * 7, 4); x.beginPath(); x.moveTo(ax, ay); x.lineTo(bx, by); x.stroke(); }
-  for (let j = 0; j < 7; j++) { const yy = 36 - j * j * 0.75; const [ax, ay] = P(0, yy); const [bx] = P(46, yy); x.beginPath(); x.moveTo(ax, ay); x.lineTo(bx, ay); x.stroke(); }
-  // Grand cercle et titre
-  x.lineWidth = 8; x.strokeStyle = col.c;
-  x.beginPath(); x.arc(cx, cy + 40, 230, 0, Math.PI * 2); x.stroke();
-  x.font = '900 120px Impact, Arial Black, sans-serif'; x.textAlign = 'center'; x.textBaseline = 'middle';
+  (PAINTERS[table.id] || PAINTERS.arcade)(x, P, col, c);
+  x.font = '900 116px Impact, Arial Black, sans-serif'; x.textAlign = 'center'; x.textBaseline = 'middle';
   x.fillStyle = col.a; x.shadowColor = col.a; x.shadowBlur = 30;
-  x.fillText('ARCADE', ...P(23, 38));
-  x.font = '800 44px Arial Black, sans-serif'; x.fillStyle = col.b; x.shadowColor = col.b;
-  x.fillText('LE CERCLE', ...P(23, 33.6));
+  x.fillText(table.title, ...P(23, 35.5));
+  x.font = '800 40px Arial Black, sans-serif'; x.fillStyle = col.b; x.shadowColor = col.b;
+  x.fillText('LE CERCLE', ...P(23, 32.3));
   x.shadowBlur = 0;
   // Étiquettes des inserts lumineux
-  x.font = '800 30px Arial, sans-serif'; x.fillStyle = 'rgba(255,255,255,.85)';
+  x.font = '800 28px Arial, sans-serif'; x.fillStyle = 'rgba(255,255,255,.85)';
   for (const l of table.lights) if (l.label && !l.big) x.fillText(l.label, ...P(l.x, l.y - 1.9));
-  x.font = '800 26px Arial'; x.fillStyle = '#ffd23f';
+  x.font = '900 40px Arial Black, sans-serif'; x.fillStyle = 'rgba(255,170,60,.35)';
+  for (const l of table.lights) if (l.big) x.fillText(l.label, ...P(l.x, l.y));
+  x.font = '800 26px Arial'; x.fillStyle = col.c;
   x.fillText('1', ...P(17, 95.3)); x.fillText('2', ...P(23, 95.3)); x.fillText('3', ...P(29, 95.3));
   x.fillStyle = 'rgba(255,255,255,.6)'; x.font = '700 22px Arial';
-  x.fillText('SPINNER', ...P(4.4, 53)); x.fillText('LOCK', ...P(23, 51.8));
+  x.fillText('SPINNER', ...P(4.4, 53));
   // Couloir de lancement
   x.fillStyle = 'rgba(0,0,0,.35)'; x.fillRect(...P(46, 100), 6 * S, 100 * S);
+  return new THREE.CanvasTexture(c);
+}
+
+// Texture de jeton de casino (bords rayés)
+function chipTexture(color) {
+  const c = document.createElement('canvas');
+  c.width = 256; c.height = 32;
+  const x = c.getContext('2d');
+  for (let i = 0; i < 16; i++) { x.fillStyle = i % 2 ? '#fff' : color; x.fillRect(i * 16, 0, 16, 32); }
   return new THREE.CanvasTexture(c);
 }
 
@@ -158,7 +247,7 @@ export function createView(canvas, table) {
   const HEIGHT = { outer: 5, lane: 3, apron: 3, metal: 2.6, gate: 0.6, post: 2.4, rubber: 2.2, sling: 2.2, plunger: 1 };
   const objects = new Map(); // élément physique -> maillage
   for (const s of table.walls) {
-    if (['target', 'drop', 'door'].includes(s.kind)) continue;
+    if (['target', 'drop', 'door', 'secret'].includes(s.kind)) continue;
     const len = Math.hypot(s.bx - s.ax, s.by - s.ay), h = HEIGHT[s.kind] ?? 2.5;
     const m = new THREE.Mesh(new THREE.BoxGeometry(len + 0.6, (s.r ?? 0.3) * 2, h), s.kind === 'sling' ? mats.sling.clone() : mats[s.kind] || chrome);
     m.position.set((s.ax + s.bx) / 2, (s.ay + s.by) / 2, h / 2);
@@ -168,35 +257,109 @@ export function createView(canvas, table) {
     if (s.kind === 'sling') objects.set(s.id, { mesh: m, flash: 0 });
   }
   // Plastiques des slingshots (triangles translucides)
-  for (const [a, b, c] of [[[4.5, 35], [4.5, 29.5], [10.5, 23]], [[41.5, 35], [41.5, 29.5], [35.5, 23]]]) {
+  for (const [a, b, c] of table.slings) {
     const shape = new THREE.Shape([new THREE.Vector2(...a), new THREE.Vector2(...b), new THREE.Vector2(...c)]);
     const m = new THREE.Mesh(new THREE.ExtrudeGeometry(shape, { depth: 0.3, bevelEnabled: false }), std(table.colors.b, { transparent: true, opacity: 0.75, emissive: table.colors.b, emissiveIntensity: 0.6 }));
     m.position.z = 2.3;
     T.add(m);
   }
 
-  // Bumpers
-  for (const c of table.circles) {
-    const g = new THREE.Group();
+  // Bumpers : leur allure dépend de l'univers (néon, planète, jeton, idole, rocher de lave)
+  const PLANET = { jupiter: '#d9a066', mars: '#c1440e', saturn: '#e3c27a' };
+  function bumper(c) {
+    const g = new THREE.Group(), mats = [];
+    const glow = color => { const m = std(color, { emissive: color, emissiveIntensity: 0.4 }); mats.push(m); return m; };
+    let lightColor = table.colors.a;
+    if (PLANET[c.look]) {
+      const planet = new THREE.Mesh(new THREE.SphereGeometry(c.r * 0.95, 32, 20), std(PLANET[c.look], { roughness: 0.7, emissive: PLANET[c.look], emissiveIntensity: 0.15 }));
+      planet.position.z = c.r;
+      mats.push(planet.material);
+      g.add(planet);
+      if (c.look === 'saturn') { const ring = new THREE.Mesh(new THREE.TorusGeometry(c.r * 1.55, 0.25, 6, 40), glow('#ffe7b0')); ring.position.z = c.r; ring.rotation.x = 0.5; g.add(ring); }
+      if (c.look === 'jupiter') { const band = new THREE.Mesh(new THREE.TorusGeometry(c.r * 0.96, 0.18, 6, 40), glow('#a0522d')); band.position.z = c.r; g.add(band); }
+      const halo = new THREE.Mesh(new THREE.TorusGeometry(c.r + 0.2, 0.2, 8, 40), glow(table.colors.b));
+      halo.position.z = 0.25;
+      g.add(halo);
+      lightColor = PLANET[c.look];
+    } else if (c.look === 'chip') {
+      const edge = new THREE.Mesh(new THREE.CylinderGeometry(c.r, c.r, 1.4, 40, 1, true), std('#fff', { map: chipTexture(table.colors.a), roughness: 0.4 }));
+      edge.rotation.x = Math.PI / 2; edge.position.z = 1.1;
+      const top = new THREE.Mesh(new THREE.CircleGeometry(c.r, 40), glow(table.colors.a));
+      top.position.z = 1.81;
+      const inner = new THREE.Mesh(new THREE.RingGeometry(c.r * 0.55, c.r * 0.65, 40), glow(table.colors.b));
+      inner.position.z = 1.82;
+      g.add(edge, top, inner);
+    } else if (c.look === 'idol') {
+      const body = new THREE.Mesh(new THREE.CylinderGeometry(c.r * 0.8, c.r, 3.4, 8), std('#6f7a5a', { roughness: 0.9 }));
+      body.rotation.x = Math.PI / 2; body.position.z = 1.7;
+      const head = new THREE.Mesh(new THREE.SphereGeometry(c.r * 0.75, 16, 12), glow('#ffc23d'));
+      head.position.z = 3.8;
+      const eyes = new THREE.Mesh(new THREE.TorusGeometry(c.r * 0.82, 0.18, 6, 24), glow(table.colors.a));
+      eyes.position.z = 2.8;
+      g.add(body, head, eyes);
+      lightColor = '#ffc23d';
+    } else if (c.look === 'lava') {
+      const rock = new THREE.Mesh(new THREE.DodecahedronGeometry(c.r, 1), std('#2a1410', { roughness: 0.95, emissive: '#ff4d00', emissiveIntensity: 0.35, flatShading: true }));
+      rock.position.z = c.r * 0.8;
+      mats.push(rock.material);
+      g.add(rock);
+      lightColor = '#ff4d00';
+    } else {
+      const base = new THREE.Mesh(new THREE.CylinderGeometry(c.r + 0.3, c.r + 0.4, 0.8, 32), std('#111'));
+      base.rotation.x = Math.PI / 2; base.position.z = 0.4;
+      const body = new THREE.Mesh(new THREE.CylinderGeometry(c.r - 0.2, c.r - 0.2, 2.2, 32), std('#f2f2f2', { roughness: 0.3 }));
+      body.rotation.x = Math.PI / 2; body.position.z = 1.9;
+      const ring = new THREE.Mesh(new THREE.TorusGeometry(c.r - 0.1, 0.35, 12, 32), glow(table.colors.a));
+      ring.position.z = 1.2;
+      const cap = new THREE.Mesh(new THREE.CylinderGeometry(c.r - 0.4, c.r - 0.1, 0.9, 32), std(table.colors.c, { emissive: table.colors.c, emissiveIntensity: 0.5, transparent: true, opacity: 0.9 }));
+      mats.push(cap.material);
+      cap.rotation.x = Math.PI / 2; cap.position.z = 3.4;
+      g.add(base, body, ring, cap);
+    }
+    g.traverse(m => { if (m.isMesh) m.castShadow = true; });
+    return { g, mats, lightColor };
+  }
+  for (const c of table.circles.filter(x => x.kind === 'bumper')) {
+    const { g, mats, lightColor } = bumper(c);
     g.position.set(c.x, c.y, 0);
-    const base = new THREE.Mesh(new THREE.CylinderGeometry(c.r + 0.3, c.r + 0.4, 0.8, 32), std('#111'));
-    base.rotation.x = Math.PI / 2; base.position.z = 0.4;
-    const body = new THREE.Mesh(new THREE.CylinderGeometry(c.r - 0.2, c.r - 0.2, 2.2, 32), std('#f2f2f2', { roughness: 0.3 }));
-    body.rotation.x = Math.PI / 2; body.position.z = 1.9;
-    const ringMat = std(table.colors.a, { emissive: table.colors.a, emissiveIntensity: 0.4 });
-    const ring = new THREE.Mesh(new THREE.TorusGeometry(c.r - 0.1, 0.35, 12, 32), ringMat);
-    ring.position.z = 1.2;
-    const capMat = std(table.colors.c, { emissive: table.colors.c, emissiveIntensity: 0.5, transparent: true, opacity: 0.9 });
-    const cap = new THREE.Mesh(new THREE.CylinderGeometry(c.r - 0.4, c.r - 0.1, 0.9, 32), capMat);
-    cap.rotation.x = Math.PI / 2; cap.position.z = 3.4;
-    for (const m of [base, body, ring, cap]) m.castShadow = true;
-    g.add(base, body, ring, cap);
     T.add(g);
-    const light = new THREE.PointLight(table.colors.a, 0, 18, 2);
+    const light = new THREE.PointLight(lightColor, 0, 18, 2);
     light.position.set(c.x, c.y, 6);
     T.add(light);
-    objects.set(c.id, { mesh: g, mats: [ringMat, capMat], light, flash: 0 });
+    objects.set(c.id, { mesh: g, mats, light, flash: 0 });
   }
+  // Obstacles mobiles : vaisseau, serpents, rochers
+  const movers = table.circles.filter(x => x.kind === 'mover').map(c => {
+    const g = new THREE.Group(), mats = [];
+    let tail = null;
+    if (c.look === 'ufo') {
+      const hull = new THREE.Mesh(new THREE.CylinderGeometry(c.r * 1.25, c.r * 0.6, 0.7, 24), std('#cfd6e3', { metalness: 1, roughness: 0.2 }));
+      hull.rotation.x = Math.PI / 2; hull.position.z = 1.6;
+      const domeMat = std('#7df9ff', { emissive: '#22d3ee', emissiveIntensity: 0.8, transparent: true, opacity: 0.85 });
+      const dome = new THREE.Mesh(new THREE.SphereGeometry(c.r * 0.6, 16, 10, 0, Math.PI * 2, 0, Math.PI / 2), domeMat);
+      dome.rotation.x = Math.PI / 2; dome.position.z = 1.9;
+      mats.push(domeMat);
+      g.add(hull, dome);
+    } else if (c.look === 'snake') {
+      const skin = std('#3ddc84', { roughness: 0.5, emissive: '#0f5a2a', emissiveIntensity: 0.4 });
+      mats.push(skin);
+      const head = new THREE.Mesh(new THREE.SphereGeometry(c.r, 16, 12), skin);
+      head.position.z = c.r;
+      const eyes = new THREE.Mesh(new THREE.SphereGeometry(c.r * 0.25, 8, 6), std('#ffe14d', { emissive: '#ffe14d', emissiveIntensity: 1.5 }));
+      eyes.position.set(0, c.r * 0.7, c.r * 1.5);
+      g.add(head, eyes);
+      tail = Array.from({ length: 7 }, (_, i) => { const m = new THREE.Mesh(new THREE.SphereGeometry(c.r * (0.9 - i * 0.09), 12, 8), skin); T.add(m); return m; });
+    } else {
+      const rock = new THREE.Mesh(new THREE.DodecahedronGeometry(c.r, 0), std('#3a2a24', { roughness: 1, flatShading: true, emissive: '#ff3d00', emissiveIntensity: 0.15 }));
+      rock.position.z = c.r;
+      mats.push(rock.material);
+      g.add(rock);
+    }
+    g.traverse(m => { if (m.isMesh) m.castShadow = true; });
+    T.add(g);
+    objects.set(c.id, { mesh: g, mats, flash: 0 });
+    return { id: c.id, g, tail, hist: [] };
+  });
 
   // Flippers : silhouette effilée extrudée, tournant autour du pivot
   const flippers = table.flippers.map(f => {
@@ -256,24 +419,80 @@ export function createView(canvas, table) {
   }
 
   // Cibles (A, R, C, tombantes) et porte
-  for (const s of table.walls.filter(w => ['target', 'drop', 'door'].includes(w.kind))) {
+  for (const s of table.walls.filter(w => ['target', 'drop', 'door', 'secret'].includes(w.kind))) {
     const len = Math.hypot(s.bx - s.ax, s.by - s.ay);
-    const color = s.kind === 'door' ? '#ffd23f' : s.kind === 'drop' ? table.colors.b : table.colors.a;
+    const color = s.id === 'treasure' ? '#ffd700' : s.kind === 'secret' ? '#6f7a5a' : s.id === 'slot' ? '#ffcc33' : s.kind === 'door' ? '#ffd23f' : s.kind === 'drop' ? table.colors.b : table.colors.a;
     const mat = std(color, { emissive: color, emissiveIntensity: 0.25, roughness: 0.3 });
     const m = new THREE.Mesh(new THREE.BoxGeometry(len, s.kind === 'door' ? 0.5 : 0.8, 2.6), mat);
     m.position.set((s.ax + s.bx) / 2, (s.ay + s.by) / 2, 1.3);
     m.rotation.z = Math.atan2(s.by - s.ay, s.bx - s.ax);
     m.castShadow = true;
     T.add(m);
-    objects.set(s.id, { mesh: m, mats: [mat], flash: 0, z: 1.3 });
+    if (s.active === false) m.position.z = -1.5; // trésor caché sous la table au départ
+    objects.set(s.id, { mesh: m, mats: [mat], flash: 0, z: 1.3, target: s.kind === 'target' });
   }
 
   // Trou de capture, spinner, poussoir
-  const hole = new THREE.Mesh(new THREE.CircleGeometry(1.9, 32), new THREE.MeshBasicMaterial({ color: '#000' }));
-  hole.position.set(table.saucers[0].x, table.saucers[0].y, 0.03);
-  const rim = new THREE.Mesh(new THREE.TorusGeometry(2, 0.25, 8, 32), chrome);
-  rim.position.copy(hole.position);
-  T.add(hole, rim);
+  let roulette = null, rouletteSpin = 0.4;
+  for (const sc of table.saucers) {
+    if (table.fields.some(f => f.kind === 'pull' && f.x === sc.x && f.y === sc.y)) continue; // le trou noir a son propre décor
+    const r = Math.min(1.9, sc.r);
+    const hole = new THREE.Mesh(new THREE.CircleGeometry(r, 32), new THREE.MeshBasicMaterial({ color: '#000' }));
+    hole.position.set(sc.x, sc.y, 0.03);
+    const rim = new THREE.Mesh(new THREE.TorusGeometry(r + 0.1, 0.25, 8, 32), sc.role === 'trap' ? std('#ff3344', { emissive: '#ff0022', emissiveIntensity: 0.8 }) : chrome);
+    rim.position.copy(hole.position);
+    T.add(hole, rim);
+    if (sc.role === 'roulette') {
+      const c = document.createElement('canvas');
+      c.width = c.height = 256;
+      const x = c.getContext('2d');
+      for (let i = 0; i < 37; i++) { x.fillStyle = i === 0 ? '#0a8a3a' : i % 2 ? '#c8102e' : '#111'; x.beginPath(); x.moveTo(128, 128); x.arc(128, 128, 128, (i / 37) * Math.PI * 2, ((i + 1) / 37) * Math.PI * 2); x.fill(); }
+      roulette = new THREE.Mesh(new THREE.RingGeometry(2.1, 3.1, 48), new THREE.MeshStandardMaterial({ map: new THREE.CanvasTexture(c), roughness: 0.3, metalness: 0.3 }));
+      roulette.position.set(sc.x, sc.y, 0.06);
+      T.add(roulette);
+    }
+  }
+  // Zones de force : trou noir, jets de vapeur, lave
+  const fieldFx = table.fields.map(f => {
+    const g = new THREE.Group();
+    g.position.set(f.x, f.y, 0.05);
+    let spin = null, core = null;
+    if (f.kind === 'pull') {
+      g.add(new THREE.Mesh(new THREE.CircleGeometry(2.4, 40), new THREE.MeshBasicMaterial({ color: '#000' })));
+      spin = new THREE.Mesh(new THREE.TorusGeometry(3, 0.55, 8, 48), std('#8a5cff', { emissive: '#b48cff', emissiveIntensity: 1.6 }));
+      spin.scale.z = 0.3;
+      const outer = new THREE.Mesh(new THREE.RingGeometry(f.r - 0.3, f.r, 64), new THREE.MeshBasicMaterial({ color: '#8a5cff', transparent: true, opacity: 0.18, toneMapped: false }));
+      g.add(spin, outer);
+    } else if (f.kind === 'jet') {
+      g.add(new THREE.Mesh(new THREE.TorusGeometry(f.r - 0.4, 0.3, 8, 32), std('#3a3a3a', { metalness: 0.8 })));
+      core = new THREE.Mesh(new THREE.CircleGeometry(f.r - 0.6, 32), std('#331100', { emissive: '#ffb300', emissiveIntensity: 0.2 }));
+      g.add(core);
+    } else if (f.kind === 'repel') {
+      core = new THREE.Mesh(new THREE.CircleGeometry(f.r, 40), std('#ff4d00', { emissive: '#ff5a00', emissiveIntensity: 1.4, roughness: 0.6 }));
+      const crust = new THREE.Mesh(new THREE.TorusGeometry(f.r, 0.5, 8, 40), std('#2a1410', { roughness: 1, flatShading: true }));
+      g.add(core, crust);
+    }
+    T.add(g);
+    return { f, spin, core };
+  });
+  // Portails lumineux (entrée) et leur sortie
+  const portals = table.portals.map(p => {
+    const mat = std(p.color, { emissive: p.color, emissiveIntensity: 1.8 });
+    const ring = new THREE.Mesh(new THREE.TorusGeometry(p.r + 0.2, 0.35, 10, 40), mat);
+    ring.position.set(p.x, p.y, 0.6);
+    const disc = new THREE.Mesh(new THREE.CircleGeometry(p.r, 32), new THREE.MeshBasicMaterial({ color: p.color, transparent: true, opacity: 0.25, toneMapped: false }));
+    disc.position.set(p.x, p.y, 0.05);
+    const exit = new THREE.Mesh(new THREE.TorusGeometry(1.4, 0.15, 6, 32), mat);
+    exit.position.set(p.to.x, p.to.y, 0.1);
+    T.add(ring, disc, exit);
+    return { ring, exit };
+  });
+  // Décor : deux vaisseaux en orbite au-dessus de la table spatiale
+  const ships = table.id === 'space' ? [0, Math.PI].map(ph => {
+    const m = new THREE.Mesh(new THREE.ConeGeometry(0.8, 2.6, 8), std('#cfd6e3', { metalness: 1, roughness: 0.25, emissive: '#22d3ee', emissiveIntensity: 0.3 }));
+    T.add(m);
+    return { m, ph };
+  }) : [];
   const spinner = new THREE.Group();
   spinner.position.set(4.3, 55, 2.6);
   const plate = new THREE.Mesh(new THREE.BoxGeometry(7.4, 0.12, 2.2), std('#dfe3ea', { metalness: 1, roughness: 0.15, emissive: table.colors.c, emissiveIntensity: 0.15 }));
@@ -295,6 +514,7 @@ export function createView(canvas, table) {
     else if (l.big) geo = new THREE.PlaneGeometry(12, 2.6);
     else geo = new THREE.CircleGeometry(l.label ? 1.25 : 1, 24);
     const mat = new THREE.MeshStandardMaterial({ color: '#111', emissive: l.color, emissiveIntensity: 0.06, roughness: 0.2, transparent: true, opacity: 0.95 });
+    mat.userData.big = !!l.big;
     const m = new THREE.Mesh(geo, mat);
     m.position.set(l.x, l.y, 0.04);
     T.add(m);
@@ -374,6 +594,16 @@ export function createView(canvas, table) {
       if (e.kind === 'multiball' || e.kind === 'jackpot' || e.kind === 'mission') { flashAll = e.kind === 'mission' ? 1.2 : 2.5; shake = Math.max(shake, 0.4); }
       if (e.kind === 'drain') shake = Math.max(shake, 0.25);
       if (e.kind === 'ramp') { const r = table.ramps.find(x => x.id === e.ramp); const p = r.points.at(-1); burst(p[0], p[1], 1, r.color, 24, 35); }
+      if (e.kind === 'portal') { burst(e.x, e.y, 1, e.obj.color, 30, 40); burst(e.obj.x, e.obj.y, 1, e.obj.color, 16, 30); }
+      if (e.kind === 'jet') burst(e.x, e.y, 1, '#ffffff', 26, 50);
+      if (e.kind === 'burn') burst(e.x, e.y, 1, '#ff6a00', 20, 30);
+      if (e.kind === 'mover') burst(e.x, e.y, 1.5, table.colors.a, 12, 30);
+      if (e.kind === 'trap') shake = Math.max(shake, 0.3);
+      if (e.kind === 'saucer' && e.obj?.role === 'trap') burst(e.obj.x, e.obj.y, 1, '#ff2244', 24, 30);
+      if (e.kind === 'secret') burst(43, 72, 1, '#3ddc84', 30, 35);
+      if (e.kind === 'roulette') rouletteSpin = 14;
+      if (e.kind === 'slot') burst(43, 74, 2, '#ffcc33', 20, 30);
+
     },
     update(g, dt, charge) {
       const w = g.w;
@@ -410,12 +640,13 @@ export function createView(canvas, table) {
       for (const [id, mat] of lights) {
         const v = flashAll > 0 ? (Math.sin(performance.now() / 60 + id.length) > 0 ? 1 : 0) : L[id] === 2 ? (blink ? 1 : 0) : L[id];
         mat.emissiveIntensity = v ? 2.6 : 0.06;
+        if (mat.userData.big) mat.opacity = v ? 0.85 : 0; // le grand voyant éteint laisse voir le mot peint
       }
       // Éclats des bumpers, slingshots et cibles
       for (const [id, o] of objects) {
         o.flash = Math.max(0, o.flash - dt * 5);
         if (o.light) { o.light.intensity = o.flash * 60; o.mesh.scale.setScalar(1 + o.flash * 0.08); }
-        if (o.mats) for (const m of o.mats) m.emissiveIntensity = 0.25 + o.flash * 3 + (id === 'A' || id === 'R' || id === 'C' ? (L[id] ? 1.5 : 0) : 0);
+        if (o.mats) for (const m of o.mats) m.emissiveIntensity = 0.25 + o.flash * 3 + (o.target && L[id] ? 1.5 : 0);
         if (o.mesh.material?.emissive && !o.mats) o.mesh.material.emissiveIntensity = o.flash * 3;
         // Cibles tombantes et porte qui s'enfoncent
         const wall = w.walls.find(s => s.id === id);
@@ -425,6 +656,30 @@ export function createView(canvas, table) {
         }
       }
       spinner.rotation.x += g.spin * dt * 9;
+      // Obstacles mobiles (positions de la physique) ; les serpents traînent leur corps derrière eux
+      const now = performance.now() / 1000;
+      for (const mv of movers) {
+        const c = w.circles.find(x => x.id === mv.id);
+        mv.g.position.set(c.x, c.y, 0);
+        if (mv.tail) {
+          mv.hist.unshift([c.x, c.y]);
+          mv.hist.length = Math.min(mv.hist.length, 60);
+          mv.tail.forEach((m, i) => { const h = mv.hist[(i + 1) * 7] || mv.hist.at(-1); m.position.set(h[0], h[1] + Math.sin(now * 6 + i) * 0.3, c.r * 0.8); });
+        } else mv.g.rotation.z += dt * 1.5;
+      }
+      for (const { f, spin, core } of fieldFx) {
+        if (spin) spin.rotation.z += dt * 3;
+        if (f.kind === 'jet') {
+          const on = jetOn(f, w.time);
+          core.material.emissiveIntensity = on ? 3 : 0.2;
+          if (on && Math.random() < 0.6) burst(f.x + (Math.random() - 0.5) * 2, f.y, 0.5, '#f0f0f0', 2, 14);
+        }
+        if (f.kind === 'repel') core.material.emissiveIntensity = 1.2 + Math.sin(now * 3) * 0.4;
+      }
+      for (const p of portals) { p.ring.rotation.z += dt * 2; p.ring.scale.setScalar(1 + Math.sin(now * 4) * 0.05); p.exit.rotation.z -= dt * 2; }
+      for (const s of ships) { const a = now * 0.4 + s.ph; s.m.position.set(23 + Math.cos(a) * 20, 70 + Math.sin(a) * 30, 14); s.m.rotation.z = a + Math.PI; }
+      if (roulette) { roulette.rotation.z += dt * rouletteSpin; rouletteSpin = Math.max(0.4, rouletteSpin - dt * 4); }
+
       plunger.position.y = -1 - charge * 3.5;
       // Particules
       let k = 0;
@@ -456,5 +711,6 @@ export function createView(canvas, table) {
       if (composer) composer.render(); else renderer.render(scene, camera);
     },
     resize,
+    dispose() { removeEventListener('resize', resize); composer?.dispose(); renderer.dispose(); renderer.forceContextLoss(); },
   };
 }
