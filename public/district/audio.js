@@ -1,9 +1,14 @@
 // Little District : ambiance sonore synthétisée (aucun fichier). Musique douce, pluie, rumeur de la rue, cuisine, grillons, tonnerre.
 let ctx = null, music, sfx, noise, amb = {};
 const vol = { music: 0.5, sfx: 0.7 };
-// Gamme pentatonique (ré, mi, sol, la, si) et accords qui tournent lentement
-const SCALE = [62, 64, 67, 69, 71, 74, 76, 79, 81];
-const CHORDS = [[50, 57, 62, 66, 69], [47, 54, 59, 62, 66], [43, 50, 55, 59, 62], [45, 52, 57, 61, 64]];
+// Grille lo-fi en do majeur : Fa maj7, Mi m7, Ré m9, Do maj9 (une mesure chacun). bass : la note grave.
+const CHORDS = [
+  { bass: 41, notes: [53, 57, 60, 64], tones: [69, 72, 76, 77] },
+  { bass: 40, notes: [52, 55, 59, 62], tones: [67, 71, 74, 76] },
+  { bass: 38, notes: [50, 53, 57, 60, 64], tones: [69, 72, 74, 77] },
+  { bass: 36, notes: [48, 52, 55, 59, 62], tones: [67, 72, 74, 76] },
+];
+const BEAT = 60 / 66; // tempo lent
 const hz = m => 440 * 2 ** ((m - 69) / 12);
 
 export function startAudio() {
@@ -14,11 +19,14 @@ export function startAudio() {
   music = ctx.createGain(); sfx = ctx.createGain();
   music.connect(master); sfx.connect(master);
   setVolumes(vol);
-  // écho doux pour les notes pincées
-  const delay = ctx.createDelay(), fb = ctx.createGain(), wet = ctx.createGain();
-  delay.delayTime.value = 0.42; fb.gain.value = 0.35; wet.gain.value = 0.3;
-  delay.connect(fb).connect(delay); delay.connect(wet).connect(music);
-  music.echo = delay;
+  // Musique : filtre chaud + réverbération douce (réponse impulsionnelle générée)
+  const warm = ctx.createBiquadFilter(); warm.type = 'lowpass'; warm.frequency.value = 2000; warm.Q.value = 0.3;
+  const verb = ctx.createConvolver(), ir = ctx.createBuffer(2, ctx.sampleRate * 3, ctx.sampleRate);
+  for (let c = 0; c < 2; c++) { const d = ir.getChannelData(c); for (let i = 0; i < d.length; i++) d[i] = (Math.random() * 2 - 1) * (1 - i / d.length) ** 3; }
+  verb.buffer = ir;
+  const wet = ctx.createGain(); wet.gain.value = 0.45;
+  warm.connect(music); warm.connect(verb).connect(wet).connect(music);
+  music.input = warm; music.warm = warm;
   const buf = ctx.createBuffer(1, ctx.sampleRate * 2, ctx.sampleRate), d = buf.getChannelData(0);
   for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
   noise = buf;
@@ -86,23 +94,44 @@ export function thunder() {
   burst(t + 0.1, 1.2, 300, 0.18, 'lowpass', 0.5);
 }
 
-// Musique : nappes lentes et quelques notes de koto ; plus calme la nuit.
+// Musique : piano électrique feutré, basse ronde, quelques notes de mélodie sur les accords. Plus rare et plus grave la nuit.
+function epiano(m, t, dur, g) {
+  const f = hz(m), e = ctx.createGain();
+  e.gain.setValueAtTime(0, t);
+  e.gain.linearRampToValueAtTime(g, t + 0.02);
+  e.gain.exponentialRampToValueAtTime(g * 0.35, t + 0.9);
+  e.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+  e.connect(music.input);
+  for (const [mul, k] of [[1, 1], [2, 0.12], [3, 0.03]]) { // fondamentale + harmoniques légères : son de Rhodes doux
+    const o = ctx.createOscillator(), og = ctx.createGain();
+    o.type = 'sine'; o.frequency.value = f * mul; o.detune.value = (Math.random() - 0.5) * 6;
+    og.gain.value = k; o.connect(og).connect(e); o.start(t); o.stop(t + dur + 0.05);
+  }
+}
+function bassNote(m, t, dur, g) {
+  const o = ctx.createOscillator(), e = ctx.createGain();
+  o.type = 'sine'; o.frequency.value = hz(m);
+  e.gain.setValueAtTime(0, t); e.gain.linearRampToValueAtTime(g, t + 0.08); e.gain.setValueAtTime(g, t + dur * 0.6); e.gain.linearRampToValueAtTime(0, t + dur);
+  o.connect(e).connect(music.input); o.start(t); o.stop(t + dur + 0.05);
+}
 let nextBar = 0, bar = 0;
 function scheduleMusic() {
   const loop = () => {
-    if (ctx.state === 'running' && vol.music > 0) while (nextBar < ctx.currentTime + 1) {
-      const t = Math.max(nextBar, ctx.currentTime + 0.05), chord = CHORDS[bar % CHORDS.length], len = 8;
-      const lp = ctx.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 900 - state.night * 400; lp.connect(music);
-      for (const n of chord.slice(0, 4)) for (const det of [-4, 4]) {
-        const { o, e } = tone('triangle', hz(n), t, len + 2, 0.022, lp, 2.5);
-        o.detune.value = det;
-        e.gain.cancelScheduledValues(t); e.gain.setValueAtTime(0, t); e.gain.linearRampToValueAtTime(0.022, t + 2.5); e.gain.setValueAtTime(0.022, t + len - 1); e.gain.linearRampToValueAtTime(0, t + len + 2);
-      }
-      const notes = state.night > 0.5 ? 3 : 6;
-      for (let i = 0; i < notes; i++) if (Math.random() < 0.7) {
-        const nt = t + (i * len) / notes + Math.random() * 0.3, f = hz(SCALE[Math.floor(Math.random() * SCALE.length)] - (state.night > 0.5 ? 12 : 0));
-        const { o } = tone('triangle', f, nt, 1.6, 0.05, music);
-        o.connect(music.echo);
+    if (ctx.state === 'running' && vol.music > 0) while (nextBar < ctx.currentTime + 1.5) {
+      const t = Math.max(nextBar, ctx.currentTime + 0.05), c = CHORDS[bar % CHORDS.length], len = BEAT * 4, night = state.night > 0.5;
+      music.warm.frequency.setTargetAtTime(night ? 1300 : 2000, t, 2);
+      // accord égrené doucement, puis rejoué plus bas sur le temps 3
+      c.notes.forEach((n, i) => epiano(n, t + i * 0.035, len * 0.95, 0.05));
+      if (Math.random() < 0.7) c.notes.slice(1).forEach((n, i) => epiano(n, t + BEAT * 2.5 + i * 0.03, len * 0.5, 0.025));
+      bassNote(c.bass, t, BEAT * 2.2, 0.09);
+      bassNote(c.bass + (Math.random() < 0.5 ? 7 : 12), t + BEAT * 2.5, BEAT * 1.4, 0.06);
+      // mélodie : une petite phrase une mesure sur deux, sur les notes de l'accord
+      if (bar % 2 === 0 || Math.random() < 0.3) {
+        let beat = Math.random() < 0.5 ? 0.5 : 1;
+        for (let k = 0; k < (night ? 2 : 3) && beat < 4; k++) {
+          epiano(c.tones[Math.floor(Math.random() * c.tones.length)] - (night ? 12 : 0), t + beat * BEAT, BEAT * 2.5, 0.035);
+          beat += [0.5, 1, 1, 1.5][Math.floor(Math.random() * 4)];
+        }
       }
       nextBar = t + len; bar++;
     }
