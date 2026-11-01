@@ -217,3 +217,51 @@ input { font: 600 .95rem 'Inter', sans-serif; padding: 10px 12px; border-radius:
   .stat { padding: 4px 8px; font-size: .85rem; }
   .power small { display: none; }
 }
+
+/* ---------- Personnages, partie du jour, défis ---------- */
+.chars { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; margin-bottom: 12px; }
+.char { display: grid; grid-template-columns: auto 1fr; grid-template-rows: auto auto; column-gap: 8px; text-align: left; padding: 8px 10px; background: rgba(255, 255, 255, .04); }
+.char span { grid-row: span 2; font-size: 1.6rem; }
+.char small { color: var(--muted); font-size: .72rem; font-weight: 600; line-height: 1.3; }
+.char.on { box-shadow: inset 0 0 0 2px var(--accent); background: color-mix(in srgb, var(--accent) 14%, transparent); }
+.daily { margin-top: 8px; }
+.challenge { margin: 0 0 10px; padding: 10px 12px; border-radius: 12px; background: color-mix(in srgb, var(--gold) 16%, transparent); border: 1px solid color-mix(in srgb, var(--gold) 50%, transparent); }
+.challenge button { margin-left: 6px; }
+.toggles { display: grid; gap: 6px; margin-top: 10px; font-size: .86rem; }
+.toggles small { color: var(--muted); }
+.toggles input { accent-color: var(--accent); }
+.charbadge { font-size: 1.2rem; }
+.stat.combo { color: var(--gold); animation: pulse .9s infinite; }
+.stat.clockb.urgent { background: var(--bad); color: #fff; animation: pulse .5s infinite; }
+.hist, .upstats { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; }
+.hist li { display: grid; grid-template-columns: 4.5em 1fr auto; gap: 2px 8px; align-items: center; padding: 6px 10px; border-radius: 8px; background: rgba(255, 255, 255, .04); font-size: .82rem; }
+.hist b { font-family: 'Space Grotesk', sans-serif; color: var(--gold); }
+.hist small { grid-column: 2 / -1; color: var(--muted); }
+.upstats li { display: grid; grid-template-columns: 1fr auto auto; gap: 8px; padding: 5px 10px; border-radius: 8px; background: rgba(255, 255, 255, .04); font-size: .84rem; }
+.upstats b { color: var(--accent2); font-family: 'JetBrains Mono', monospace; }
+.upstats small { color: var(--muted); }
+.goal { margin: 0; padding: 8px 12px; border-radius: 10px; color: var(--accent2); background: color-mix(in srgb, var(--accent2) 12%, transparent); font-weight: 700; }
+
+/* ---------- Grille : trous, indices, trésors, vague, mort ---------- */
+.c.void { visibility: hidden; pointer-events: none; }
+.c.hint { box-shadow: inset 0 0 0 2px color-mix(in srgb, var(--ok) 70%, transparent), inset 2px 2px 0 var(--closed-hi); background: color-mix(in srgb, var(--closed) 82%, var(--ok)); }
+.c.wave { animation: wave .55s var(--w) both; }
+.float { position: absolute; z-index: 5; transform: translate(-50%, 0); font: 800 .95rem 'Inter', sans-serif; color: var(--gold); text-shadow: 0 2px 6px rgba(0, 0, 0, .7); white-space: nowrap; animation: floatUp 1.1s ease-out forwards; }
+.confetti { position: absolute; top: -10px; width: 8px; height: 12px; border-radius: 2px; background: hsl(var(--h) 90% 60%); animation: confetti 1.5s ease-in forwards; }
+.board-wrap.deathcam .board { transform-origin: var(--ox) var(--oy); animation: deathcam 2.2s ease-out forwards; }
+
+/* ---------- Cartes : chemin, pacte, évolution, revente ---------- */
+.cards.two { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.card.path .ic { font-size: 2.6rem; }
+.card.pact { background: linear-gradient(160deg, #3a0008, #120003 60%, #3a0008); --rc: #ff2246; box-shadow: inset 0 0 0 2px #ff2246, 0 0 26px rgba(255, 34, 70, .45); }
+.card .evo { position: absolute; top: -10px; left: 50%; transform: translateX(-50%); white-space: nowrap; padding: 2px 8px; border-radius: 999px; font-size: .68rem; font-weight: 800; color: #fff; background: linear-gradient(90deg, var(--accent), var(--accent2)); }
+.own.evolved { box-shadow: inset 0 0 0 2px var(--accent2), 0 0 12px var(--accent2); }
+.own.combo { box-shadow: inset 0 0 0 2px var(--gold), 0 0 12px color-mix(in srgb, var(--gold) 60%, transparent); }
+.sellrow { display: flex; flex-wrap: wrap; justify-content: center; gap: 6px; }
+.sellrow .own { width: auto; height: auto; padding: 6px 8px; display: flex; gap: 4px; cursor: pointer; }
+.sellrow small { color: var(--gold); font-weight: 800; font-size: .72rem; }
+
+@keyframes wave { 40% { transform: scale(1.12); filter: brightness(1.8); } }
+@keyframes floatUp { to { transform: translate(-50%, -46px); opacity: 0; } }
+@keyframes confetti { to { transform: translate(var(--x), 110vh) rotate(720deg); opacity: .6; } }
+@keyframes deathcam { 0% { transform: scale(1); filter: none; } 30% { transform: scale(1.35); filter: saturate(1.6); } 100% { transform: scale(1.5); filter: grayscale(1) brightness(.6); } }

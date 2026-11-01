@@ -22,19 +22,28 @@
     </header>
     <div class="home-grid">
       <div class="panel start">
+        <p class="challenge" id="challenge" hidden></p>
+        <h3>Ton personnage</h3>
+        <div class="chars" id="chars"></div>
         <button class="primary big" id="newRun">▶ Nouvelle partie</button>
+        <button class="ghost big daily" id="dailyBtn">📅 Partie du jour</button>
         <div class="records" id="records"></div>
         <details class="howto"><summary>Comment jouer</summary>
           <p><b>Clic gauche</b> : ouvrir une case · <b>Clic droit</b> : drapeau · <b>Clic sur un chiffre</b> entouré de ses drapeaux : ouvre ses voisins. Sur téléphone : toucher pour ouvrir, appui long (ou mode 🚩) pour le drapeau.</p>
           <p>Chaque grille se termine <b>par déduction</b> : le premier clic est toujours sûr, et si jamais tu es obligé de deviner, le jeu ne te punit pas.</p>
           <p>Une mine coûte une vie. Entre les grilles : des pièces, une amélioration à choisir, parfois la boutique. Un <b>boss</b> tous les 5 niveaux. Va le plus loin possible !</p>
         </details>
+        <div class="toggles">
+          <label><input type="checkbox" id="learn"> 🎓 Mode apprentissage <small>(les cases prouvées sûres s’éclairent ; pas de classement)</small></label>
+          <label><input type="checkbox" id="musicOn"> 🎵 Musique</label>
+        </div>
       </div>
       <div class="panel">
         <div class="tabs" id="tabs">
           <button data-tab="board" class="on">🏆 Classement</button>
           <button data-tab="trophies">🎖 Succès</button>
           <button data-tab="themes">🎨 Thèmes</button>
+          <button data-tab="history">📜 Historique</button>
           <button data-tab="stats">📊 Stats</button>
         </div>
         <div id="tabBody"></div>
@@ -46,12 +55,15 @@
   <section id="game" class="screen" hidden>
     <header class="hud">
       <button class="ghost small" id="pauseBtn" aria-label="Menu">☰</button>
+      <span class="charbadge" id="hChar"></span>
       <div class="level" id="hLevel"></div>
       <div class="stats-row">
         <span class="stat lives" title="Vies" id="hLives"></span>
         <span class="stat coins" title="Pièces"><i>🪙</i><b id="hCoins">0</b></span>
         <span class="stat" title="Mines restantes"><i>💣</i><b id="hMines">0</b></span>
         <span class="stat" title="Temps"><i>⏱</i><b id="hTime">0:00</b></span>
+        <span class="stat combo" id="hCombo" hidden></span>
+        <span class="stat clockb" id="hClock" hidden></span>
       </div>
     </header>
     <p class="event" id="event" hidden></p>

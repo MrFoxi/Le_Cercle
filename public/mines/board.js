@@ -1,10 +1,11 @@
 // Grille de démineur : génération (premier clic sûr, grille résoluble sans deviner), ouverture, drapeaux, accords,
 // et un solveur de déduction qui vérifie qu'une grille se termine sans tirer à pile ou face.
-export function makeBoard(w, h) {
+// radius : portée des chiffres (1 = classique ; 2 pour le boss « L'Écho », qui compte les mines à 2 cases).
+export function makeBoard(w, h, radius = 1) {
   const n = w * h;
   const nb = Array.from({ length: n }, (_, i) => {
     const x = i % w, y = Math.floor(i / w), out = [];
-    for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) {
+    for (let dy = -radius; dy <= radius; dy++) for (let dx = -radius; dx <= radius; dx++) {
       if ((dx || dy) && x + dx >= 0 && x + dx < w && y + dy >= 0 && y + dy < h) out.push((y + dy) * w + x + dx);
     }
     return out;
@@ -13,6 +14,8 @@ export function makeBoard(w, h) {
     w, h, n, nb,
     mine: new Uint8Array(n), open: new Uint8Array(n), flag: new Uint8Array(n), count: new Int8Array(n),
     silent: new Uint8Array(n), // cases « muettes » : ouvertes sans afficher de chiffre (boss)
+    void: new Uint8Array(n), // trous de la grille (formes en losange, grilles trouées) : ni case ni mine
+    loot: new Uint8Array(n), // 1 = pièces cachées, 2 = coffre (objet)
     mines: 0, generated: false, exploded: [],
   };
 }
@@ -24,19 +27,25 @@ export const area = (b, i, r) => {
   }
   return out;
 };
+// Trous : une case vide compte comme ouverte et muette (aucune information, aucune mine).
+export function carve(b, cells) {
+  for (const i of cells) { b.void[i] = 1; b.open[i] = 1; b.silent[i] = 1; }
+}
+
 export const recount = b => { for (let i = 0; i < b.n; i++) b.count[i] = b.nb[i].reduce((s, j) => s + b.mine[j], 0); };
 
 // Place les mines après le premier clic : jamais autour de lui ni dans la zone sûre, et la grille doit se résoudre
 // par déduction depuis ce clic (jusqu'à `tries` essais ; sinon on garde le dernier tirage).
 export function generate(b, first, { mines, safe = [], silent = 0, rng = Math.random, tries = 300 }) {
   const banned = new Set([first, ...b.nb[first], ...safe]);
+  for (let i = 0; i < b.n; i++) if (b.void[i]) banned.add(i);
   const pool = [];
   for (let i = 0; i < b.n; i++) if (!banned.has(i)) pool.push(i);
   mines = Math.min(mines, pool.length);
   let ok = false;
   for (let t = 0; t < tries && !ok; t++) {
     b.mine.fill(0);
-    b.silent.fill(0);
+    for (let i = 0; i < b.n; i++) b.silent[i] = b.void[i];
     for (let k = pool.length - 1; k > 0; k--) { const j = Math.floor(rng() * (k + 1)); [pool[k], pool[j]] = [pool[j], pool[k]]; }
     for (let k = 0; k < mines; k++) b.mine[pool[k]] = 1;
     recount(b);
@@ -117,6 +126,7 @@ export function solvable(b, first, fromState = false) {
       if (!b.count[k] && !b.silent[k]) for (const j of b.nb[k]) if (known[j] === -1 && !b.mine[j]) st.push(j);
     }
   };
+  for (let i = 0; i < b.n; i++) if (b.void[i]) known[i] = 0;
   if (fromState) for (let i = 0; i < b.n; i++) { if (b.open[i]) known[i] = b.mine[i] ? 1 : 0; }
   else open(first);
   let total = 0;
@@ -153,13 +163,19 @@ export function solvable(b, first, fromState = false) {
         progress = true;
       }
     }
-    if (fromState) {
+    if (fromState === true) {
       for (let i = 0; i < b.n; i++) if (known[i] === 0 && !b.open[i]) return i; // case sûre trouvée
       if (!progress) return -1;
     }
-    if (!progress) break;
+    if (!progress || fromState === 'step') break; // 'step' : une seule passe (ce qui se déduit tout de suite)
   }
-  if (fromState) return -1;
+  if (fromState === true) return -1;
+  // fromState = 'all' : toutes les cases que la déduction prouve, sûres ou minées (mode apprentissage)
+  if (fromState === 'all' || fromState === 'step') {
+    const safe = [], mines = [];
+    for (let i = 0; i < b.n; i++) if (!b.open[i]) { if (known[i] === 0) safe.push(i); else if (known[i] === 1) mines.push(i); }
+    return { safe, mines };
+  }
   for (let i = 0; i < b.n; i++) if (!b.mine[i] && known[i] !== 0) return false;
   return true;
 }

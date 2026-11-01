@@ -2,7 +2,7 @@
 // partie complète jouée par déduction, améliorations, pouvoirs, boutique, événements, boss.
 import assert from 'node:assert';
 import { makeBoard, generate, reveal, chordTargets, solvable } from './public/mines/board.js';
-import { newRun, nextLevel, open, chord, toggleFlag, armPower, usePower, pickUpgrade, skipUpgrade, buy, leaveShop, levelSpec, UPGRADES, BOSSES, EVENTS, powerCount } from './public/mines/run.js';
+import { newRun, nextLevel, open, chord, toggleFlag, armPower, usePower, pickUpgrade, skipUpgrade, buy, sell, leaveShop, levelSpec, choosePath, acceptOffer, seeded, tickClock, combosOf, UPGRADES, BOSSES, EVENTS, CHARACTERS, powerCount } from './public/mines/run.js';
 
 let seed = 3;
 const rng = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
@@ -54,14 +54,17 @@ function playLevel(run, stats) {
     nextLevel(run);
     while (run.phase !== 'over' && run.level < 16) {
       if (run.phase === 'play') playLevel(run, stats);
+      if (run.offer) acceptOffer(run, 'coins');
       if (run.phase === 'reward') pickUpgrade(run, run.choices[0]);
       if (run.phase === 'shop') { buy(run, 'life'); leaveShop(run); }
+      if (run.phase === 'path') choosePath(run, Math.floor(rng() * run.paths.length));
     }
     stats.levels += run.cleared;
     stats.bosses += run.bosses;
   }
   console.log(`  robot par déduction : ${stats.levels} grilles finies sur 4 parties, ${stats.bosses} boss battus, ${stats.guesses} coups devinés`);
   assert(stats.levels >= 40 && stats.bosses >= 6, 'le robot doit franchir des niveaux et des boss');
+  assert(stats.guesses <= 4, `la déduction doit suffire (${stats.guesses} coups devinés)`);
 }
 
 // Difficulté croissante, boss tous les 5 niveaux
@@ -123,7 +126,10 @@ function playLevel(run, stats) {
     assert(run.coins > 0 && run.choices.length === 3);
     const id = run.choices[0];
     pickUpgrade(run, id);
-    assert.strictEqual(run.upgrades[id], 1);
+    if (id !== 'pact') assert.strictEqual(run.upgrades[id], 1);
+    assert.strictEqual(run.phase, 'path', 'choix du chemin après la récompense');
+    assert.strictEqual(run.paths.length, 3);
+    choosePath(run, 0);
     assert.strictEqual(run.level, 2);
     playLevel(run, { guesses: 0 });
     if (run.phase === 'reward') {
@@ -134,8 +140,69 @@ function playLevel(run, stats) {
       assert(buy(run, 'life') && run.lives === lives + 1);
       assert(buy(run, 'item:shield') && run.items.shield === 1);
       leaveShop(run);
+      choosePath(run, 0);
       assert.strictEqual(run.level, 3);
     }
   }
+}
+// Nouveautés : graine, personnages, boss L'Écho et La Pendule, formes, trésors, pacte, combinaison, évolution, revente, inconnu
+{
+  // Même graine, même partie (premier clic identique)
+  const play = () => { const r = newRun(seeded(1234)); nextLevel(r); open(r, 40); return Array.from(r.lv.b.mine).join(''); };
+  assert.strictEqual(play(), play(), 'partie du jour reproductible');
+  // Personnages
+  const sap = newRun(rng, {}, { char: 'sapeur' });
+  nextLevel(sap);
+  assert(sap.lives === 2 && powerCount(sap, 'defuse') === 1);
+  assert(CHARACTERS.banquier.coin === 1.5);
+  // L'Écho (niveau 15) : chiffres sur 5 × 5, grille quand même résoluble
+  const echo = levelSpec(15);
+  assert.strictEqual(echo.boss.id, 'echo');
+  const re = newRun(rng);
+  re.level = 14;
+  nextLevel(re);
+  assert.strictEqual(re.lv.b.nb[re.lv.b.w * 5 + 5].length, 24, 'voisinage 5 × 5');
+  open(re, re.lv.b.w * 6 + 8);
+  assert(re.lv.b.fair, 'grille de L’Écho résoluble');
+  // La Pendule (niveau 25) : le sablier vidé coûte une vie
+  const rp = newRun(rng);
+  rp.level = 24;
+  nextLevel(rp);
+  assert.strictEqual(rp.lv.spec.boss.id, 'pendule');
+  open(rp, 60);
+  rp.lv.clockAt -= 30000;
+  const lives = rp.lives;
+  assert(tickClock(rp).boom && rp.lives === lives - 1, 'la Pendule prend une vie');
+  // Grille en losange : des cases vides, et des mines seulement dans la forme
+  let shaped = null;
+  for (let k = 0; k < 40 && !shaped; k++) { const r = newRun(rng); r.level = 5; nextLevel(r); if (r.lv.spec.shape) shaped = r; }
+  assert(shaped, 'des formes apparaissent');
+  open(shaped, [...Array(shaped.lv.b.n).keys()].find(i => !shaped.lv.b.void[i] && shaped.lv.b.nb[i].every(j => !shaped.lv.b.void[j])));
+  for (let i = 0; i < shaped.lv.b.n; i++) if (shaped.lv.b.void[i]) assert(!shaped.lv.b.mine[i]);
+  // Trésors : chasse au trésor → pièces trouvées en ouvrant les cases
+  const rt = newRun(rng);
+  rt.level = 3;
+  nextLevel(rt, 'treasure');
+  open(rt, 50);
+  assert(rt.lv.b.loot.some(Boolean) || rt.lv.loot > 0, 'trésors cachés');
+  // Pacte, combinaison, évolution, revente
+  const r = newRun(rng, { unlocked: ['boss1', 'level10'] });
+  nextLevel(r);
+  r.phase = 'reward'; r.choices = ['pact']; r.picksLeft = 1; r.afterShop = false;
+  const got = pickUpgrade(r, 'pact');
+  assert(got.pact && r.lives === 2 && Object.keys(r.upgrades).some(id => UPGRADES.find(u => u.id === id).rarity === 'legendary'));
+  r.upgrades.p_scan = 1; r.upgrades.p_radar = 1;
+  assert(combosOf(r).some(c => c.id === 'sonar'), 'combinaison Sonar');
+  r.phase = 'reward'; r.choices = ['vision']; r.upgrades.vision = 2; r.picksLeft = 1;
+  assert(pickUpgrade(r, 'vision').evolved, 'évolution Vision totale');
+  r.phase = 'shop'; r.shop = []; const c0 = r.coins;
+  assert(sell(r, 'p_scan') && r.coins > c0 && !r.upgrades.p_scan);
+  // L'inconnu : une offre avant la grille, qui bloque le jeu tant qu'on n'a pas répondu
+  const rs = newRun(rng);
+  rs.level = 2;
+  nextLevel(rs, 'stranger');
+  assert(rs.offer && open(rs, 40) === null);
+  acceptOffer(rs, 'coins');
+  assert(rs.coins > 0 && !rs.offer && open(rs, 40));
 }
 console.log('Tests du démineur : OK');

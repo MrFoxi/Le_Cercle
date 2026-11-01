@@ -10,9 +10,12 @@ Un seul serveur pour plusieurs projets : la page d'accueil (`/`) mène à chaque
   - jouable sur téléphone et tablette : joystick au pouce gauche, visée au pouce droit, boutons boost, monter, descendre et menu ⋯ ; graphismes allégés (`?mobile` force ce mode sur ordinateur).
   Les positions, pings et émotes passent par un canal rapide à part. `SOLAR_FAST_EVENTS=1 npm start` rapproche les événements pour les tester ; `?depart=saturne` part près d’un astre.
 - `/mines/` : **Démineur Rogue**, le démineur en roguelike, en solo :
-  - grilles qui grandissent et se densifient ; premier clic toujours sûr ; chaque grille est vérifiée par un solveur pour se finir par déduction (et si l’on est forcé de deviner, la mine est déplacée sans pénalité) ;
-  - vies, pièces, 18 améliorations en 4 raretés (dont 3 à débloquer), 6 pouvoirs (scanner, radar, détecteur, désamorçage, révélation, protection), boutique, 7 événements (grille maudite, zone sécurisée, marchand, double récompense, brouillard, chrono, grille piégée) ;
-  - un boss tous les 5 niveaux (Le Colosse, L’Ombre, Le Démineur fou) ; écran de fin, records, succès, thèmes à débloquer, statistiques, classement mondial (`/api/mines`).
+  - grilles qui grandissent et se densifient, parfois en losange ou trouées ; premier clic toujours sûr ; chaque grille est vérifiée par un solveur pour se finir par déduction (et si l’on est forcé de deviner, la mine est déplacée sans pénalité) ;
+  - 4 personnages (Démineur, Sapeur, Banquier, Voyant), vies, pièces, trésors et coffres cachés, combo d’ouvertures rapides ;
+  - 19 améliorations en 4 raretés (dont le Pacte maudit), 2 évolutions, 4 combinaisons cachées, 6 pouvoirs, boutique avec revente, choix du chemin entre les niveaux, 10 événements (dont l’Inconnu et la grille d’élite) ;
+  - 5 boss en boucle tous les 5 niveaux (Colosse, Ombre, Écho, Démineur fou, Pendule) ;
+  - partie du jour (même graine pour tous, classement du jour), défi à un ami par lien, mode apprentissage, musique qui s’intensifie, raccourcis clavier ;
+  - records, succès, thèmes, collection, historique, statistiques par amélioration, objectif suivant, classement mondial (`/api/mines`).
 - `/pinball/` : **3D Pinball**, flipper d’arcade en 3D (Three.js), en solo, sur 5 tables (chacune se débloque avec 100 000 points sur la précédente) :
   - Arcade classique (A-R-C, cibles tombantes, porte et trou de capture), Espace (planètes, vaisseau mobile, portails, trou noir qui aspire), Casino (roulette, machine à sous, cartes, jetons), Jungle (totems T-I-K-I, serpents mobiles, temple, piège, passage secret, trésor caché), Volcan (lave qui repousse, rochers mobiles, jets de vapeur, bumpers surpuissants) ;
   - sur chaque table : flippers, slingshots, 3 bumpers, 2 rampes en relief, spinner, couloirs 1-2-3, multiball à 3 billes, super jackpot, 7 à 9 missions affichées en jeu ;
