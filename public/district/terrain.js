@@ -177,11 +177,16 @@ export function buildTerrain(scene, low) {
   }
   // Pêcheur assis au bord de l'eau
   const fisher = makePerson(seeded(77));
-  fisher.root.position.set(-6.5, GY, CANAL.z0 - 0.25); fisher.root.rotation.y = Math.PI;
+  fisher.root.position.set(-6.5, GY, CANAL.z0 - 0.25); fisher.root.rotation.y = 0; // face au canal (vers +z)
   fisher.legL.rotation.x = fisher.legR.rotation.x = -1.45; fisher.body.position.y = -0.24;
   fisher.armR.rotation.x = fisher.armL.rotation.x = -1.1;
-  const rod = new THREE.Mesh(new THREE.CylinderGeometry(0.006, 0.01, 1.4, 4), std('#3a2a1a'));
-  rod.position.set(-6.5, 0.55, CANAL.z0 + 0.35); rod.rotation.x = -1.05; scene.add(rod);
+  // canne tenue dans les mains, inclinée au-dessus de l'eau, et son fil
+  const butt = new THREE.Vector3(-6.5, GY + 0.2, CANAL.z0 - 0.05), dir = new THREE.Vector3(0, 0.5, 0.866);
+  const rod = new THREE.Mesh(new THREE.CylinderGeometry(0.006, 0.012, 1.4, 4), std('#3a2a1a'));
+  rod.position.copy(butt).addScaledVector(dir, 0.7); rod.rotation.x = Math.atan2(dir.z, dir.y); scene.add(rod);
+  const tip = butt.clone().addScaledVector(dir, 1.4);
+  scene.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints([tip, new THREE.Vector3(tip.x, CANAL.water, tip.z)]), new THREE.LineBasicMaterial({ color: '#d8d8d8', transparent: true, opacity: 0.6 })));
+  const float = new THREE.Mesh(new THREE.SphereGeometry(0.03, 8, 6), std('#e8432e')); float.position.set(tip.x, CANAL.water + 0.01, tip.z); scene.add(float); // flotteur
   scene.add(fisher.root);
   // Bateau amarré (yakatabune) avec fenêtres éclairées
   const boat = new THREE.Group();
