@@ -224,6 +224,16 @@ function settings() {
     <div class="row">Qualité ${sel('quality', { auto: 'Automatique', low: 'Économie (téléphone)' })}</div>
     <h3>Quartiers</h3>
     <div class="districts">${DISTRICTS.map(([n, on]) => `<div class="${on ? 'on' : ''}">${n}<small>${on ? 'Ton quartier' : 'Bientôt'}</small></div>`).join('')}</div>
+    <h3>Comment jouer</h3>
+    <ul class="rules">
+      <li>🍜 Tes commerces gagnent des ¥ <b>tout seuls</b>, même quand le jeu est fermé.</li>
+      <li>⬆️ Touche un bâtiment pour l’<b>améliorer</b> : il rapporte plus et change d’apparence.</li>
+      <li>🏗 Plus tu gagnes, plus de <b>bâtiments</b> se débloquent. Achète des parcelles 売地 pour agrandir le quartier.</li>
+      <li>🏠 Chaque <b>habitant</b> (logements) et chaque <b>décoration</b> augmentent les revenus de tout le quartier.</li>
+      <li>📜 Les <b>objectifs</b> donnent des récompenses et des décorations rares. Rien n’est obligatoire.</li>
+      <li>✨ Des <b>événements</b> arrivent parfois : festival, chat doré, marchand… Touche-les pour un bonus.</li>
+    </ul>
+    <div class="actions"><button data-act="tuto">🎓 Revoir le tutoriel</button></div>
     <h3>Partie</h3>
     <div class="actions"><button class="ghost" data-act="reset">Recommencer de zéro</button></div>
     <p class="hint">Raccourcis : B construire, D décorer, R tourner, H contempler, Échap pour annuler. Ta partie est sauvegardée sur cet appareil.</p>`;
@@ -260,6 +270,7 @@ function act(a, data) {
   if (a === 'drot') { state.decor[i].r = ((state.decor[i].r || 0) + Math.PI / 4) % (Math.PI * 2); world.syncDecor(state); sound('click'); }
   if (a === 'dmove') { const d = state.decor[i]; close(); decorRot = d.r || 0; setMode('decor', { decorId: d.id, movingDecor: i }); }
   if (a === 'dremove' && S.removeDecor(state, i)) { world.syncDecor(state); sound('place'); close(); afterChange(); }
+  if (a === 'tuto') { close(); startTutorial(); return; }
   if (a === 'reset') {
     if (data.sure) { localStorage.removeItem(S.SAVE_KEY); removeEventListener('pagehide', save); location.reload(); return; }
     const b = panelEl.querySelector('[data-act=reset]'); b.dataset.sure = '1'; b.textContent = 'Sûr ? Tout sera effacé'; b.classList.add('primary');
@@ -425,12 +436,50 @@ if (away) {
 }
 enter.disabled = false;
 enter.textContent = fresh ? 'Ouvrir le restaurant' : 'Revenir dans le quartier';
+// ---------- Tutoriel : on fait les deux premiers gestes, puis on découvre le reste ----------
+const TOUCH = matchMedia('(pointer: coarse)').matches;
+const ramenAt = () => state.plots.findIndex(p => p?.type === 'ramen');
+const TUTO = [
+  { text: '<b>Bienvenue à Little District</b> 🏮<br>Ici, pas de chrono ni de pression : ton quartier gagne de l’argent <b>tout seul</b>, même quand tu fermes le jeu. Ton but : le faire grandir et le rendre beau, à ton rythme.' },
+  { text: TOUCH ? '<b>Regarder la maquette</b><br>Glisse un doigt pour tourner autour, pince pour zoomer, glisse à deux doigts pour te déplacer.' : '<b>Regarder la maquette</b><br>Clic gauche et glisser pour tourner autour, molette pour zoomer, clic droit et glisser pour te déplacer.' },
+  { text: '<b>Ton premier commerce</b><br>Touche ton <b>restaurant de ramen</b> 🍜 (il clignote).', wait: () => panel?.kind === 'building' && state.plots[panel.arg]?.type === 'ramen', enter: () => { const i = ramenAt(); if (i >= 0) { world.focus(PLOTS[i].x, PLOTS[i].z + PLOTS[i].face, 14); sel = i; refreshRings(); } } },
+  { text: '<b>Améliore-le</b><br>Appuie sur <b>Améliorer</b> : il rapportera plus, et tu le verras changer (lanternes, étage, terrasse…).', wait: () => (state.plots[ramenAt()]?.level || 0) >= 2, glow: '[data-act=upgrade]', enter: () => { if (state.money < S.upgradeCost('ramen', 1)) state.money = S.upgradeCost('ramen', 1); } },
+  { text: '<b>Gagner et construire</b><br>Tes gains s’affichent en haut (¥ et ¥/min). Plus tu gagnes, plus de bâtiments se débloquent dans <b>Construire</b> : restaurants, boutiques, loisirs, logements.', glow: '#buildBtn', enter: () => close() },
+  { text: '<b>Habitants et décoration</b><br>Les logements 🏠 attirent des habitants : chacun augmente les revenus du quartier. Les décorations 🌸 aussi, et elles rendent les rues plus belles.', glow: '#decoBtn' },
+  { text: '<b>Agrandir le quartier</b><br>Les vieilles maisons au panneau <b>売地</b> sont à vendre : achète-les pour avoir de nouvelles parcelles.' },
+  { text: '<b>Objectifs</b> 📜<br>Des idées de choses à faire, avec des récompenses et des décorations rares. Aucun n’est obligatoire.', glow: '#goalsBtn' },
+  { text: '<b>Petites surprises</b> ✨<br>De temps en temps, il se passe quelque chose : festival, chat doré, marchand de patates douces… Touche-les pour un bonus. Les chats, eux, adorent les caresses.' },
+  { text: '<b>Prends ton temps</b> 📷<br>Quand tu reviens, tu récupères ce que ton quartier a gagné pendant ton absence. <b>Contempler</b> lance un petit film du quartier. Bonne balade !', glow: '#photoBtn', last: true },
+];
+let tuto = -1;
+const coach = $('coach');
+function startTutorial() { tuto = 0; showStep(); }
+function endTutorial() { tuto = -1; coach.hidden = true; document.querySelectorAll('.glow').forEach(e => e.classList.remove('glow')); state.tuto = true; save(); }
+function showStep() {
+  const s = TUTO[tuto];
+  document.querySelectorAll('.glow').forEach(e => e.classList.remove('glow'));
+  s.enter?.();
+  coach.hidden = false;
+  coach.innerHTML = `<p>${s.text}</p><div class="row"><small>${tuto + 1} / ${TUTO.length}</small><span>${s.last ? '' : '<button class="ghost" id="tutoSkip">Passer</button>'}${s.wait ? '' : `<button class="primary" id="tutoNext">${s.last ? 'C’est parti !' : 'Suivant'}</button>`}</span></div>`;
+  coach.style.animation = 'none'; void coach.offsetWidth; coach.style.animation = '';
+  $('tutoSkip')?.addEventListener('click', endTutorial);
+  $('tutoNext')?.addEventListener('click', nextStep);
+}
+function nextStep() { sound('click'); if (++tuto >= TUTO.length) endTutorial(); else showStep(); }
+// À chaque image : étape réussie ? élément à faire briller ?
+function tutorialTick() {
+  if (tuto < 0) return;
+  const s = TUTO[tuto];
+  if (s.wait?.()) { sound('goal'); nextStep(); return; }
+  if (s.glow) document.querySelector(s.glow)?.classList.add('glow');
+}
+
 enter.onclick = () => {
   startAudio();
   intro.classList.add('out');
   setTimeout(() => intro.remove(), 900);
   world.focus(start.x, start.z + 1.2, 14);
-  if (fresh) setTimeout(() => toast('Bienvenue ! Touche le restaurant de ramen pour l’améliorer.'), 1200);
+  if (fresh) setTimeout(() => startTutorial(), 1600);
   save();
 };
 if (/[?&]debug/.test(location.search)) window.__district = { state, world, S, setHour: h => (hour = h), setWeather: w => (state.settings.weather = w), cinema, startEvent: id => { if (event) endEvent(); const e = EVENTS[id]; event = { id, t: e.dur }; state.boost = e.boost || 1; e.start?.(); if (id === 'festival') world.setFestival(true); } };
@@ -463,7 +512,8 @@ function frame(now) {
     const g = world.groundAt(innerWidth / 2, innerHeight / 2);
     if (g) world.setGhost(decorId, snap(g.x), snap(g.z), decorRot, S.canPlace(state, snap(g.x), snap(g.z), movingDecor));
   }
-  if ((idle += dt) > 120 && !cinema.active && mode === 'view' && !panel && !$('intro')) startCinema(); // laissé tranquille : le quartier se met en scène
+  if ((idle += dt) > 120 && !cinema.active && mode === 'view' && !panel && !$('intro') && tuto < 0) startCinema(); // laissé tranquille : le quartier se met en scène
+  tutorialTick();
   if ((hudT -= dt) < 0) { hudT = 0.25; hud(); render(true); checkGoals(); }
   if ((saveT += dt) > 10) { saveT = 0; save(); }
   requestAnimationFrame(frame);
