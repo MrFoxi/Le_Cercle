@@ -131,11 +131,11 @@ export function buildTerrain(scene, low) {
   flat(BASE.x * 2, HILL.z0 - 13.3, paveM, 0, GY, (13.3 + HILL.z0) / 2);
   flat(BASE.x * 2, -13.3 - CANAL.z1, paveM, 0, GY, (-13.3 + CANAL.z1) / 2);
   flat(BASE.x * 2, CANAL.z0 - BASE.z0, grassMat([8, 1]), 0, GY, (BASE.z0 + CANAL.z0) / 2);
-  flat(BASE.x * 2, BASE.z1 - HILL.z0, grassMat([8, 2]), 0, HILL.y + 0.01, (HILL.z0 + BASE.z1) / 2);
+  flat(BASE.x * 2, BASE.z1 - HILL.z0, grassMat([8, 2]), 0, HILL.y + 0.03, (HILL.z0 + BASE.z1) / 2);
   const gravel = textured('gravel', TEX.dirt());
-  flat(1.5, 3.4, gravel, 0, HILL.y + 0.02, HILL.z0 + 1.7);
-  flat(BASE.x * 2 - 2, 1, gravel, 0, HILL.y + 0.02, 16.5);
-  flat(BASE.x * 2, 0.9, gravel, 0, GY + 0.005, -20.2);
+  flat(1.5, 3.4, gravel, 0, HILL.y + 0.06, HILL.z0 + 1.7);
+  flat(BASE.x * 2 - 2, 1, gravel, 0, HILL.y + 0.055, 16.5);
+  flat(BASE.x * 2, 0.9, gravel, 0, GY + 0.025, -20.2);
   const groundMats = [paveM];
 
   // Escalier vers la colline
@@ -234,5 +234,5 @@ export function buildTerrain(scene, low) {
 export function groundY(x, z) {
   if (z > HILL.z0) return HILL.y + 0.01;
   if (z < CANAL.z1 && z > CANAL.z0) return Math.abs(x) < 0.65 ? null : CANAL.water + 0.01;
-  return Math.abs(z) < 1.4 ? 0.012 : GY + 0.01;
+  return Math.abs(z) < 1.4 ? 0.022 : GY + 0.01;
 }

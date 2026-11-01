@@ -17,7 +17,7 @@ import { createLife } from './life.js';
 import { GTAOPass } from 'three/addons/postprocessing/GTAOPass.js';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 
-const GROUND_Y = 0.06;
+const GROUND_Y = 0.06, ROAD_Y = 0.01;
 const smooth = (a, b, t) => { t = Math.min(1, Math.max(0, (t - a) / (b - a))); return t * t * (3 - 2 * t); };
 const lerp = (a, b, t) => a + (b - a) * t;
 
@@ -102,17 +102,17 @@ export function createWorld(canvas, { low }) {
   const groundMats = [];
   const groundMat = (key, tex, rep) => { const t = tex.clone(); t.needsUpdate = true; t.repeat.set(...rep); const m = new THREE.MeshStandardMaterial({ map: t, roughness: 0.9 }); m.userData.base = new THREE.Color('#ffffff'); groundMats.push(m); return m; };
   const flat = (w, d, m, x, y, z) => { const o = new THREE.Mesh(new THREE.PlaneGeometry(w, d), m); o.rotation.x = -Math.PI / 2; o.position.set(x, y, z); o.receiveShadow = true; scene.add(o); return o; };
-  flat(26.6, 2.8, groundMat('road', TEX.asphalt(), [7, 0.8]), 0, 0, 0);
+  flat(26.6, 2.8, groundMat('road', TEX.asphalt(), [7, 0.8]), 0, ROAD_Y, 0); // au-dessus du socle, jamais à la même hauteur
   for (const s of [-1, 1]) {
-    flat(26.6, 1.3, groundMat('walk', TEX.slab(), [26, 1.3]), 0, GROUND_Y, s * 2.05);
+    flat(26.6, 1.26, groundMat('walk', TEX.slab(), [26, 1.26]), 0, GROUND_Y, s * 2.07); // commence après la bordure
     flat(26.6, 10.6, groundMat('pave', TEX.pave(), [9, 3.6]), 0, GROUND_Y, s * 8);
-    const curb = box(scene, 26.6, GROUND_Y, 0.08, std('#8f8b84'), 0, 0, s * 1.4); curb.receiveShadow = true;
+    const curb = box(scene, 26.6, GROUND_Y + 0.02, 0.1, std('#8f8b84'), 0, 0, s * 1.39); curb.receiveShadow = true; // un peu plus haute que le trottoir : pas de surfaces confondues
   }
   // Marquages : ligne médiane, passages piétons
   const paint = std('#bdb8ac', { roughness: 0.8 }); // pas trop blanc : sinon ça brille comme un néon au soleil
-  for (let x = -12; x <= 12; x += 1.6) if (Math.abs(x) > 1.6 && Math.abs(Math.abs(x) - 9.3) > 1) box(scene, 0.8, 0.005, 0.07, paint, x, 0, 0);
-  for (const cx of [0, -9.3, 9.3]) for (let z = -1.1; z <= 1.1; z += 0.44) box(scene, 1.3, 0.005, 0.22, paint, cx, 0, z);
-  for (const [x, z] of [[-3, 0.5], [6, -0.6], [-8, -0.4]]) { const m = new THREE.Mesh(new THREE.CylinderGeometry(0.28, 0.28, 0.01, 18), std('#3a3a3c', { metalness: 0.6, roughness: 0.5 })); m.position.set(x, 0.006, z); scene.add(m); }
+  for (let x = -12; x <= 12; x += 1.6) if (Math.abs(x) > 1.6 && Math.abs(Math.abs(x) - 9.3) > 1) box(scene, 0.8, 0.006, 0.07, paint, x, ROAD_Y, 0);
+  for (const cx of [0, -9.3, 9.3]) for (let z = -1.1; z <= 1.1; z += 0.44) box(scene, 1.3, 0.006, 0.22, paint, cx, ROAD_Y, z);
+  for (const [x, z] of [[-3, 0.5], [6, -0.6], [-8, -0.4]]) { const m = new THREE.Mesh(new THREE.CylinderGeometry(0.28, 0.28, 0.01, 18), std('#3a3a3c', { metalness: 0.6, roughness: 0.5 })); m.position.set(x, ROAD_Y + 0.006, z); scene.add(m); }
   // Relief : colline du sanctuaire, canal, rive d'en face ; socle en bois ; table sombre et brillante dessous
   const terrain = buildTerrain(scene, low);
   groundMats.push(...terrain.groundMats);
@@ -142,7 +142,7 @@ export function createWorld(canvas, { low }) {
     const m = new THREE.Mesh(new THREE.CircleGeometry(1, 20), puddleMat);
     m.rotation.x = -Math.PI / 2;
     const onRoad = i < 9;
-    m.position.set(prng() * 24 - 12, onRoad ? 0.008 : GROUND_Y + 0.006, onRoad ? prng() * 2.2 - 1.1 : (prng() < 0.5 ? -1 : 1) * (7.4 + prng() * 0.3 - 0.15));
+    m.position.set(prng() * 24 - 12, onRoad ? ROAD_Y + 0.012 : GROUND_Y + 0.012, onRoad ? prng() * 2.2 - 1.1 : (prng() < 0.5 ? -1 : 1) * (7.4 + prng() * 0.3 - 0.15));
     m.scale.set(0.4 + prng() * 0.7, 0.25 + prng() * 0.35, 1); m.rotation.z = prng() * 3;
     scene.add(m);
   }
