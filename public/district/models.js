@@ -120,13 +120,13 @@ export const TEX = {
       x.fillText(text, w / 2, h / 2 + 4);
     }
   }),
-  noren: (text, color) => canvasTex(`noren${text}${color}`, 256, 128, (x, w, h) => {
+  noren: (text, color) => canvasTex(`noren2${text}${color}`, 256, 64, (x, w, h) => {
     x.fillStyle = color; x.fillRect(0, 0, w, h);
     const chars = [...text];
-    x.fillStyle = '#f7efe0'; x.textAlign = 'center'; x.textBaseline = 'middle'; x.font = `800 64px ${KANJI}`;
-    chars.forEach((c, i) => x.fillText(c, (w / chars.length) * (i + 0.5), h / 2));
+    x.fillStyle = '#f7efe0'; x.textAlign = 'center'; x.textBaseline = 'middle'; x.font = `800 44px ${KANJI}`;
+    chars.forEach((c, i) => x.fillText(c, (w / chars.length) * (i + 0.5), h / 2 + 2));
     x.fillStyle = 'rgba(0,0,0,.35)';
-    for (let i = 1; i < 3; i++) x.fillRect((w / 3) * i - 2, 30, 4, h);
+    for (let i = 1; i < 3; i++) x.fillRect((w / 3) * i - 2, 14, 4, h);
   }),
   lantern: (color, char) => canvasTex(`lantern${color}${char}`, 128, 128, (x, w, h) => {
     x.fillStyle = color; x.fillRect(0, 0, w, h);
@@ -300,9 +300,9 @@ export function gableRoof(p, w, d, y, color, pitch = 0.5) {
 }
 // Auvent de tuiles au-dessus de l'entrée (hisashi)
 function hisashi(p, w, y, z, color) {
-  const s = box(p, w, 0.06, 0.7, roofMat(color), 0, 0, 0);
-  s.position.set(0, y + 0.12, z + 0.3); s.rotation.x = 0.38;
-  box(p, w + 0.04, 0.07, 0.07, std('#1c1d22'), 0, y - 0.03, z + 0.62);
+  const s = box(p, w, 0.06, 0.5, roofMat(color), 0, 0, 0); // auvent peu profond : on voit encore le comptoir d’en haut
+  s.position.set(0, y + 0.16, z + 0.2); s.rotation.x = 0.42;
+  box(p, w + 0.04, 0.07, 0.07, std('#1c1d22'), 0, y + 0.04, z + 0.43);
 }
 function awning(p, w, y, z, a, b) {
   const s = box(p, w, 0.03, 0.8, textured(`awn${a}${b}`, TEX.stripes(a, b)), 0, 0, 0);
@@ -328,7 +328,7 @@ function sign(p, text, bg, fg, w, h, x, y, z, vertical = false, night = 1.6) {
 }
 function noren(p, text, color, w, y, z) {
   const m = mat(`noren${text}${color}`, () => new THREE.MeshStandardMaterial({ map: TEX.noren(text, color), roughness: 0.95, side: THREE.DoubleSide }));
-  plane(p, w, 0.42, m, 0, y - 0.21, z);
+  plane(p, w, 0.26, m, 0, y - 0.13, z); // court : vu d'en haut, il ne doit pas cacher le cuisinier
 }
 function windowRow(p, w, y, z, n, schedKey = 'A', shoji = false) {
   const m = glowMat(`win${shoji}${schedKey}`, '#ffffff', shoji ? TEX.shoji() : TEX.window(), 0.02, 0.75, schedKey);

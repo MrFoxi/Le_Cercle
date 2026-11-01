@@ -234,7 +234,7 @@ export function createPeople({ scene, plots, low, emitCoin, onFlash }) {
     else if (a === 'bow') { const k = Math.max(0, Math.sin(p.ph * 0.5)); m.body.rotation.x = k * 0.45; m.armL.rotation.x = m.armR.rotation.x = -0.4 * k; }
     else if (a === 'photo') { m.armR.rotation.x = m.armL.rotation.x = -1.9; m.head.rotation.x = -0.1; }
     else if (a === 'cook') { m.armR.rotation.x = -0.9 + Math.sin(p.ph * 4) * 0.25; m.armL.rotation.x = -0.9 + Math.cos(p.ph * 4) * 0.25; m.head.rotation.x = 0.25; }
-    const umb = p.umbrella && wet && !p.seat;
+    const umb = !!(p.umbrella && wet && !p.seat); // !! : visible = undefined afficherait quand même le parapluie
     m.umbrella.visible = umb;
     if (umb) m.armR.rotation.x = -0.75, m.armR.rotation.z = 0.15;
   }
