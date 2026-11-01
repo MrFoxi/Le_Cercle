@@ -91,7 +91,7 @@ export const levelIncome = (type, level) => BUILDINGS[type].base * level * 1.12 
 export const upgradeCost = (type, level) => Math.round(Math.max(50, BUILDINGS[type].cost * 0.5) * 2.2 ** (level - 1));
 export const capacity = s => s.plots.reduce((n, p) => n + (p && BUILDINGS[p.type].home ? BUILDINGS[p.type].home * p.level : 0), 0);
 export const charm = s => Math.min(0.3, s.decor.reduce((n, d) => n + (DECOR[d.id]?.rare ? 0.03 : 0.01), 0));
-export const multiplier = s => (1 + 0.01 * s.residents) * (1 + charm(s));
+export const multiplier = s => (1 + 0.01 * s.residents) * (1 + charm(s)) * (s.boost || 1); // boost : événement en cours
 export const incomeOf = (s, i) => (s.plots[i] ? levelIncome(s.plots[i].type, s.plots[i].level) * multiplier(s) : 0);
 export const totalIncome = s => s.plots.reduce((n, p, i) => n + incomeOf(s, i), 0);
 export const clientRate = (s, i) => (s.plots[i] && BUILDINGS[s.plots[i].type].ticket ? incomeOf(s, i) / BUILDINGS[s.plots[i].type].ticket : 0);
@@ -242,6 +242,7 @@ export function load(text, now = Date.now()) {
     const s = { ...newState(now), ...d, settings: { ...newState().settings, ...d.settings } };
     s.plots = s.plots.map(p => (p && BUILDINGS[p.type] ? { type: p.type, level: Math.min(MAX_LEVEL, Math.max(1, p.level | 0)), served: +p.served || 0 } : null));
     s.decor = (s.decor || []).filter(d => DECOR[d.id] && Number.isFinite(d.x) && Number.isFinite(d.z));
+    s.boost = 1;
     return s;
   } catch { return null; }
 }

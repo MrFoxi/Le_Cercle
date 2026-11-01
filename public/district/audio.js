@@ -84,6 +84,7 @@ function sprinkle() {
   const t = ctx.currentTime + Math.random() * 0.3;
   if (Math.random() < 0.18 * state.kitchen) { for (let i = 0; i < 1 + Math.random() * 3; i++) tone('sine', 2200 + Math.random() * 1800, t + i * 0.07, 0.25, 0.012); }
   if (Math.random() < 0.025 * state.crowd) { tone('sine', 1318, t, 0.9, 0.018); tone('sine', 1046, t + 0.18, 1.2, 0.018); }
+  if (state.night < 0.3 && state.rain < 0.2 && Math.random() < 0.05) { const n = 2 + Math.floor(Math.random() * 3); for (let i = 0; i < n; i++) { const o = tone('sine', 3000, t + i * 0.11, 0.07, 0.006).o; o.frequency.setValueAtTime(2800 + Math.random() * 1200, t + i * 0.11); o.frequency.linearRampToValueAtTime(3800 + Math.random() * 800, t + i * 0.11 + 0.06); } }
   if (state.cricket && state.night > 0.6 && Math.random() < 0.35) { for (let i = 0; i < 4; i++) tone('sine', 4600 + Math.random() * 200, t + i * 0.06, 0.04, 0.006); }
 }
 
@@ -152,4 +153,10 @@ export function sound(name) {
   if (name === 'place') { burst(t, 0.12, 500, 0.18); tone('sine', 660, t + 0.02, 0.15, 0.03); }
   if (name === 'goal') [67, 71, 74, 79, 83].forEach((n, i) => tone('sine', hz(n + 12), t + i * 0.1, 1, 0.05));
   if (name === 'error') tone('sine', 220, t, 0.18, 0.05);
+  if (name === 'meow') { const o = ctx.createOscillator(), e = ctx.createGain(), f = ctx.createBiquadFilter(); o.type = 'sawtooth'; f.type = 'bandpass'; f.frequency.value = 1400; f.Q.value = 3; o.frequency.setValueAtTime(520, t); o.frequency.linearRampToValueAtTime(780, t + 0.15); o.frequency.linearRampToValueAtTime(480, t + 0.5); e.gain.setValueAtTime(0, t); e.gain.linearRampToValueAtTime(0.05, t + 0.05); e.gain.exponentialRampToValueAtTime(0.0001, t + 0.6); o.connect(f).connect(e).connect(sfx); o.start(t); o.stop(t + 0.65); }
+  if (name === 'firework') { burst(t + 0.25, 1.4, 160, 0.16, 'lowpass', 0.6); for (let i = 0; i < 6; i++) burst(t + 0.4 + Math.random() * 0.6, 0.06, 3000, 0.02); }
+  if (name === 'vendor') [72, 76, 79, 76, 72].forEach((n, i) => tone('sine', hz(n), t + i * 0.32, 0.6, 0.02));
+  if (name === 'golden') [76, 79, 83, 88, 91].forEach((n, i) => tone('sine', hz(n), t + i * 0.06, 0.9, 0.035));
+  if (name === 'flap') for (let i = 0; i < 8; i++) burst(t + i * 0.05, 0.05, 900, 0.03);
+  if (name === 'chirp') for (let i = 0; i < 3; i++) { const o = tone('sine', 3200, t + i * 0.12, 0.08, 0.012).o; o.frequency.setValueAtTime(3600, t + i * 0.12); o.frequency.linearRampToValueAtTime(2600, t + i * 0.12 + 0.08); }
 }

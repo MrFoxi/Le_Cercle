@@ -10,7 +10,7 @@ export const seeded = seed => () => ((seed = (seed * 16807) % 2147483647) / 2147
 
 // ---------- Textures ----------
 const texCache = new Map();
-function canvasTex(key, w, h, paint, { repeat, color = true } = {}) {
+export function canvasTex(key, w, h, paint, { repeat, color = true } = {}) {
   if (texCache.has(key)) return texCache.get(key);
   const c = document.createElement('canvas');
   c.width = w; c.height = h;
@@ -188,7 +188,7 @@ export function glowMat(key, color, map, day = 0.15, night = 2, sched = 0, o = {
     return m;
   });
 }
-const foliage = kind => mat('leaf' + kind, () => { const m = new THREE.MeshStandardMaterial({ color: '#4c7a3a', roughness: 0.9, flatShading: true }); m.userData.leaf = kind; return m; });
+export const foliage = kind => mat('leaf' + kind, () => { const m = new THREE.MeshStandardMaterial({ color: '#4c7a3a', roughness: 0.9, flatShading: true }); m.userData.leaf = kind; return m; });
 export const SEASON_LEAVES = {
   printemps: { cherry: '#f4b6c8', green: '#7fae4f' },
   ete: { cherry: '#4f8a3a', green: '#3f7a35' },
@@ -212,15 +212,15 @@ export function box(parent, w, h, d, material, x = 0, y = 0, z = 0, ry = 0) {
   parent.add(m);
   return m;
 }
-function shape(parent, geo, material, x, y, z, sx, sy, sz) {
+export function shape(parent, geo, material, x, y, z, sx, sy, sz) {
   const m = new THREE.Mesh(geo, material);
   m.position.set(x, y, z); m.scale.set(sx, sy ?? sx, sz ?? sx);
   parent.add(m);
   return m;
 }
-const cyl = (p, r, h, m, x, y, z, seg) => shape(p, seg === 6 ? G.cyl6 : G.cyl, m, x, y + h / 2, z, r * 2, h, r * 2);
-const ball = (p, r, m, x, y, z, sy = 1) => shape(p, G.sphere, m, x, y, z, r * 2, r * 2 * sy, r * 2);
-const sub = (parent, x = 0, y = 0, z = 0, ry = 0) => { const o = new THREE.Group(); o.position.set(x, y, z); o.rotation.y = ry; parent.add(o); return o; };
+export const cyl = (p, r, h, m, x, y, z, seg) => shape(p, seg === 6 ? G.cyl6 : G.cyl, m, x, y + h / 2, z, r * 2, h, r * 2);
+export const ball = (p, r, m, x, y, z, sy = 1) => shape(p, G.sphere, m, x, y, z, r * 2, r * 2 * sy, r * 2);
+export const sub = (parent, x = 0, y = 0, z = 0, ry = 0) => { const o = new THREE.Group(); o.position.set(x, y, z); o.rotation.y = ry; parent.add(o); return o; };
 function plane(parent, w, h, material, x, y, z, rx = 0, ry = 0) {
   const m = new THREE.Mesh(G.plane, material);
   m.scale.set(w, h, 1); m.position.set(x, y, z); m.rotation.set(rx, ry, 0);
@@ -278,7 +278,7 @@ const PALEWOOD = () => textured('palewood', TEX.wood('#a37a52'));
 const roofMat = c => { const m = textured('roof' + c, TEX.roof(c), { roughness: 0.55, metalness: 0.15 }); m.userData.roof = true; return m; };
 
 // Toit japonais à deux pans, avec faîtage et pignons.
-function gableRoof(p, w, d, y, color, pitch = 0.5) {
+export function gableRoof(p, w, d, y, color, pitch = 0.5) {
   const m = roofMat(color), oh = 0.32, half = d / 2 + oh, len = half / Math.cos(pitch), rise = Math.tan(pitch) * (d / 2);
   for (const s of [-1, 1]) {
     const slab = box(p, w + oh * 2, 0.08, len, m, 0, 0, 0);

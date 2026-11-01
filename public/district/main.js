@@ -4,6 +4,7 @@ import { createWorld, nightOf } from './world.js';
 import { isOpen } from './people.js';
 import { KANJI } from './models.js';
 import { startAudio, setVolumes, setAmbience, sound, thunder } from './audio.js';
+import { createCinema } from './cinema.js';
 
 const { BUILDINGS, DECOR, PLOTS, SECTORS, OBJECTIVES, CATS, LEVEL_TEXT, MAX_LEVEL, money } = S;
 const $ = id => document.getElementById(id);
@@ -46,6 +47,8 @@ const start = PLOTS[S.START_PLOT];
 world.controls.target.set(0, 0, 0);
 world.camera.position.set(22, 26, 30);
 world.onThunder = thunder;
+world.onSound = sound;
+const cinema = createCinema(world, { fade: $('fade'), label: $('shot') });
 await document.fonts.load(`800 40px ${KANJI}`, '麺処龍寿司').catch(() => {}); // les enseignes sont peintes avec cette police
 world.sync(state);
 setVolumes({ music: state.settings.music, sfx: state.settings.sfx });
@@ -68,7 +71,7 @@ world.onPay = (i, pos) => {
 };
 
 // ---------- Heure, météo, saison ----------
-let hour = state.hour, weather = 'soleil', weatherT = 120;
+let hour = state.hour, weather = 'soleil', weatherT = 120, lastWeather = 'soleil';
 const autoSeason = () => ['hiver', 'hiver', 'printemps', 'printemps', 'printemps', 'ete', 'ete', 'ete', 'automne', 'automne', 'automne', 'hiver'][new Date().getMonth()];
 const season = () => (state.settings.season === 'auto' ? autoSeason() : state.settings.season);
 function nextWeather() {
@@ -275,7 +278,8 @@ function afterChange() { save(); render(); checkGoals(); }
 // ---------- Clics dans la maquette ----------
 const canvas = $('scene');
 let down = null, idle = 0;
-canvas.addEventListener('pointerdown', e => { down = { x: e.clientX, y: e.clientY, t: performance.now() }; idle = 0; world.controls.autoRotate = false; });
+canvas.addEventListener('pointerdown', e => { down = { x: e.clientX, y: e.clientY, t: performance.now() }; idle = 0; });
+addEventListener('keydown', () => (idle = 0));
 canvas.addEventListener('pointermove', e => {
   if (mode !== 'decor' || e.pointerType === 'touch') return;
   const g = world.groundAt(e.clientX, e.clientY);
@@ -289,7 +293,7 @@ canvas.addEventListener('pointerup', e => {
 });
 const snap = v => Math.round(v * 4) / 4;
 function tap(x, y) {
-  if (document.body.classList.contains('photo')) return exitPhoto();
+  if (cinema.active) return exitPhoto();
   if (mode === 'decor') {
     const g = world.groundAt(x, y);
     if (!g) return;
@@ -305,6 +309,9 @@ function tap(x, y) {
     return;
   }
   const hit = world.pick(x, y);
+  if (hit?.golden) return collect('golden');
+  if (hit?.vendor) return collect('vendor');
+  if (hit?.cat != null) { sound('meow'); world.life.hearts(world.life.cats[hit.cat].root.position); if (Math.random() < 0.3) toast(['Miaou ~', 'Ronron…', 'Le chat te regarde, l’air satisfait', 'Il s’étire et repart'][Math.floor(Math.random() * 4)]); return; }
   if (mode === 'erase') {
     if (hit?.decor != null && S.removeDecor(state, hit.decor)) { world.syncDecor(state); sound('place'); afterChange(); }
     return;
@@ -336,15 +343,52 @@ $('buildBtn').onclick = () => { sound('click'); if (panel?.kind === 'build') { c
 $('decoBtn').onclick = () => { sound('click'); if (panel?.kind === 'decor' || mode === 'decor') { close(); setMode('view'); } else { sel = null; setMode('view'); open('decor'); } };
 $('goalsBtn').onclick = () => { sound('click'); panel?.kind === 'goals' ? close() : open('goals'); };
 $('settingsBtn').onclick = () => { sound('click'); panel?.kind === 'settings' ? close() : open('settings'); };
-$('photoBtn').onclick = () => { document.body.classList.add('photo'); close(); setMode('view'); world.controls.autoRotate = true; world.controls.autoRotateSpeed = 0.35; toast('Touche l’écran pour revenir'); setTimeout(() => ($('toast').hidden = true), 1800); };
-function exitPhoto() { document.body.classList.remove('photo'); world.controls.autoRotate = false; }
+// Contempler : l'interface disparaît et la caméra enchaîne des plans de cinéma
+function startCinema() { document.body.classList.add('photo'); close(); setMode('view'); cinema.start(ctx()); }
+$('photoBtn').onclick = () => { startCinema(); toast('Touche l’écran pour revenir'); setTimeout(() => ($('toast').hidden = true), 1800); };
+function exitPhoto() { document.body.classList.remove('photo'); cinema.stop(); idle = 0; }
+const ctx = () => ({ state, festival: event?.id === 'festival', night: nightOf(hour) });
+
+// ---------- Événements du quartier (jamais obligatoires) ----------
+let event = null, eventT = 100;
+const EVENTS = {
+  festival: { when: h => h > 16.5 && h < 21.5, dur: 300, boost: 1.5, crowd: 1.6, icon: '🏮', name: 'Festival', text: '🏮 Festival ce soir ! Lanternes, feux d’artifice et clients en plus (revenus ×1,5)' },
+  tourists: { when: h => h > 8 && h < 18.5, dur: 150, boost: 1.25, crowd: 1.1, icon: '📸', name: 'Touristes', text: '📸 Un groupe de touristes visite le quartier (revenus ×1,25)', start: () => world.people.tourists() },
+  golden: { when: () => true, dur: 70, icon: '✨', name: 'Chat doré', text: '✨ Un chat doré se promène… trouve-le et touche-le !', start: () => world.life.spawnGolden(), end: () => world.life.removeGolden() },
+  vendor: { when: h => h > 9 && h < 22, dur: 80, icon: '🍠', name: 'Marchand', text: '🍠 Le marchand de patates douces passe dans la rue. Touche sa charrette !', start: () => world.life.spawnVendor(), end: () => world.life.removeVendor() },
+};
+function startEvent() {
+  const ok = Object.entries(EVENTS).filter(([, e]) => e.when(hour));
+  const [id, e] = ok[Math.floor(Math.random() * ok.length)];
+  event = { id, t: e.dur };
+  state.boost = e.boost || 1;
+  e.start?.();
+  if (id === 'festival') world.setFestival(true);
+  toast(e.text); sound('goal');
+}
+function endEvent() {
+  EVENTS[event.id].end?.();
+  if (event.id === 'festival') world.setFestival(false);
+  event = null; state.boost = 1;
+}
+function collect(kind) {
+  const gain = Math.round(Math.max(kind === 'golden' ? 150 : 60, S.totalIncome(state) * (kind === 'golden' ? 180 : 90)));
+  state.money += gain; state.earned += gain;
+  const at = kind === 'golden' ? world.life.golden : null;
+  if (at) world.life.sparkle(at);
+  if (kind === 'golden') world.life.removeGolden(); else world.life.removeVendor();
+  if (event?.id === kind) endEvent();
+  sound('golden');
+  toast(kind === 'golden' ? `✨ Le chat doré te porte chance : +${money(gain)} ¥` : `🍠 Patates douces brûlantes pour tout le monde : +${money(gain)} ¥`);
+  afterChange();
+}
 addEventListener('keydown', e => {
   if (e.target.closest?.('input, select')) return;
   const k = e.key.toLowerCase();
   if (k === 'escape') { if (document.body.classList.contains('photo')) exitPhoto(); else if (mode !== 'view') setMode('view'); else close(); }
   if (k === 'b') $('buildBtn').click();
   if (k === 'd') $('decoBtn').click();
-  if (k === 'h') document.body.classList.contains('photo') ? exitPhoto() : $('photoBtn').click();
+  if (k === 'h') cinema.active ? exitPhoto() : $('photoBtn').click();
   if (k === 'r' && mode === 'decor') { decorRot += Math.PI / 4; sound('click'); }
 });
 
@@ -368,6 +412,8 @@ function hud() {
   $('pop').textContent = `🏠 ${Math.floor(state.residents)} habitant${state.residents >= 2 ? 's' : ''}`;
   $('clients').textContent = `🍜 ${money(state.clients)} client${state.clients >= 2 ? 's' : ''}`;
   $('clock').textContent = `${pad(Math.floor(hour))}:${pad(Math.floor((hour % 1) * 60))} ${WEATHER[curWeather()].split(' ')[0]}`;
+  $('evt').hidden = !event;
+  if (event) $('evt').textContent = `${EVENTS[event.id].icon} ${EVENTS[event.id].name} · ${Math.floor(event.t / 60)}:${pad(Math.floor(event.t % 60))}`;
 }
 
 // ---------- Arrivée ----------
@@ -387,7 +433,7 @@ enter.onclick = () => {
   if (fresh) setTimeout(() => toast('Bienvenue ! Touche le restaurant de ramen pour l’améliorer.'), 1200);
   save();
 };
-if (/[?&]debug/.test(location.search)) window.__district = { state, world, S, setHour: h => (hour = h), setWeather: w => (state.settings.weather = w) };
+if (/[?&]debug/.test(location.search)) window.__district = { state, world, S, setHour: h => (hour = h), setWeather: w => (state.settings.weather = w), cinema, startEvent: id => { if (event) endEvent(); const e = EVENTS[id]; event = { id, t: e.dur }; state.boost = e.boost || 1; e.start?.(); if (id === 'festival') world.setFestival(true); } };
 
 // ---------- Boucle ----------
 let last = performance.now(), hudT = 0, saveT = 0;
@@ -399,9 +445,16 @@ function frame(now) {
   else { const t = TIME_HOUR[state.settings.time]; let d = t - hour; if (d > 12) d -= 24; if (d < -12) d += 24; hour = (hour + d * Math.min(1, dt * 0.8) + 24) % 24; }
   state.hour = hour;
   if ((weatherT -= dt) < 0) { weatherT = 150 + Math.random() * 180; weather = nextWeather(); }
+  // après la pluie, en journée : un arc-en-ciel
+  const wNow = curWeather();
+  if (['pluie', 'orage'].includes(lastWeather) && ['soleil', 'nuages'].includes(wNow) && nightOf(hour) < 0.3) { world.life.rainbow(); toast('🌈 Un arc-en-ciel au-dessus du quartier'); }
+  lastWeather = wNow;
+  if (event && (event.t -= dt) < 0) endEvent();
+  if (!event && (eventT -= dt) < 0) { eventT = 150 + Math.random() * 200; startEvent(); }
   S.tick(state, dt);
   const w = curWeather();
-  world.update(dt, { hour, weather: w, season: season(), state });
+  world.update(dt, { hour, weather: w, season: season(), state, festival: event?.id === 'festival', crowd: event ? EVENTS[event.id].crowd || 1 : 1 });
+  cinema.update(dt, ctx());
   // le son suit l'ambiance
   const dist = world.camera.position.distanceTo(world.controls.target);
   setAmbience({ rain: Math.min(1, world.amb.rain), crowd: Math.min(1, world.people.count / 24), night: world.amb.night, cricket: ['ete', 'automne'].includes(season()), wind: w === 'neige' || w === 'brouillard' ? 1 : w === 'orage' ? 0.6 : 0, kitchen: Math.max(0.2, 1 - dist / 40) });
@@ -410,7 +463,7 @@ function frame(now) {
     const g = world.groundAt(innerWidth / 2, innerHeight / 2);
     if (g) world.setGhost(decorId, snap(g.x), snap(g.z), decorRot, S.canPlace(state, snap(g.x), snap(g.z), movingDecor));
   }
-  if ((idle += dt) > 90 && !document.body.classList.contains('photo') && mode === 'view' && !panel) { world.controls.autoRotate = true; world.controls.autoRotateSpeed = 0.25; }
+  if ((idle += dt) > 120 && !cinema.active && mode === 'view' && !panel && !$('intro')) startCinema(); // laissé tranquille : le quartier se met en scène
   if ((hudT -= dt) < 0) { hudT = 0.25; hud(); render(true); checkGoals(); }
   if ((saveT += dt) > 10) { saveT = 0; save(); }
   requestAnimationFrame(frame);

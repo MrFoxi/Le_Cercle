@@ -30,7 +30,7 @@
   <header class="hud ui">
     <a class="round" href="../" title="Le Cercle" aria-label="Retour au Cercle">←</a>
     <div class="wallet"><b id="money">0</b><span>¥</span><small id="rate"></small></div>
-    <div class="chips"><span title="Habitants" id="pop"></span><span title="Clients accueillis" id="clients"></span></div>
+    <div class="chips"><span title="Habitants" id="pop"></span><span title="Clients accueillis" id="clients"></span><span class="evt" id="evt" hidden></span></div>
     <div class="right">
       <span class="clock" id="clock"></span>
       <button class="round" id="goalsBtn" title="Objectifs" aria-label="Objectifs">📜<i id="goalDot" hidden></i></button>
@@ -47,6 +47,9 @@
   <div class="tip ui" id="tip" hidden></div>
   <aside class="panel ui" id="panel" hidden></aside>
   <div id="floaters"></div>
+  <div class="bars" aria-hidden="true"></div>
+  <div id="fade"></div>
+  <p id="shot"></p>
   <div id="toast" role="status" hidden></div>
 </body>
 </html>

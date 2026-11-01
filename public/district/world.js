@@ -12,6 +12,9 @@ import { VerticalTiltShiftShader } from 'three/addons/shaders/VerticalTiltShiftS
 import { TEX, MATS, SEASON_LEAVES, std, textured, glowMat, box, bake, buildBuilding, makeDecor, lightPool, streak, lantern, seeded } from './models.js';
 import { PLOTS, SECTORS, BUILDINGS } from './sim.js';
 import { createPeople } from './people.js';
+import { buildTerrain, groundY, BASE } from './terrain.js';
+import { createLife } from './life.js';
+import { GTAOPass } from 'three/addons/postprocessing/GTAOPass.js';
 
 const GROUND_Y = 0.06;
 const smooth = (a, b, t) => { t = Math.min(1, Math.max(0, (t - a) / (b - a))); return t * t * (3 - 2 * t); };
@@ -54,10 +57,29 @@ export function createWorld(canvas, { low }) {
   const pmrem = new THREE.PMREMGenerator(renderer);
   scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
 
-  const camera = new THREE.PerspectiveCamera(30, 1, 0.5, 300);
+  const dome = new THREE.Mesh(new THREE.SphereGeometry(220, 32, 16), new THREE.ShaderMaterial({
+    uniforms: { top: { value: new THREE.Color() }, horizon: { value: new THREE.Color() } },
+    vertexShader: 'varying vec3 vP; void main(){ vP=normalize(position); gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.); }',
+    fragmentShader: 'uniform vec3 top; uniform vec3 horizon; varying vec3 vP; void main(){ float h=clamp(vP.y,-0.2,1.); vec3 c=mix(horizon,top,pow(max(h,0.),0.55)); if(h<0.) c=mix(horizon,horizon*0.35,-h*5.); gl_FragColor=vec4(c,1.); }',
+    side: THREE.BackSide, depthWrite: false, fog: false,
+  }));
+  dome.renderOrder = -10; scene.add(dome);
+  const starGeo = new THREE.BufferGeometry(), starPos = [];
+  for (let i = 0; i < 900; i++) { const u = Math.random() * 0.92 + 0.08, a = Math.random() * Math.PI * 2, r = Math.sqrt(1 - u * u); starPos.push(Math.cos(a) * r * 200, u * 200, Math.sin(a) * r * 200); }
+  starGeo.setAttribute('position', new THREE.Float32BufferAttribute(starPos, 3));
+  const stars = new THREE.Points(starGeo, new THREE.PointsMaterial({ color: '#ffffff', size: 1.4, sizeAttenuation: false, transparent: true, opacity: 0, depthWrite: false, fog: false }));
+  scene.add(stars);
+  const moon = new THREE.Mesh(new THREE.SphereGeometry(5, 24, 16), new THREE.MeshBasicMaterial({ color: '#fff6dc', transparent: true, fog: false }));
+  const moonHalo = new THREE.Sprite(new THREE.SpriteMaterial({ map: TEX.glow(), color: '#9fb4ff', transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, fog: false }));
+  moonHalo.scale.set(40, 40, 1); moon.add(moonHalo); scene.add(moon);
+  const shooting = new THREE.Mesh(new THREE.PlaneGeometry(14, 0.25), new THREE.MeshBasicMaterial({ map: TEX.streak(), color: '#ffffff', transparent: true, opacity: 0, depthWrite: false, blending: THREE.AdditiveBlending, fog: false }));
+  scene.add(shooting);
+  let shootT = 10, shootLife = 0;
+
+  const camera = new THREE.PerspectiveCamera(30, 1, 0.5, 500);
   const controls = new OrbitControls(camera, canvas);
   controls.enableDamping = true; controls.dampingFactor = 0.08;
-  controls.minDistance = 7; controls.maxDistance = 46;
+  controls.minDistance = 6; controls.maxDistance = 62;
   controls.minPolarAngle = 0.42; controls.maxPolarAngle = 1.12;
   controls.screenSpacePanning = false;
   controls.zoomToCursor = true;
@@ -90,14 +112,11 @@ export function createWorld(canvas, { low }) {
   for (let x = -12; x <= 12; x += 1.6) if (Math.abs(x) > 1.6 && Math.abs(Math.abs(x) - 9.3) > 1) box(scene, 0.8, 0.005, 0.07, paint, x, 0, 0);
   for (const cx of [0, -9.3, 9.3]) for (let z = -1.1; z <= 1.1; z += 0.44) box(scene, 1.3, 0.005, 0.22, paint, cx, 0, z);
   for (const [x, z] of [[-3, 0.5], [6, -0.6], [-8, -0.4]]) { const m = new THREE.Mesh(new THREE.CylinderGeometry(0.28, 0.28, 0.01, 18), std('#3a3a3c', { metalness: 0.6, roughness: 0.5 })); m.position.set(x, 0.006, z); scene.add(m); }
-  // Bords du plateau : strates de terre, cadre en bois, table sombre et brillante dessous
-  const sideTex = TEX.strata().clone(); sideTex.needsUpdate = true; sideTex.repeat.set(3, 1);
-  const base = new THREE.Mesh(new THREE.BoxGeometry(26.6, 1.4, 26.6), [0, 0, 0, 0, 0, 0].map((_, i) => i === 2 || i === 3 ? std('#3d3a36') : new THREE.MeshStandardMaterial({ map: sideTex, roughness: 0.95 })));
-  base.position.y = -0.7; base.receiveShadow = true; scene.add(base);
-  const rim = std('#2a1c14', { roughness: 0.5 });
-  for (const s of [-1, 1]) { box(scene, 26.9, 0.12, 0.16, rim, 0, -0.06, s * 13.37); box(scene, 0.16, 0.12, 26.9, rim, s * 13.37, -0.06, 0); }
+  // Relief : colline du sanctuaire, canal, rive d'en face ; socle en bois ; table sombre et brillante dessous
+  const terrain = buildTerrain(scene, low);
+  groundMats.push(...terrain.groundMats);
   const tableTop = new THREE.Mesh(new THREE.PlaneGeometry(160, 160), new THREE.MeshStandardMaterial({ color: '#0d0f14', roughness: 0.32, metalness: 0.3 }));
-  tableTop.rotation.x = -Math.PI / 2; tableTop.position.y = -1.42; tableTop.receiveShadow = true; scene.add(tableTop);
+  tableTop.rotation.x = -Math.PI / 2; tableTop.position.y = -1.69; tableTop.receiveShadow = true; scene.add(tableTop);
 
   // Flaques (visibles quand le sol est mouillé)
   const puddleMat = new THREE.MeshStandardMaterial({ color: '#0d1014', roughness: 0.03, metalness: 0.7, transparent: true, opacity: 0, depthWrite: false });
@@ -274,10 +293,10 @@ export function createWorld(canvas, { low }) {
   }
 
   // ---------- Particules : pluie, éclaboussures, neige, pétales, vapeur, poussière ----------
-  const N_RAIN = low ? 700 : 1800;
+  const N_RAIN = low ? 1000 : 2600;
   const rainGeo = new THREE.BufferGeometry(), rainPos = new Float32Array(N_RAIN * 6);
   for (let i = 0; i < N_RAIN; i++) resetDrop(i, Math.random() * 14);
-  function resetDrop(i, y) { const x = Math.random() * 30 - 15, z = Math.random() * 30 - 15; rainPos.set([x, y, z, x - 0.02, y + 0.22, z - 0.01], i * 6); }
+  function resetDrop(i, y) { const x = Math.random() * 30 - 15, z = Math.random() * 46 - 23; rainPos.set([x, y, z, x - 0.02, y + 0.22, z - 0.01], i * 6); }
   rainGeo.setAttribute('position', new THREE.BufferAttribute(rainPos, 3));
   const rain = new THREE.LineSegments(rainGeo, new THREE.LineBasicMaterial({ color: '#b8c8dc', transparent: true, opacity: 0, depthWrite: false }));
   rain.frustumCulled = false; scene.add(rain);
@@ -302,10 +321,10 @@ export function createWorld(canvas, { low }) {
     pts.frustumCulled = false; scene.add(pts);
     return { pts, pos, alpha, sz, geo, m, n, data: Array.from({ length: n }, () => ({ life: 0, vx: 0, vy: 0, vz: 0, max: 1 })) };
   }
-  const snow = particleSystem(low ? 500 : 1200, '#ffffff', 0.09);
-  snow.data.forEach((d, i) => { snow.pos.set([Math.random() * 28 - 14, Math.random() * 12, Math.random() * 28 - 14], i * 3); snow.sz[i] = 0.06 + Math.random() * 0.06; d.ph = Math.random() * 7; });
+  const snow = particleSystem(low ? 700 : 1800, '#ffffff', 0.09);
+  snow.data.forEach((d, i) => { snow.pos.set([Math.random() * 28 - 14, Math.random() * 12, Math.random() * 44 - 22], i * 3); snow.sz[i] = 0.06 + Math.random() * 0.06; d.ph = Math.random() * 7; });
   const petals = particleSystem(low ? 60 : 160, '#f6b8cc', 0.08);
-  petals.data.forEach((d, i) => { petals.pos.set([Math.random() * 28 - 14, Math.random() * 6, Math.random() * 28 - 14], i * 3); petals.sz[i] = 0.07; d.ph = Math.random() * 7; });
+  petals.data.forEach((d, i) => { petals.pos.set([Math.random() * 28 - 14, Math.random() * 6, Math.random() * 28 - 14], i * 3); petals.sz[i] = 0.045; d.ph = Math.random() * 7; });
   const steam = particleSystem(low ? 120 : 260, '#ffffff', 0.25);
   const dust = particleSystem(140, '#e8dcc6', 0.3);
   let steamNext = 0;
@@ -328,7 +347,7 @@ export function createWorld(canvas, { low }) {
       d.life -= dt;
       const i = k * 3;
       sys.pos[i] += d.vx * dt; sys.pos[i + 1] += d.vy * dt; sys.pos[i + 2] += d.vz * dt;
-      d.vx *= 0.97; d.vz *= 0.97;
+      const f = Math.pow(0.97, dt * 60); d.vx *= f; d.vz *= f;
       const t = 1 - d.life / d.max;
       sys.alpha[k] = fade ? Math.sin(Math.PI * t) * 0.5 : 1;
       sys.sz[k] = d.size * (0.6 + t * 1.2);
@@ -337,17 +356,48 @@ export function createWorld(canvas, { low }) {
   }
 
   // ---------- Habitants ----------
-  const people = createPeople({ scene, plots, low, emitCoin: (...a) => api.onPay?.(...a) });
+  const people = createPeople({ scene, plots, low, emitCoin: (...a) => api.onPay?.(...a), onFlash: p => life?.flash(p) });
+  let life = null;
+  life = createLife({ scene, people, low, camera, target: controls.target, onSound: n => api.onSound?.(n) });
 
   // ---------- Rendu : bloom (néons) et flou de maquette (tilt-shift) ----------
   const composer = new EffectComposer(renderer);
   composer.addPass(new RenderPass(scene, camera));
+  let gtao = null;
+  if (!low) {
+    gtao = new GTAOPass(scene, camera, 512, 512);
+    gtao.blendIntensity = 0.85;
+    gtao.updateGtaoMaterial({ radius: 0.45, distanceExponent: 1.4, thickness: 0.8, scale: 1.1, samples: 12 });
+    gtao.updatePdMaterial({ lumaPhi: 10, depthPhi: 2, normalPhi: 3, radius: 5, rings: 2, samples: 12 });
+    // pas d'ombre de contact sous les taches de lumière, l'eau ou les vitres
+    const hide = gtao._overrideVisibility.bind(gtao);
+    gtao._overrideVisibility = () => { hide(); scene.traverse(o => { if (o.isMesh && o.visible && o.material.transparent && o.material.depthWrite === false) { o.visible = false; gtao._visibilityCache.push(o); } }); };
+    composer.addPass(gtao);
+  }
   const bloom = new UnrealBloomPass(new THREE.Vector2(256, 256), 0.6, 0.45, 0.9);
   composer.addPass(bloom);
   const tiltH = new ShaderPass(HorizontalTiltShiftShader), tiltV = new ShaderPass(VerticalTiltShiftShader);
   tiltH.uniforms.r.value = tiltV.uniforms.r.value = 0.52;
   composer.addPass(tiltH); composer.addPass(tiltV);
   composer.addPass(new OutputPass());
+  const grade = new ShaderPass({
+    uniforms: { tDiffuse: { value: null }, uTime: { value: 0 }, uTint: { value: new THREE.Vector3(1, 1, 1) }, uVig: { value: 0.35 } },
+    vertexShader: 'varying vec2 vUv; void main(){ vUv=uv; gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.); }',
+    fragmentShader: `uniform sampler2D tDiffuse; uniform float uTime; uniform vec3 uTint; uniform float uVig; varying vec2 vUv;
+      float rnd(vec2 p){ return fract(sin(dot(p, vec2(12.9898,78.233)) + uTime) * 43758.5453); }
+      void main(){
+        vec3 c = texture2D(tDiffuse, vUv).rgb;
+        c = (c - 0.5) * 1.06 + 0.5;
+        float l = dot(c, vec3(0.299, 0.587, 0.114));
+        c = mix(vec3(l), c, 1.1) * uTint;
+        c += vec3(0.012, 0.008, 0.02) * (1.0 - l); // ombres légèrement bleutées, comme sur pellicule
+        float d = distance(vUv, vec2(0.5));
+        c *= 1.0 - uVig * smoothstep(0.35, 0.9, d);
+        c += (rnd(vUv * 731.0) - 0.5) * 0.025;
+        gl_FragColor = vec4(c, 1.0);
+      }`,
+  });
+  composer.addPass(grade);
   let tiltOn = true;
 
   function resize() {
@@ -357,6 +407,10 @@ export function createWorld(canvas, { low }) {
     bloom.resolution.set(w / (low ? 3 : 2), h / (low ? 3 : 2));
     camera.aspect = w / h; camera.updateProjectionMatrix();
     tiltH.uniforms.h.value = 2.2 / w; tiltV.uniforms.v.value = 2.2 / h;
+    // taille des particules en pixels : même perspective que la caméra
+    const scale = (h * renderer.getPixelRatio()) / (2 * Math.tan((camera.fov * Math.PI) / 360));
+    for (const sys of [snow, petals, steam, dust]) sys.m.uniforms.uScale.value = scale;
+    life?.setScale(scale);
   }
 
   // ---------- Ambiance (heure, météo, saison) ----------
@@ -391,8 +445,21 @@ export function createWorld(canvas, { low }) {
     const flicker = amb.flash > 0 ? amb.flash * (0.6 + Math.random() * 0.4) : 0;
 
     scene.background.copy(S.bg);
+    dome.material.uniforms.top.value.copy(S.bg).multiplyScalar(0.55);
+    dome.material.uniforms.horizon.value.copy(S.bg).lerp(S.sky, 0.25 * (1 - n));
+    dome.position.copy(camera.position);
+    stars.position.copy(camera.position);
+    const clear = 1 - Math.min(1, amb.cloud + amb.fog + amb.rain);
+    stars.material.opacity = n * clear * 0.9;
+    const mAz = (hour / 24) * Math.PI * 2 + 0.8 + Math.PI;
+    moon.position.set(camera.position.x + Math.cos(mAz) * 150, 70 + 40 * n, camera.position.z + Math.sin(mAz) * 150);
+    moon.material.opacity = n * (0.4 + 0.6 * clear); moonHalo.material.opacity = n * clear * 0.35;
+    if (n > 0.7 && clear > 0.6 && (shootT -= dt) < 0) { shootT = 12 + Math.random() * 25; shootLife = 1; const a = Math.random() * 6.28; shooting.position.set(camera.position.x + Math.cos(a) * 140, 90 + Math.random() * 30, camera.position.z + Math.sin(a) * 140); shooting.lookAt(camera.position); shooting.rotateZ(-0.4); }
+    shootLife = Math.max(0, shootLife - dt * 1.4);
+    shooting.material.opacity = Math.sin(shootLife * Math.PI) * 0.9;
+    if (shootLife > 0) shooting.translateX(-dt * 60);
     scene.fog.color.copy(S.bg);
-    const dist = camera.position.distanceTo(controls.target);
+    const dist = api.cam ? 28 : camera.position.distanceTo(controls.target); // en plan de cinéma, brouillard normal
     scene.fog.near = dist * lerp(1.2, 0.35, amb.fog); scene.fog.far = dist * lerp(3.2, 1.5, amb.fog);
     hemi.color.copy(S.sky); hemi.groundColor.copy(S.ground);
     hemi.intensity = S.hemi * (1 - amb.cloud * 0.15) + flicker * 4;
@@ -403,6 +470,8 @@ export function createWorld(canvas, { low }) {
     scene.environmentIntensity = lerp(0.3, 0.06, n);
     renderer.toneMappingExposure = lerp(1, 1.12, n);
     bloom.strength = lerp(0.25, 0.7, n);
+    grade.uniforms.uTime.value = (grade.uniforms.uTime.value + dt) % 100;
+    grade.uniforms.uTint.value.set(lerp(1.03, 0.96, n), lerp(1.0, 0.99, n), lerp(0.95, 1.06, n));
 
     // Lumières émissives : enseignes, lanternes, fenêtres (chaque groupe de fenêtres a ses horaires)
     const sched = { 0: 1, 1: 1, A: smooth(16.5, 18, hour) * (1 - smooth(23.5, 24, hour)) + (1 - smooth(6, 7, hour)) * 0.15, B: smooth(18, 19.5, hour) * (1 - smooth(22, 23, hour)) + smooth(5, 5.5, hour) * (1 - smooth(7, 8, hour)), C: smooth(17.5, 19, hour) * (1 - smooth(1, 2, hour + (hour < 12 ? 24 : 0) - 24)) };
@@ -430,6 +499,7 @@ export function createWorld(canvas, { low }) {
     const poolO = n * 0.5, streakO = n * (amb.wet * 0.75 + 0.05) + amb.wet * 0.05;
     const each = list => { for (const o of list) {
       if (o.userData.pool) o.material.opacity = poolO * o.userData.pool;
+      else if (o.userData.water) { o.material.opacity = n * 0.35 * o.userData.streak; if (o.material.opacity > 0.005) { o.rotation.set(-Math.PI / 2, 0, phi); const b = (o.userData.base ??= o.position.clone()); o.position.copy(b).addScaledVector(toCam, 1.3); } }
       else {
         o.material.opacity = streakO * o.userData.streak;
         if (o.material.opacity < 0.005) continue;
@@ -439,7 +509,7 @@ export function createWorld(canvas, { low }) {
         o.position.copy(o.parent.worldToLocal(o.parent.localToWorld(base.clone()).addScaledVector(toCam, 1.3)));
       }
     } };
-    each(glows);
+    each(glows); each(terrain.glows);
     for (const P of plots) each(P.glows);
     for (const g of decorRoot.children) each(g.userData.glowMeshes);
     // pluie : opacité selon l'intensité
@@ -460,7 +530,8 @@ export function createWorld(canvas, { low }) {
         rainPos[k + 1] -= sp; rainPos[k + 4] -= sp;
         if (rainPos[k + 1] < 0) {
           const rs = ripState.find(r => r.t >= 1);
-          if (rs && Math.random() < 0.25) Object.assign(rs, { x: rainPos[k], z: rainPos[k + 2], t: 0, y: Math.abs(rainPos[k + 2]) < 1.4 ? 0.012 : GROUND_Y + 0.01 });
+          const gy = groundY(rainPos[k], rainPos[k + 2]);
+          if (rs && gy != null && Math.random() < 0.25) Object.assign(rs, { x: rainPos[k], z: rainPos[k + 2], t: 0, y: gy });
           resetDrop(i, 11 + Math.random() * 3);
         }
       }
@@ -480,7 +551,7 @@ export function createWorld(canvas, { low }) {
         const i = k * 3, d = snow.data[k];
         snow.pos[i + 1] -= dt * (0.6 + (k % 5) * 0.08);
         snow.pos[i] += Math.sin((d.ph += dt)) * dt * 0.25;
-        if (snow.pos[i + 1] < 0) { snow.pos[i + 1] = 11 + Math.random(); snow.pos[i] = Math.random() * 28 - 14; snow.pos[i + 2] = Math.random() * 28 - 14; }
+        if (snow.pos[i + 1] < 0) { snow.pos[i + 1] = 11 + Math.random(); snow.pos[i] = Math.random() * 28 - 14; snow.pos[i + 2] = Math.random() * 44 - 22; }
         snow.alpha[k] = Math.min(1, amb.snowfall) * 0.9;
       }
       snow.geo.attributes.position.needsUpdate = snow.geo.attributes.aAlpha.needsUpdate = snow.geo.attributes.aSize.needsUpdate = true;
@@ -539,6 +610,8 @@ export function createWorld(canvas, { low }) {
   }
   function pick(cx, cy) {
     setRay(cx, cy);
+    const hitL = ray.intersectObjects(life.pickables, true)[0];
+    if (hitL) { const u = hitL.object.userData; return u.golden ? { golden: true } : u.vendor ? { vendor: true } : { cat: u.cat, point: hitL.point }; }
     const hitD = ray.intersectObjects(decorRoot.children, true)[0];
     const hitP = ray.intersectObjects(pickables, false)[0];
     if (hitD && (!hitP || hitD.distance < hitP.distance)) return { decor: hitD.object.userData.decor };
@@ -577,8 +650,7 @@ export function createWorld(canvas, { low }) {
       camera.position.copy(controls.target).addScaledVector(dir, lerp(fly.d0, fly.d1, e));
       if (fly.t >= 1) fly = null;
     }
-    const lim = 11.5;
-    const cx = THREE.MathUtils.clamp(controls.target.x, -lim, lim) - controls.target.x, cz = THREE.MathUtils.clamp(controls.target.z, -lim, lim) - controls.target.z;
+    const cx = THREE.MathUtils.clamp(controls.target.x, -12, 12) - controls.target.x, cz = THREE.MathUtils.clamp(controls.target.z, BASE.z0 + 2, BASE.z1 - 2) - controls.target.z;
     controls.target.x += cx; controls.target.z += cz; camera.position.x += cx; camera.position.z += cz;
     controls.target.y = 0;
     controls.update();
@@ -593,13 +665,22 @@ export function createWorld(canvas, { low }) {
     syncPlot, syncDecor, pick, groundAt, highlight, setGhost, focus, resize,
     sync(state) { PLOTS.forEach((_, i) => syncPlot(i, state)); syncDecor(state); },
     setTilt(on) { tiltOn = on; },
-    update(dt, { hour, weather, season, state }) {
-      updateCamera(dt);
+    setFestival(on) { festoon.ete.visible = on || amb.season === 'ete'; },
+    life, terrain, cam: null,
+    update(dt, { hour, weather, season, state, festival = false, crowd = 1 }) {
+      if (api.cam) { // plan de cinéma
+        camera.position.copy(api.cam.pos); camera.lookAt(api.cam.look);
+        const k = tiltOn ? lerp(4, 1.4, smooth(3, 30, camera.position.distanceTo(api.cam.look))) * (api.cam.blur ?? 1) : 0;
+        tiltH.uniforms.h.value = k / canvas.clientWidth; tiltV.uniforms.v.value = k / canvas.clientHeight;
+        controls.target.copy(api.cam.look);
+      } else updateCamera(dt);
+      terrain.update(dt);
+      life.update(dt, { night: amb.night, season, rain: amb.rain > 0.3 || amb.snowfall > 0.3, festival, hour });
       updateAmbience(dt, hour, weather, season);
       updateParticles(dt, hour);
       updatePlots(dt);
       updateRings(dt);
-      people.update(dt, { hour, wet: amb.rain > 0.25 || amb.snowfall > 0.3, state, night: amb.night, camera });
+      people.update(dt, { hour, wet: amb.rain > 0.25 || amb.snowfall > 0.3, state, night: amb.night, camera, crowd });
       composer.render();
     },
     worldPos(i, local) { return new THREE.Vector3(local.x, local.y ?? 0, local.z).applyMatrix4(plots[i].holder.matrixWorld); },
