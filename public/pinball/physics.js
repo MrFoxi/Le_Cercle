@@ -99,10 +99,11 @@ function bounce(b, nx, ny, e, svx = 0, svy = 0) {
   const j = -(1 + e) * rvn;
   b.vx += j * nx;
   b.vy += j * ny;
-  // un peu de frottement le long de la surface
+  // Frottement proportionnel à la force du choc : un vrai choc freine un peu, une bille qui roule contre un bord presque pas.
   const tx = -ny, ty = nx, vt = (b.vx - svx) * tx + (b.vy - svy) * ty;
-  b.vx -= vt * 0.04 * tx;
-  b.vy -= vt * 0.04 * ty;
+  const f = Math.sign(vt) * Math.min(Math.abs(vt), 0.1 * j);
+  b.vx -= f * tx;
+  b.vy -= f * ty;
   return -rvn;
 }
 

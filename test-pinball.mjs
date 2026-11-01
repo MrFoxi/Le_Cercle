@@ -34,6 +34,14 @@ const inside = b => b.x > -0.5 && b.x < 52.5 && b.y < 111 && !Number.isNaN(b.x);
   assert(top > 45 && fast > 300 && fast <= 540, `tir du flipper : ${fast.toFixed(0)} cm/s, jusqu’à ${top.toFixed(1)} cm`);
 }
 
+// Une bille qui roule contre un bord ne doit pas s'y freiner : sur la pente du tablier, elle accélère.
+{
+  const w = createWorld(table);
+  const b = addBall(w, 3, 26.5, 0, 0);
+  for (let i = 0; i < 18; i++) step(w, 1 / 60);
+  assert(Math.hypot(b.vx, b.vy) > 50, `bille freinée contre le tablier : ${Math.hypot(b.vx, b.vy).toFixed(0)} cm/s`);
+}
+
 // Rampe : une bille rapide dans l'embouchure fait tout le tour ; une bille lente redescend.
 for (const [speed, done] of [[420, true], [120, false]]) {
   const w = createWorld(table);
