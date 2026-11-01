@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Little District</title>
+  <link rel="icon" href="favicon.svg" type="image/svg+xml">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Shippori+Mincho:wght@600;800&family=Inter:wght@400;600;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+  <script type="importmap">{ "imports": { "three": "/vendor/three/build/three.module.js", "three/addons/": "/vendor/three/addons/" } }</script>
+  <script type="module" src="main.js"></script>
+</head>
+<body>
+  <canvas id="scene"></canvas>
+  <div class="vignette"></div>
+
+  <!-- Écran d'arrivée (et récapitulatif d'absence) -->
+  <div id="intro">
+    <div class="card">
+      <p class="jp">小さな街</p>
+      <h1>Little District</h1>
+      <div id="away"></div>
+      <button class="primary" id="enter" disabled>Chargement du quartier…</button>
+      <a class="back" href="../">← Le Cercle</a>
+    </div>
+  </div>
+
+  <header class="hud ui">
+    <a class="round" href="../" title="Le Cercle" aria-label="Retour au Cercle">←</a>
+    <div class="wallet"><b id="money">0</b><span>¥</span><small id="rate"></small></div>
+    <div class="chips"><span title="Habitants" id="pop"></span><span title="Clients accueillis" id="clients"></span></div>
+    <div class="right">
+      <span class="clock" id="clock"></span>
+      <button class="round" id="goalsBtn" title="Objectifs" aria-label="Objectifs">📜<i id="goalDot" hidden></i></button>
+      <button class="round" id="settingsBtn" title="Réglages" aria-label="Réglages">⚙</button>
+    </div>
+  </header>
+
+  <nav class="dock ui">
+    <button id="buildBtn"><span>🏗</span>Construire</button>
+    <button id="decoBtn"><span>🌸</span>Décorer</button>
+    <button id="photoBtn" title="Mode photo (H)"><span>📷</span>Contempler</button>
+  </nav>
+
+  <div class="tip ui" id="tip" hidden></div>
+  <aside class="panel ui" id="panel" hidden></aside>
+  <div id="floaters"></div>
+  <div id="toast" role="status" hidden></div>
+</body>
+</html>
