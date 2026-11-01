@@ -9,7 +9,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700;900&family=Inter:wght@400;600;800&display=swap" rel="stylesheet">
   <style>
-    :root { --gold: #f5d27a; --gold-2: #c8973a; --gold-3: #8a5f1c; --ink: #f4f1ea; --muted: #a9b1ba; --line: rgba(255, 255, 255, .09); }
+    :root { --gold: #f5d27a; --gold-2: #c8973a; --gold-3: #8a5f1c; --ink: #f4f1ea; --muted: #a9b1ba; --line: rgba(255, 255, 255, .09); --card: rgba(14, 18, 26, .72); }
     * { box-sizing: border-box; }
     html { color-scheme: dark; }
     body {
@@ -17,194 +17,361 @@
       background: radial-gradient(1200px 600px at 50% -10%, rgba(200, 151, 58, .18), transparent 60%), radial-gradient(circle at 50% 50%, #0d1219, #05070a 75%);
       background-attachment: fixed;
     }
-    main { max-width: 960px; margin: 0 auto; padding: 10vh 16px 60px; }
+    [hidden] { display: none !important; }
+    #bg { position: fixed; inset: 0; width: 100%; height: 100%; z-index: -1; pointer-events: none; }
+    main { max-width: 1020px; margin: 0 auto; padding: 8vh 16px 60px; }
     h1 {
       margin: 0; text-align: center; font: 900 clamp(3rem, 12vw, 5.5rem)/1.1 'Playfair Display', Georgia, serif;
       background: linear-gradient(100deg, var(--gold-3), var(--gold) 35%, #fff6d8 50%, var(--gold) 65%, var(--gold-2));
       -webkit-background-clip: text; background-clip: text; color: transparent;
     }
-    .tagline { margin: 8px 0 48px; text-align: center; color: var(--muted); letter-spacing: .25em; text-transform: uppercase; font-size: .75rem; }
-    .games { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 20px; }
-    .game {
-      display: flex; flex-direction: column; gap: 10px; padding: 22px; border-radius: 22px; color: inherit; text-decoration: none;
-      background: rgba(14, 18, 26, .62); border: 1px solid var(--line); box-shadow: 0 30px 60px rgba(0, 0, 0, .45);
-      transition: transform .2s, border-color .2s, box-shadow .2s;
-    }
-    a.game:hover, a.game:focus-visible { transform: translateY(-4px); border-color: rgba(245, 210, 122, .5); box-shadow: 0 30px 60px rgba(0, 0, 0, .5), 0 0 30px rgba(245, 210, 122, .15); outline: none; }
-    .game img { width: 64px; height: 64px; }
-    .game h2 { margin: 4px 0 0; font: 900 1.5rem 'Playfair Display', Georgia, serif; color: var(--gold); }
-    .game p { margin: 0; color: #d6dbe1; line-height: 1.5; }
-    .game .go { margin-top: auto; padding-top: 8px; font-weight: 800; color: var(--gold); }
-    .meta { display: flex; flex-wrap: wrap; gap: 6px; font-size: .78rem; font-weight: 700; }
+    .tagline { margin: 8px 0 18px; text-align: center; color: var(--muted); letter-spacing: .25em; text-transform: uppercase; font-size: .75rem; }
+    button, select, input { font: inherit; color: inherit; }
+    button:focus-visible, select:focus-visible, a:focus-visible, input:focus-visible { outline: 2px solid var(--gold); outline-offset: 3px; }
+
+    /* Profil (en haut à droite) */
+    .profile { position: fixed; top: 14px; right: 14px; z-index: 5; }
+    .profile > button { display: flex; align-items: center; gap: 8px; padding: 7px 14px 7px 8px; border-radius: 999px; cursor: pointer; background: var(--card); border: 1px solid var(--line); backdrop-filter: blur(10px); font-weight: 700; font-size: .9rem; }
+    .profile > button span { font-size: 1.3rem; }
+    .profile > button:hover { border-color: rgba(245, 210, 122, .5); }
+    .pop { position: absolute; right: 0; top: calc(100% + 8px); width: min(320px, calc(100vw - 28px)); padding: 16px; border-radius: 18px; background: rgba(14, 18, 26, .96); border: 1px solid rgba(245, 210, 122, .3); box-shadow: 0 20px 50px rgba(0, 0, 0, .5); }
+    .pop h3 { margin: 0 0 4px; font: 900 1.15rem 'Playfair Display', serif; color: var(--gold); }
+    .pop p { margin: 0 0 10px; color: var(--muted); font-size: .82rem; line-height: 1.4; }
+    .pop input { width: 100%; padding: 10px 14px; border-radius: 12px; background: rgba(0, 0, 0, .35); border: 1px solid var(--line); }
+    .avatars { display: grid; grid-template-columns: repeat(8, 1fr); gap: 4px; margin: 10px 0 12px; }
+    .avatars button { aspect-ratio: 1; border-radius: 10px; border: 1px solid transparent; background: rgba(255, 255, 255, .05); font-size: 1.2rem; cursor: pointer; padding: 0; }
+    .avatars button.on { border-color: var(--gold); background: rgba(245, 210, 122, .15); }
+    .pop .save { width: 100%; padding: 10px; border: 0; border-radius: 12px; font-weight: 800; cursor: pointer; color: #2a1c06; background: linear-gradient(180deg, #ffe39a, var(--gold-2)); }
+
+    /* Bandeau d'activité */
+    .ticker { display: flex; justify-content: center; margin: 0 0 22px; min-height: 34px; }
+    .ticker div { display: inline-flex; align-items: center; gap: 10px; max-width: 100%; padding: 7px 16px; border-radius: 999px; background: var(--card); border: 1px solid var(--line); font-size: .86rem; color: #d6dbe1; transition: opacity .4s; }
+    .ticker div::before { content: ''; flex: none; width: 8px; height: 8px; border-radius: 50%; background: #8ff0a4; box-shadow: 0 0 10px #8ff0a4; animation: pulse 2s infinite; }
+    .ticker div.calm::before { background: var(--muted); box-shadow: none; animation: none; }
+    .ticker span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    @keyframes pulse { 50% { opacity: .35; } }
+
+    /* Reprendre */
+    .resume { display: flex; align-items: center; gap: 16px; margin: 0 0 22px; padding: 14px 16px; border-radius: 20px; color: inherit; text-decoration: none; background: linear-gradient(100deg, rgba(200, 151, 58, .16), var(--card) 55%); border: 1px solid rgba(245, 210, 122, .35); transition: transform .2s, border-color .2s; }
+    .resume:hover { transform: translateY(-2px); border-color: var(--gold); }
+    .resume img.icon { width: 52px; height: 52px; flex: none; }
+    .resume .txt { flex: 1; min-width: 0; }
+    .resume small { display: block; color: var(--gold); font-weight: 800; letter-spacing: .14em; text-transform: uppercase; font-size: .66rem; }
+    .resume b { display: block; font: 900 1.25rem 'Playfair Display', serif; }
+    .resume em { display: block; font-style: normal; color: #d6dbe1; font-size: .88rem; margin-top: 2px; }
+    .resume .go { font-weight: 800; color: var(--gold); white-space: nowrap; }
+    .resume .thumb { width: 120px; height: 70px; border-radius: 12px; object-fit: cover; flex: none; opacity: .9; }
+
+    /* Outils : recherche, filtres, tri */
+    .tools { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin: 0 0 18px; }
+    .chips { display: flex; gap: 6px; flex-wrap: wrap; flex: 1; }
+    .chips button { padding: 7px 13px; border-radius: 999px; cursor: pointer; font-size: .84rem; font-weight: 700; background: rgba(255, 255, 255, .05); border: 1px solid var(--line); color: var(--muted); transition: all .2s; }
+    .chips button:hover { color: var(--ink); }
+    .chips button.on { color: #2a1c06; background: var(--gold); border-color: var(--gold); }
+    .tools select { padding: 8px 12px; border-radius: 12px; background: var(--card); border: 1px solid var(--line); font-weight: 700; font-size: .84rem; }
+    .tools select option { background: #10151d; }
+    .search { display: flex; align-items: center; gap: 8px; }
+    .search button { width: 38px; height: 38px; border-radius: 50%; cursor: pointer; background: var(--card); border: 1px solid var(--line); }
+    .search button[aria-expanded="true"] { border-color: rgba(245, 210, 122, .6); }
+    .search input { width: min(260px, 60vw); padding: 9px 14px; border-radius: 999px; background: rgba(14, 18, 26, .85); border: 1px solid rgba(245, 210, 122, .4); outline: none; animation: open .2s ease-out; }
+    @keyframes open { from { opacity: 0; transform: scaleX(.6); } }
+    .none { text-align: center; color: var(--muted); }
+
+    /* Cartes */
+    .games { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 18px; }
+    .game { position: relative; display: flex; flex-direction: column; border-radius: 22px; overflow: hidden; background: var(--card); border: 1px solid var(--line); box-shadow: 0 30px 60px rgba(0, 0, 0, .45); transition: transform .2s, border-color .2s, box-shadow .2s; }
+    .game:hover, .game:focus-within { transform: translateY(-4px); border-color: rgba(245, 210, 122, .5); box-shadow: 0 30px 60px rgba(0, 0, 0, .5), 0 0 30px rgba(245, 210, 122, .12); }
+    .shot { position: relative; height: 150px; overflow: hidden; background: #0b0f15; }
+    .shot img { width: 100%; height: 100%; object-fit: cover; display: block; opacity: .82; transform: scale(1.04); transition: opacity .4s, transform .4s; }
+    .shot::after { content: ''; position: absolute; inset: 0; background: linear-gradient(transparent 45%, rgba(10, 13, 19, .95)); }
+    /* carte vivante : au survol (ou au centre de l'écran sur téléphone), la capture s'anime doucement */
+    .game:hover .shot img, .game.alive .shot img { opacity: 1; animation: drift 7s ease-in-out infinite alternate; }
+    @keyframes drift { from { transform: scale(1.04) translate(0, 0); } to { transform: scale(1.16) translate(-3%, -2%); } }
+    .body { position: relative; display: flex; flex-direction: column; gap: 8px; padding: 0 20px 18px; flex: 1; }
+    .body img.icon { width: 56px; height: 56px; margin-top: -30px; position: relative; filter: drop-shadow(0 6px 12px rgba(0, 0, 0, .6)); }
+    .game h2 { margin: 0; font: 900 1.4rem 'Playfair Display', Georgia, serif; color: var(--gold); }
+    .game h2 a { color: inherit; text-decoration: none; }
+    .game h2 a::after { content: ''; position: absolute; inset: 0; z-index: 1; } /* toute la carte est cliquable */
+    .game p { margin: 0; color: #d6dbe1; line-height: 1.5; font-size: .93rem; }
+    .game .go { margin-top: auto; padding-top: 6px; font-weight: 800; color: var(--gold); }
+    .meta { display: flex; flex-wrap: wrap; gap: 6px; font-size: .76rem; font-weight: 700; }
     .meta span { padding: 4px 10px; border-radius: 999px; background: rgba(255, 255, 255, .06); color: var(--muted); }
     .meta .live { color: #8ff0a4; background: rgba(80, 220, 120, .12); }
-    .meta .live::before { content: ''; display: inline-block; width: 7px; height: 7px; margin-right: 6px; border-radius: 50%; background: currentColor; box-shadow: 0 0 8px currentColor; vertical-align: 1px; }
+    .meta .live::before { content: ''; display: inline-block; width: 7px; height: 7px; margin-right: 6px; border-radius: 50%; background: currentColor; box-shadow: 0 0 8px currentColor; }
     .meta .live.zero { color: var(--muted); background: rgba(255, 255, 255, .04); }
     .meta .live.zero::before { box-shadow: none; opacity: .5; }
-    .search { display: flex; justify-content: center; align-items: center; gap: 10px; margin: -28px 0 28px; }
-    .search button {
-      width: 46px; height: 46px; border-radius: 50%; font-size: 1.2rem; cursor: pointer; color: inherit;
-      background: rgba(14, 18, 26, .62); border: 1px solid var(--line); transition: border-color .2s;
-    }
-    .search button:hover, .search button:focus-visible, .search button[aria-expanded="true"] { border-color: rgba(245, 210, 122, .6); outline: none; }
-    .search input {
-      width: min(420px, calc(100vw - 90px)); padding: 12px 16px; border-radius: 999px; font: 600 1rem 'Inter', system-ui, sans-serif;
-      color: var(--ink); background: rgba(14, 18, 26, .8); border: 1px solid rgba(245, 210, 122, .4); outline: none; animation: open .2s ease-out;
-    }
-    .search input:focus { border-color: var(--gold); box-shadow: 0 0 20px rgba(245, 210, 122, .15); }
-    .none { text-align: center; color: var(--muted); }
-    @keyframes open { from { opacity: 0; transform: scaleX(.6); } }
-    @media (prefers-reduced-motion: reduce) { .search input { animation: none; } }
-    .game[hidden] { display: none; }
-    .game.soon { border-style: dashed; opacity: .6; }
+    .badge { position: absolute; top: 12px; left: 12px; z-index: 2; padding: 4px 10px; border-radius: 999px; font-size: .7rem; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; }
+    .badge.new { color: #2a1c06; background: var(--gold); box-shadow: 0 0 18px rgba(245, 210, 122, .5); }
+    .badge.maj { color: #dff6ff; background: rgba(60, 150, 220, .85); }
+    .fav { position: absolute; top: 10px; right: 10px; z-index: 2; width: 36px; height: 36px; border-radius: 50%; border: 1px solid var(--line); background: rgba(10, 13, 19, .7); cursor: pointer; font-size: 1.05rem; color: var(--muted); backdrop-filter: blur(6px); transition: transform .15s; }
+    .fav:hover { transform: scale(1.1); color: var(--gold); }
+    .fav.on { color: var(--gold); border-color: rgba(245, 210, 122, .6); }
+    .game.soon { border-style: dashed; opacity: .6; padding: 22px; gap: 10px; }
     .game.soon .icon { width: 64px; height: 64px; display: grid; place-items: center; border-radius: 16px; border: 2px dashed var(--line); font-size: 1.8rem; color: var(--muted); }
+    .game.soon h2 { color: var(--muted); }
+    @media (prefers-reduced-motion: reduce) { .game:hover .shot img, .game.alive .shot img { animation: none; } .search input { animation: none; } }
+    @media (max-width: 560px) {
+      .resume .thumb { display: none; } .profile > button b { display: none; }
+      .resume { gap: 12px; padding: 12px 14px; } .resume img.icon { width: 42px; height: 42px; } .resume .go { font-size: 0; } .resume .go::after { content: '→'; font-size: 1.4rem; }
+      .chips { flex: 1 1 100%; flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; margin: 0 -16px; padding: 2px 16px; } /* une seule ligne qui défile */
+      .chips::-webkit-scrollbar { display: none; } .chips button { flex: none; }
+      .tools select { flex: 1; }
+      main { padding-top: 70px; }
+    }
   </style>
 </head>
 <body>
+  <canvas id="bg" aria-hidden="true"></canvas>
+  <div class="profile">
+    <button id="profileBtn" aria-expanded="false" aria-controls="profilePop"><span id="pAvatar">👤</span><b id="pName">Mon profil</b></button>
+    <div class="pop" id="profilePop" hidden>
+      <h3>Ton profil</h3>
+      <p>Choisis ton pseudo et ton avatar une seule fois : tous les jeux du Cercle les reprennent.</p>
+      <input id="pInput" maxlength="20" placeholder="Ton pseudo" aria-label="Ton pseudo" autocomplete="nickname">
+      <div class="avatars" id="pAvatars"></div>
+      <button class="save" id="pSave">Enregistrer</button>
+    </div>
+  </div>
   <main>
     <h1>Le Cercle</h1>
     <p class="tagline">Jeux en ligne entre amis</p>
-    <div class="search">
-      <button id="searchBtn" aria-label="Rechercher un jeu" aria-expanded="false" aria-controls="searchInput">🔍</button>
-      <input id="searchInput" type="search" placeholder="Rechercher un jeu…" aria-label="Rechercher un jeu" hidden>
-    </div>
-    <p id="noGame" class="none" hidden>Aucun jeu ne correspond à ta recherche.</p>
-    <div class="games">
-      <a class="game" href="7-5/">
-        <img src="7-5/favicon.svg" alt="">
-        <h2>Le Cercle du 7,5</h2>
-        <p>Le jeu de cartes « sept et demi » : approche 7,5 sans le dépasser et bats le banquier. De 2 à 8 joueurs.</p>
-        <div class="meta"><span>👥 2 à 8 joueurs</span><span class="live" data-game="7-5" hidden></span></div>
-        <span class="go">Jouer →</span>
-      </a>
-      <a class="game" href="pays/">
-        <img src="pays/favicon.svg" alt="">
-        <h2>Trouve le pays</h2>
-        <p>Quiz de géographie : un nom de pays s’affiche, clique dessus sur la carte du monde. 197 pays, 4 modes de jeu.</p>
-        <div class="meta"><span>👥 Solo</span><span class="live" data-game="pays" hidden></span></div>
-        <span class="go">Jouer →</span>
-      </a>
-      <a class="game" href="cote/">
-        <img src="cote/favicon.svg" alt="">
-        <h2>Le Demi-Cercle</h2>
-        <p>À deux : un thème, un mot, une aiguille entre MAUVAIS et BON. Devine où ton adversaire classe son mot. 68 thèmes, 10 manches.</p>
-        <div class="meta"><span>👥 2 joueurs</span><span class="live" data-game="cote" hidden></span></div>
-        <span class="go">Jouer →</span>
-      </a>
-      <a class="game" href="p4/">
-        <img src="p4/favicon.svg" alt="">
-        <h2>Puissance 4</h2>
-        <p>Le classique à deux : fais tomber tes jetons et aligne-en 4 avant ton adversaire. Revanches et spectateurs.</p>
-        <div class="meta"><span>👥 2 joueurs</span><span class="live" data-game="p4" hidden></span></div>
-        <span class="go">Jouer →</span>
-      </a>
-      <a class="game" href="size/">
-        <img src="size/favicon.svg" alt="">
-        <h2>Size It Up</h2>
-        <p>Une girafe à côté d’un bus : à quelle taille la dessinerais-tu ? Redimensionne l’objet rouge à l’œil nu. 10 manches, 100 points chacune.</p>
-        <div class="meta"><span>👥 Solo</span><span class="live" data-game="size" hidden></span></div>
-        <span class="go">Jouer →</span>
-      </a>
-      <a class="game" href="imposteur/">
-        <img src="imposteur/favicon.svg" alt="">
-        <h2>L’Imposteur</h2>
-        <p>Civils, imposteurs et Mr. White : un mot secret, des indices, des soupçons et un vote. Démasque les intrus avant qu’ils ne te bluffent. En ligne, ou en soirée sur un seul téléphone. De 3 à 12 joueurs.</p>
-        <div class="meta"><span>👥 3 à 12 joueurs</span><span class="live" data-game="imposteur" hidden></span></div>
-        <span class="go">Jouer →</span>
-      </a>
-      <a class="game" href="bataille/">
-        <img src="bataille/favicon.svg" alt="">
-        <h2>Bataille navale</h2>
-        <p>La bataille navale version guerre moderne, à deux : missiles, radar, drone, sonar et brouillage. Trois modes : classique, moderne, rapide.</p>
-        <div class="meta"><span>👥 2 joueurs</span><span class="live" data-game="bataille" hidden></span></div>
-        <span class="go">Jouer →</span>
-      </a>
-      <a class="game" href="solar/">
-        <img src="solar/favicon.svg" alt="">
-        <h2>Solar Explorer</h2>
-        <p>Pilote ton vaisseau en 3D dans le système solaire et explore-le avec tes amis : planètes, anneaux de Saturne, astéroïdes, station spatiale.</p>
-        <div class="meta"><span>👥 1 à 16 joueurs</span><span class="live" data-game="solar" hidden></span></div>
-        <span class="go">Jouer →</span>
-      </a>
-      <a class="game" href="golf/">
-        <img src="golf/favicon.svg" alt="">
-        <h2>Mini-golf</h2>
-        <p>Mini-golf vu du dessus, de 1 à 8 joueurs et des robots : 10 trous fous, balles qui se cognent, 5 modes de jeu, chaos, paris, vestiaire et succès.</p>
-        <div class="meta"><span>👥 1 à 8 joueurs</span><span class="live" data-game="golf" hidden></span></div>
-        <span class="go">Jouer →</span>
-      </a>
-      <a class="game" href="strategy/">
-        <img src="strategy/favicon.svg" alt="">
-        <h2>Strategy Club</h2>
-        <p>Le salon des jeux de stratégie : échecs, dames, shogi et go. Entre amis, contre des robots de 5 niveaux, ou en spectateur.</p>
-        <div class="meta"><span>👥 2 joueurs</span><span class="live" data-game="strategy" hidden></span></div>
-        <span class="go">Jouer →</span>
-      </a>
-      <a class="game" href="pinball/">
-        <img src="pinball/favicon.svg" alt="">
-        <h2>3D Pinball</h2>
-        <p>Un vrai flipper d’arcade en 3D : bille chromée, bumpers, rampes, multiball, missions et jackpot. Bats ton record et grimpe au classement mondial.</p>
-        <div class="meta"><span>👥 Solo</span></div>
-        <span class="go">Jouer →</span>
-      </a>
-      <a class="game" href="mines/">
-        <img src="mines/favicon.svg" alt="">
-        <h2>Démineur Rogue</h2>
-        <p>Le démineur devient un roguelike : grilles de plus en plus dures, améliorations à choisir, pouvoirs, boutique, événements et boss. Jusqu’où iras-tu ?</p>
-        <div class="meta"><span>👥 Solo</span></div>
-        <span class="go">Jouer →</span>
-      </a>
-      <a class="game" href="district/">
-        <img src="district/favicon.svg" alt="">
-        <h2>Little District</h2>
-        <p>Un quartier japonais miniature en 3D qui vit tout seul : construis des commerces, décore les ruelles, regarde la pluie et les lanternes de la nuit.</p>
-        <div class="meta"><span>👥 Solo</span></div>
-        <span class="go">Jouer →</span>
-      </a>
-      <div class="game soon">
-        <span class="icon" aria-hidden="true">+</span>
-        <h2>Bientôt</h2>
-        <p>Un nouveau projet arrive ici.</p>
+    <div class="ticker" aria-live="polite"><div id="ticker" class="calm"><span>Bienvenue au Cercle</span></div></div>
+    <a class="resume" id="resume" hidden></a>
+    <div class="tools">
+      <div class="chips" id="chips" role="group" aria-label="Filtrer les jeux"></div>
+      <div class="search">
+        <button id="searchBtn" aria-label="Rechercher un jeu" aria-expanded="false" aria-controls="searchInput">🔍</button>
+        <input id="searchInput" type="search" placeholder="Rechercher un jeu…" aria-label="Rechercher un jeu" hidden>
       </div>
+      <select id="sort" aria-label="Trier les jeux">
+        <option value="une">À la une</option>
+        <option value="pop">Populaires en ce moment</option>
+        <option value="new">Nouveautés</option>
+        <option value="az">De A à Z</option>
+      </select>
     </div>
+    <p id="noGame" class="none" hidden>Aucun jeu ne correspond.</p>
+    <div class="games" id="games"></div>
   </main>
-  <script>
-    // Joueurs connectés en ce moment, rafraîchi toutes les 15 s.
-    async function online() {
-      try {
-        const counts = await (await fetch('/api/online')).json();
-        for (const el of document.querySelectorAll('.live')) {
-          const n = counts[el.dataset.game];
-          el.hidden = n === undefined;
-          el.textContent = `${n} en ligne`;
-          el.classList.toggle('zero', !n);
-        }
-      } catch { /* serveur injoignable : on laisse les pastilles cachées */ }
-    }
-    online();
-    setInterval(online, 15000);
-
-    // Recherche : filtre les cartes sur leur titre et leur description, sans tenir compte des accents ni des majuscules.
-    const btn = document.getElementById('searchBtn'), input = document.getElementById('searchInput');
+  <script type="module">
+    // Tous les jeux du Cercle. tags : filtres · added : arrivée (tri Nouveautés) · badge : pastille, jusqu'à la date « until ».
+    const GAMES = [
+      { id: '7-5', name: 'Le Cercle du 7,5', desc: 'Le jeu de cartes « sept et demi » : approche 7,5 sans le dépasser et bats le banquier. De 2 à 8 joueurs.', players: '2 à 8 joueurs', tags: ['multi', 'soiree'], live: true, added: '2026-10-30' },
+      { id: 'pays', name: 'Trouve le pays', desc: 'Quiz de géographie : un nom de pays s’affiche, clique dessus sur la carte du monde. 197 pays, 4 modes de jeu.', players: 'Solo', tags: ['solo', 'quiz'], added: '2026-10-30' },
+      { id: 'cote', name: 'Le Demi-Cercle', desc: 'À deux : un thème, un mot, une aiguille entre MAUVAIS et BON. Devine où ton adversaire classe son mot. 68 thèmes, 10 manches.', players: '2 joueurs', tags: ['multi', 'soiree', 'quiz'], live: true, added: '2026-10-30' },
+      { id: 'p4', name: 'Puissance 4', desc: 'Le classique à deux : fais tomber tes jetons et aligne-en 4 avant ton adversaire. Revanches et spectateurs.', players: '2 joueurs', tags: ['multi', 'strategie'], live: true, added: '2026-10-30' },
+      { id: 'size', name: 'Size It Up', desc: 'Une girafe à côté d’un bus : à quelle taille la dessinerais-tu ? Redimensionne l’objet rouge à l’œil nu. 10 manches, 100 points chacune.', players: 'Solo', tags: ['solo', 'quiz'], added: '2026-10-30' },
+      { id: 'imposteur', name: 'L’Imposteur', desc: 'Civils, imposteurs et Mr. White : un mot secret, des indices, des soupçons et un vote. En ligne, ou en soirée sur un seul téléphone.', players: '3 à 12 joueurs', tags: ['multi', 'soiree'], live: true, added: '2026-10-30' },
+      { id: 'bataille', name: 'Bataille navale', desc: 'La bataille navale version guerre moderne, à deux : missiles, radar, drone, sonar et brouillage. Trois modes : classique, moderne, rapide.', players: '2 joueurs', tags: ['multi', 'strategie'], live: true, added: '2026-10-31' },
+      { id: 'solar', name: 'Solar Explorer', desc: 'Pilote ton vaisseau en 3D dans le système solaire et explore-le avec tes amis : planètes, anneaux de Saturne, astéroïdes, station spatiale.', players: '1 à 16 joueurs', tags: ['multi', 'solo', '3d'], live: true, added: '2026-10-31' },
+      { id: 'golf', name: 'Mini-golf', desc: 'Mini-golf vu du dessus, de 1 à 8 joueurs et des robots : 10 trous fous, balles qui se cognent, 5 modes de jeu, chaos, paris, vestiaire et succès.', players: '1 à 8 joueurs', tags: ['multi', 'solo', 'arcade'], live: true, added: '2026-10-31' },
+      { id: 'strategy', name: 'Strategy Club', desc: 'Le salon des jeux de stratégie : échecs, dames, shogi et go. Entre amis, contre des robots de 5 niveaux, ou en spectateur.', players: '2 joueurs', tags: ['multi', 'solo', 'strategie'], live: true, added: '2026-10-31' },
+      { id: 'pinball', name: '3D Pinball', desc: 'Un vrai flipper d’arcade en 3D : bille chromée, bumpers, rampes, multiball, missions et jackpot, sur 5 tables. Bats ton record et grimpe au classement mondial.', players: 'Solo', tags: ['solo', 'arcade', '3d'], added: '2026-11-01', badge: { kind: 'maj', until: '2026-11-21' } },
+      { id: 'mines', name: 'Démineur Rogue', desc: 'Le démineur devient un roguelike : grilles de plus en plus dures, améliorations, pouvoirs, boutique, événements et boss. Jusqu’où iras-tu ?', players: 'Solo', tags: ['solo', 'strategie'], added: '2026-11-01', badge: { kind: 'maj', until: '2026-11-21' } },
+      { id: 'district', name: 'Little District', desc: 'Un quartier japonais miniature en 3D qui vit tout seul : construis des commerces, décore les ruelles, regarde la pluie et les lanternes de la nuit.', players: 'Solo', tags: ['solo', '3d'], added: '2026-11-01', badge: { kind: 'new', until: '2026-11-30' } },
+    ];
+    const FILTERS = { all: 'Tous', multi: 'Multijoueur', solo: 'Solo', soiree: 'Cartes & soirée', strategie: 'Stratégie', arcade: 'Arcade', '3d': '3D', quiz: 'Quiz' };
+    const AVATARS = ['🦊', '🐼', '🐯', '🦁', '🐸', '🐙', '🦄', '🐺', '🐵', '🐨', '🦉', '🐲', '🤠', '😎', '🎩', '👑'];
+    const PSEUDO_KEYS = ['pseudo', 'cote-pseudo', 'imp-pseudo', 'p4-pseudo', 'bn-pseudo', 'se-pseudo', 'sc-pseudo', 'golf-pseudo']; // chaque jeu lit la sienne
+    const $ = id => document.getElementById(id);
+    const store = {
+      get: k => { try { return localStorage.getItem(k); } catch { return null; } },
+      set: (k, v) => { try { localStorage.setItem(k, v); } catch { /* stockage bloqué */ } },
+      json: k => { try { return JSON.parse(localStorage.getItem(k)); } catch { return null; } },
+    };
+    const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
     const plain = s => s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
-    const cards = [...document.querySelectorAll('a.game')];
-    function filter() {
-      const q = plain(input.value.trim());
-      let shown = 0;
-      for (const c of cards) shown += !(c.hidden = !plain(c.textContent).includes(q));
-      document.querySelector('.game.soon').hidden = !!q;
-      document.getElementById('noGame').hidden = shown > 0;
+    const ago = t => { const m = Math.round((Date.now() - t) / 60000); return m < 1 ? 'à l’instant' : m < 60 ? `il y a ${m} min` : m < 1440 ? `il y a ${Math.round(m / 60)} h` : `il y a ${Math.round(m / 1440)} j`; };
+    const fmt = n => n >= 1e6 ? `${(n / 1e6).toFixed(1).replace('.', ',')} M` : Math.round(n).toLocaleString('fr-FR');
+
+    let filter = store.get('cercle-filter') || 'all', sort = store.get('cercle-sort') || 'une', query = '';
+    let favs = new Set(store.json('cercle-favs') || []), activity = { online: {}, tables: {}, recent: [] };
+
+    // ---------- Cartes ----------
+    const today = new Date().toISOString().slice(0, 10);
+    function card(g) {
+      const badge = g.badge && today <= g.badge.until ? `<span class="badge ${g.badge.kind}">${g.badge.kind === 'new' ? 'Nouveau' : 'Mis à jour'}</span>` : '';
+      return `<article class="game" data-id="${g.id}">
+        ${badge}<button class="fav ${favs.has(g.id) ? 'on' : ''}" data-fav="${g.id}" aria-pressed="${favs.has(g.id)}" aria-label="${favs.has(g.id) ? 'Retirer des favoris' : 'Ajouter aux favoris'} : ${esc(g.name)}">${favs.has(g.id) ? '★' : '☆'}</button>
+        <div class="shot"><img src="previews/${g.id}.jpg" alt="" loading="lazy"></div>
+        <div class="body">
+          <img class="icon" src="${g.id}/favicon.svg" alt="">
+          <h2><a href="${g.id}/">${esc(g.name)}</a></h2>
+          <p>${esc(g.desc)}</p>
+          <div class="meta"><span>👥 ${esc(g.players)}</span>${g.live ? `<span class="live" data-game="${g.id}" hidden></span>` : ''}</div>
+          <span class="go">Jouer →</span>
+        </div>
+      </article>`;
     }
+    function render() {
+      const order = GAMES.map((g, i) => ({ g, i }));
+      const pop = g => (activity.online[g.id] || 0) * 10 + (activity.tables[g.id] || 0);
+      order.sort((a, b) =>
+        favs.has(b.g.id) - favs.has(a.g.id) || // les favoris toujours en tête
+        (sort === 'pop' ? pop(b.g) - pop(a.g) : sort === 'new' ? b.g.added.localeCompare(a.g.added) : sort === 'az' ? a.g.name.localeCompare(b.g.name, 'fr') : 0) || a.i - b.i);
+      const shown = order.filter(({ g }) => (filter === 'all' || g.tags.includes(filter)) && (!query || plain(`${g.name} ${g.desc}`).includes(query)));
+      $('games').innerHTML = shown.map(({ g }) => card(g)).join('') + (filter === 'all' && !query ? `<div class="game soon"><span class="icon" aria-hidden="true">+</span><h2>Bientôt</h2><p>Un nouveau projet arrive ici.</p></div>` : '');
+      $('noGame').hidden = shown.length > 0;
+      showOnline();
+      watchAlive();
+    }
+    $('chips').innerHTML = Object.entries(FILTERS).map(([k, v]) => `<button data-filter="${k}" class="${k === filter ? 'on' : ''}" aria-pressed="${k === filter}">${v}</button>`).join('');
+    $('chips').onclick = e => {
+      const b = e.target.closest('[data-filter]'); if (!b) return;
+      filter = b.dataset.filter; store.set('cercle-filter', filter);
+      $('chips').querySelectorAll('button').forEach(x => { x.classList.toggle('on', x === b); x.setAttribute('aria-pressed', x === b); });
+      render();
+    };
+    $('sort').value = sort;
+    $('sort').onchange = () => { sort = $('sort').value; store.set('cercle-sort', sort); render(); };
+    $('games').addEventListener('click', e => {
+      const f = e.target.closest('[data-fav]');
+      if (f) { e.preventDefault(); favs.has(f.dataset.fav) ? favs.delete(f.dataset.fav) : favs.add(f.dataset.fav); store.set('cercle-favs', JSON.stringify([...favs])); render(); return; }
+      const c = e.target.closest('.game[data-id]');
+      if (c) store.set('cercle-last', JSON.stringify({ id: c.dataset.id, at: Date.now() })); // pour « Reprendre »
+    });
+
+    // Recherche (sans accents ni majuscules)
+    const btn = $('searchBtn'), input = $('searchInput');
     btn.onclick = () => {
       input.hidden = !input.hidden;
       btn.setAttribute('aria-expanded', !input.hidden);
-      if (input.hidden) { input.value = ''; filter(); } else input.focus();
+      if (input.hidden) { input.value = ''; query = ''; render(); } else input.focus();
     };
-    input.oninput = filter;
+    input.oninput = () => { query = plain(input.value.trim()); render(); };
     input.onkeydown = e => {
       if (e.key === 'Escape') btn.click();
-      if (e.key === 'Enter') cards.find(c => !c.hidden)?.click(); // Entrée ouvre le premier jeu trouvé
+      if (e.key === 'Enter') document.querySelector('.game[data-id] h2 a')?.click(); // Entrée ouvre le premier jeu trouvé
     };
+
+    // Cartes vivantes sur téléphone : celle qui passe au centre de l'écran s'anime
+    let io = null;
+    function watchAlive() {
+      if (!matchMedia('(hover: none)').matches) return;
+      io?.disconnect();
+      io = new IntersectionObserver(es => es.forEach(e => e.target.classList.toggle('alive', e.isIntersecting)), { rootMargin: '-40% 0px -40% 0px' });
+      document.querySelectorAll('.game[data-id]').forEach(c => io.observe(c));
+    }
+
+    // ---------- En ligne et bandeau d'activité ----------
+    function showOnline() {
+      for (const el of document.querySelectorAll('.live')) {
+        const n = activity.online[el.dataset.game];
+        el.hidden = n === undefined;
+        el.textContent = `${n} en ligne`;
+        el.classList.toggle('zero', !n);
+      }
+    }
+    let lines = [], lineIdx = 0;
+    async function refresh() {
+      try { activity = await (await fetch('/api/activity')).json(); } catch { return; /* serveur injoignable : on garde l'ancien */ }
+      const name = id => GAMES.find(g => g.id === id)?.name || id;
+      lines = [
+        ...Object.entries(activity.tables).filter(([, n]) => n).map(([id, n]) => `🎲 ${n} partie${n > 1 ? 's' : ''} en cours · ${name(id)}`),
+        ...Object.entries(activity.online).filter(([, n]) => n).sort((a, b) => b[1] - a[1]).map(([id, n]) => `👥 ${n} joueur${n > 1 ? 's' : ''} sur ${name(id)}`),
+        ...activity.recent.slice(0, 6).map(e => `🏆 ${e.text} · ${ago(e.at)}`),
+      ];
+      showOnline();
+      if (sort === 'pop') render();
+      if (!tickTimer) tick();
+    }
+    let tickTimer = 0;
+    function tick() {
+      const el = $('ticker');
+      const text = lines.length ? lines[lineIdx++ % lines.length] : 'Le Cercle est calme… lance une partie et invite tes amis !';
+      el.style.opacity = 0;
+      setTimeout(() => { el.querySelector('span').textContent = text; el.classList.toggle('calm', !lines.length); el.style.opacity = 1; }, 400);
+      tickTimer = setTimeout(tick, 5000);
+    }
+    refresh();
+    setInterval(refresh, 15000);
+
+    // ---------- Reprendre ----------
+    async function summary(id) {
+      if (id === 'district') {
+        const raw = store.get('district-save-v1');
+        if (!raw) return 'Ton quartier t’attend';
+        const S = await import('./district/sim.js');
+        const st = S.load(raw), off = st && S.offline(st); // calcul sur une copie : la vraie sauvegarde n'est pas touchée
+        return off && off.money >= 1 ? `Ton quartier a gagné ${S.money(off.money)} ¥ depuis ta visite` : `${Math.floor(st?.residents || 0)} habitants t’attendent`;
+      }
+      if (id === 'mines') { const m = store.json('mines-meta'); return m?.bestLevel ? `Ton record : niveau ${m.bestLevel}` : 'Prêt pour une nouvelle descente ?'; }
+      if (id === 'pinball') { const p = store.json('pinball-profile'); const best = Math.max(0, ...Object.values(p?.best || {})); return best ? `Ton record : ${fmt(best)} points` : 'Une partie de flipper ?'; }
+      if (id === 'pays') { const s = store.json('pays-stats'); const best = Math.max(0, ...Object.values(s?.best || {}).map(b => b.points || 0)); return best ? `Ton record : ${fmt(best)} points` : 'Prêt à faire le tour du monde ?'; }
+      if (id === 'golf') { const p = store.json('golf-profile'); return p?.stats?.wins ? `${p.stats.wins} victoire${p.stats.wins > 1 ? 's' : ''} au compteur` : 'Un petit parcours ?'; }
+      if (id === 'size') { const b = Number(store.get('size-best')); return b ? `Ton record : ${b} points` : 'Ton œil est-il toujours aussi juste ?'; }
+      if (id === 'solar') { const p = store.json('se-progress'); const n = Object.keys(p?.visited || {}).length; return n ? `${n} lieu${n > 1 ? 'x' : ''} découvert${n > 1 ? 's' : ''}` : 'L’espace t’attend'; }
+      const n = activity.online[id];
+      return n ? `${n} joueur${n > 1 ? 's' : ''} en ligne en ce moment` : 'Invite tes amis pour une partie';
+    }
+    async function showResume() {
+      const last = store.json('cercle-last'), g = last && GAMES.find(x => x.id === last.id);
+      if (!g) return;
+      const el = $('resume');
+      el.href = `${g.id}/`;
+      el.innerHTML = `<img class="icon" src="${g.id}/favicon.svg" alt=""><div class="txt"><small>Reprendre · ${ago(last.at)}</small><b>${esc(g.name)}</b><em>${esc(await summary(g.id))}</em></div><img class="thumb" src="previews/${g.id}.jpg" alt=""><span class="go">Continuer →</span>`;
+      el.onclick = () => store.set('cercle-last', JSON.stringify({ id: g.id, at: Date.now() }));
+      el.hidden = false;
+    }
+
+    // ---------- Profil commun ----------
+    let avatar = store.get('avatar') || AVATARS[0];
+    const profileName = () => store.get('cercle-pseudo') || PSEUDO_KEYS.map(store.get).find(Boolean) || '';
+    function showProfile() {
+      const n = profileName();
+      $('pName').textContent = n || 'Mon profil';
+      $('pAvatar').textContent = n ? avatar : '👤';
+    }
+    $('pAvatars').innerHTML = AVATARS.map(a => `<button data-av="${a}" aria-label="Avatar ${a}">${a}</button>`).join('');
+    const markAvatar = () => $('pAvatars').querySelectorAll('button').forEach(b => b.classList.toggle('on', b.dataset.av === avatar));
+    $('pAvatars').onclick = e => { const b = e.target.closest('[data-av]'); if (b) { avatar = b.dataset.av; markAvatar(); } };
+    $('profileBtn').onclick = () => {
+      const pop = $('profilePop'), open = pop.hidden;
+      pop.hidden = !open; $('profileBtn').setAttribute('aria-expanded', open);
+      if (open) { $('pInput').value = profileName(); markAvatar(); $('pInput').focus(); }
+    };
+    $('pSave').onclick = () => {
+      const n = $('pInput').value.trim().slice(0, 20);
+      if (n) { store.set('cercle-pseudo', n); PSEUDO_KEYS.forEach(k => store.set(k, n)); }
+      store.set('avatar', avatar);
+      $('profilePop').hidden = true; $('profileBtn').setAttribute('aria-expanded', false);
+      showProfile();
+    };
+    $('pInput').onkeydown = e => { if (e.key === 'Enter') $('pSave').click(); if (e.key === 'Escape') $('profileBtn').click(); };
+    document.addEventListener('click', e => { if (!e.target.closest('.profile') && !$('profilePop').hidden) $('profileBtn').click(); });
+
+    // ---------- Fond : cercles dorés qui dérivent lentement ----------
+    {
+      const cv = $('bg'), x = cv.getContext('2d'), still = matchMedia('(prefers-reduced-motion: reduce)').matches;
+      const rings = Array.from({ length: 16 }, () => ({ x: Math.random(), y: Math.random(), r: 30 + Math.random() * 230, vx: (Math.random() - 0.5) * 0.006, vy: (Math.random() - 0.5) * 0.004, a: 0.03 + Math.random() * 0.07, ph: Math.random() * 6, w: 1 + Math.random() * 1.5 }));
+      const dots = Array.from({ length: 40 }, () => ({ x: Math.random(), y: Math.random(), v: 0.004 + Math.random() * 0.01, a: Math.random() }));
+      const size = () => { const d = Math.min(devicePixelRatio, 2); cv.width = innerWidth * d; cv.height = innerHeight * d; x.setTransform(d, 0, 0, d, 0, 0); };
+      size(); addEventListener('resize', size);
+      let last = performance.now();
+      const draw = now => {
+        const dt = Math.min(0.05, (now - last) / 1000); last = now;
+        const W = innerWidth, H = innerHeight;
+        x.clearRect(0, 0, W, H);
+        for (const r of rings) {
+          r.x += r.vx * dt; r.y += r.vy * dt; r.ph += dt * 0.4;
+          if (r.x < -0.3) r.x = 1.3; if (r.x > 1.3) r.x = -0.3; if (r.y < -0.3) r.y = 1.3; if (r.y > 1.3) r.y = -0.3;
+          x.strokeStyle = `rgba(245, 210, 122, ${r.a * (0.7 + Math.sin(r.ph) * 0.3)})`; x.lineWidth = r.w;
+          x.beginPath(); x.arc(r.x * W, r.y * H, r.r * (1 + Math.sin(r.ph) * 0.04), 0, Math.PI * 2); x.stroke();
+        }
+        for (const d of dots) {
+          d.y -= d.v * dt; if (d.y < -0.02) { d.y = 1.02; d.x = Math.random(); }
+          x.fillStyle = `rgba(255, 230, 170, ${0.15 + 0.25 * Math.abs(Math.sin(now / 1500 + d.a * 6))})`;
+          x.beginPath(); x.arc(d.x * W, d.y * H, 1.2, 0, Math.PI * 2); x.fill();
+        }
+        if (!still && !document.hidden) requestAnimationFrame(draw);
+      };
+      requestAnimationFrame(draw);
+      document.addEventListener('visibilitychange', () => { if (!document.hidden && !still) { last = performance.now(); requestAnimationFrame(draw); } });
+    }
+
+    render();
+    showProfile();
+    showResume();
   </script>
 </body>
 </html>

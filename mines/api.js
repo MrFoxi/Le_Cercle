@@ -3,6 +3,7 @@
 const fs = require('fs');
 const path = require('path');
 const express = require('express');
+const activity = require('../lib/activity');
 
 const FILE = path.join(__dirname, '..', 'data', 'mines-board.json');
 const TOP = 10;
@@ -51,6 +52,8 @@ router.post('/board', (req, res) => {
   save();
   const list = b.day ? boards.days[b.day] : boards.all;
   const place = list.findIndex(e => e.name.toLowerCase() === entry.name.toLowerCase()) + 1;
+  const bosses = Math.floor((entry.level - 1) / 5);
+  if (place) activity.log(`${entry.name} a atteint le niveau ${entry.level} au Démineur Rogue${bosses ? ` (${bosses} boss battu${bosses > 1 ? 's' : ''})` : ''}`);
   res.json({ board: list, place: place || null });
 });
 

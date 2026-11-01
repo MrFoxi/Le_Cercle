@@ -2,6 +2,7 @@
 const fs = require('fs');
 const path = require('path');
 const express = require('express');
+const activity = require('../lib/activity');
 
 const FILE = path.join(__dirname, '..', 'data', 'pays-board.json');
 const TOP = 10;
@@ -64,6 +65,7 @@ router.post('/board', (req, res) => {
   boards[b.key] = next;
   save();
   const place = next.indexOf(entry) + 1 || null;
+  if (place) activity.log(`${entry.name} : ${entry.points} points à Trouve le pays (${entry.found}/${entry.total} pays)`);
   res.json({ board: next, place, improved: !!place });
 });
 

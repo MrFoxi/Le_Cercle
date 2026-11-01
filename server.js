@@ -3,6 +3,7 @@ const http = require('http');
 const path = require('path');
 const { Server } = require('socket.io');
 const { Table, MAX_PLAYERS } = require('./game');
+const activity = require('./lib/activity');
 
 const app = express();
 // Pingée de l'extérieur pour empêcher Render de mettre le serveur en veille.
@@ -29,10 +30,13 @@ require('./strategy/server')(sockets.of('/strategy')); // Strategy Club
 // Nombre de personnes connectées à chaque jeu multijoueur, pour la page d'accueil.
 const ONLINE = ['7-5', 'cote', 'p4', 'imposteur', 'bataille', 'solar', 'golf', 'strategy'];
 app.get('/api/online', (req, res) => res.json(Object.fromEntries(ONLINE.map(n => [n, sockets.of('/' + n).sockets.size]))));
+// Bandeau d'activité de l'accueil : joueurs en ligne, parties ouvertes, derniers exploits.
+app.get('/api/activity', (req, res) => res.json({ online: Object.fromEntries(ONLINE.map(n => [n, sockets.of('/' + n).sockets.size])), tables: activity.openTables(), recent: activity.recent() }));
 
 const ACTIONS = ['start', 'bet', 'draw', 'reveal', 'stand', 'bankerDraw', 'challenge', 'kick', 'ban'];
 const GRACE_MS = 60000, RESULTS_MS = 6000;
 const lobbies = new Map(); // id -> { id, table, sockets: Map(pseudo -> socket), graces: Map(pseudo -> timer), timer, chat, chatSeq }
+activity.tables['7-5'] = () => lobbies.size;
 
 const list = () => [...lobbies.values()].map(({ id, table }) => ({
   id, name: table.name, max: MAX_PLAYERS, playing: table.phase !== 'waiting',

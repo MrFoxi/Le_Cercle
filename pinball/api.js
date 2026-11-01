@@ -2,6 +2,8 @@
 const fs = require('fs');
 const path = require('path');
 const express = require('express');
+const activity = require('../lib/activity');
+const TABLE_NAMES = { arcade: 'Arcade', space: 'Espace', casino: 'Casino', jungle: 'Jungle', volcan: 'Volcan' };
 
 const FILE = path.join(__dirname, '..', 'data', 'pinball-board.json');
 const TOP = 10;
@@ -43,7 +45,9 @@ router.post('/board', (req, res) => {
   const next = list.filter(e => e !== prev).concat(entry).sort(rank).slice(0, TOP);
   boards[b.table] = next;
   save();
-  res.json({ board: next, place: next.indexOf(entry) + 1 || null });
+  const place = next.indexOf(entry) + 1 || null;
+  if (place) activity.log(`${entry.name} : ${entry.score.toLocaleString('fr-FR')} points au Pinball (table ${TABLE_NAMES[b.table]})`);
+  res.json({ board: next, place });
 });
 
 module.exports = router;
