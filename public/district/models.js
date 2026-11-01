@@ -190,10 +190,10 @@ export function glowMat(key, color, map, day = 0.15, night = 2, sched = 0, o = {
 }
 export const foliage = kind => mat('leaf' + kind, () => { const m = new THREE.MeshStandardMaterial({ color: '#4c7a3a', roughness: 0.9, flatShading: true }); m.userData.leaf = kind; return m; });
 export const SEASON_LEAVES = {
-  printemps: { cherry: '#f4b6c8', green: '#7fae4f' },
-  ete: { cherry: '#4f8a3a', green: '#3f7a35' },
-  automne: { cherry: '#d9622b', green: '#d9962f' },
-  hiver: { cherry: '#e9eef5', green: '#dfe7ee' },
+  printemps: { cherry: '#f4b6c8', green: '#7fae4f', grass: '#6f9e45' },
+  ete: { cherry: '#4f8a3a', green: '#3f7a35', grass: '#4f8a3a' },
+  automne: { cherry: '#d9622b', green: '#d9962f', grass: '#8f9448' },
+  hiver: { cherry: '#e9eef5', green: '#dfe7ee', grass: '#aab09a' },
 };
 
 // ---------- Petits outils de construction ----------
@@ -334,8 +334,11 @@ function windowRow(p, w, y, z, n, schedKey = 'A', shoji = false) {
   const m = glowMat(`win${shoji}${schedKey}`, '#ffffff', shoji ? TEX.shoji() : TEX.window(), 0.02, 0.75, schedKey);
   for (let i = 0; i < n; i++) {
     const x = -w / 2 + (w / n) * (i + 0.5);
-    plane(p, (w / n) * 0.68, 0.62, m, x, y, z);
-    box(p, (w / n) * 0.74, 0.04, 0.08, DARKWOOD(), x, y - 0.35, z);
+    const ww = (w / n) * 0.68;
+    plane(p, ww, 0.62, m, x, y, z);
+    box(p, ww + 0.08, 0.04, 0.08, DARKWOOD(), x, y - 0.35, z); // appui
+    box(p, ww + 0.06, 0.035, 0.05, DARKWOOD(), x, y + 0.31, z); // linteau
+    for (const k of [-1, 1]) box(p, 0.03, 0.62, 0.05, DARKWOOD(), x + k * (ww / 2 + 0.015), y - 0.31, z);
   }
 }
 function plant(p, x, z, s = 1, kind = 'green') {
@@ -400,14 +403,14 @@ export function buildBuilding(type, level, depth = 4.2) {
   box(g, W + 0.3, 0.04, depth, textured('slabfloor', TEX.slab()), 0, 0, 0);
   if (L.style === 'home') buildHome(g, L, level, depth, info, rng);
   else {
-    box(g, W, 0.06, D, PALEWOOD(), 0, 0.04, cz);
+    box(g, W - 0.2, 0.06, D - 0.2, PALEWOOD(), 0, 0.04, cz); // plancher : à l’intérieur des murs, pas à fleur
     const frieze = floors === 1 && L.roof !== 'flat', H = FLOOR * floors + (frieze ? 0.45 : 0);
     box(g, W, H, 0.1, wallMat, 0, 0, back + 0.05);
     for (const s of [-1, 1]) box(g, 0.1, H, D, wallMat, s * (W / 2 - 0.05), 0, cz);
     if (frieze) box(g, W - 0.2, 0.45, 0.1, wallMat, 0, FLOOR, front - 0.05);
     // Façade : poteaux et linteau ; au rez-de-chaussée, ouverte ou vitrée
     for (const s of [-1, 1]) box(g, 0.16, H, 0.16, DARKWOOD(), s * (W / 2 - 0.07), 0, front - 0.07); // dépasse un peu du mur : pas de scintillement
-    box(g, W, 0.22, 0.12, DARKWOOD(), 0, FLOOR - 0.22, front - 0.06);
+    box(g, W - 0.3, 0.22, 0.12, DARKWOOD(), 0, FLOOR - 0.22, front - 0.06);
     if (L.glass) {
       const gl = mat('glass', () => new THREE.MeshStandardMaterial({ color: '#cfe8ff', roughness: 0.05, metalness: 0.1, transparent: true, opacity: 0.22, depthWrite: false }));
       plane(g, W - 0.3, FLOOR - 0.3, gl, 0, (FLOOR - 0.3) / 2 + 0.05, front - 0.04);
@@ -416,8 +419,8 @@ export function buildBuilding(type, level, depth = 4.2) {
     }
     // Étages
     for (let f = 1; f < floors; f++) {
-      box(g, W, 0.1, D, DARKWOOD(), 0, FLOOR * f - 0.05, cz);
-      box(g, W, FLOOR, 0.1, wallMat, 0, FLOOR * f, front - 0.05);
+      box(g, W - 0.2, 0.1, D - 0.2, DARKWOOD(), 0, FLOOR * f - 0.05, cz);
+      box(g, W - 0.2, FLOOR, 0.1, wallMat, 0, FLOOR * f, front - 0.05);
       windowRow(g, W - 0.6, FLOOR * f + 0.95, front + 0.01, 3, f % 2 ? 'A' : 'B', !!L.shoji || L.roof !== 'flat');
       acUnit(g, W / 2 + 0.11, FLOOR * f + 0.2, cz + 0.6, Math.PI / 2);
     }
@@ -425,9 +428,10 @@ export function buildBuilding(type, level, depth = 4.2) {
     for (const s of [-1, 1]) windowRow(sub(g, s * (W / 2 + 0.01), 0, cz, s * Math.PI / 2), 1.2, FLOOR * (floors > 1 ? 1.55 : 0.6), 0, 1, 'C', false);
     windowRow(sub(g, 0, 0, back - 0.01, Math.PI), W - 1, FLOOR * (floors > 1 ? 1.55 : 0.6), 0, 2, 'B', false);
     cyl(g, 0.04, H, std('#6d6f72', { metalness: 0.5, roughness: 0.4 }), -W / 2 + 0.25, 0, back - 0.06);
+    details(g, W, D, back, front, cz, H, floors, L.roof !== 'flat');
     // Toit
     if (L.roof === 'flat') {
-      flatRoof(g, W, D, H, '#7d8086');
+      flatRoof(sub(g, 0, 0, cz), W, D, H, '#7d8086'); // centré sur le bâtiment, pas sur la parcelle
       box(g, 0.6, 0.35, 0.5, std('#a9acb0'), 1.1, H + 0.12, cz - 0.6); // machines sur le toit
       cyl(g, 0.25, 0.5, std('#c6c1b8'), -1.2, H + 0.12, cz - 0.5);
     } else gableRoof(sub(g, 0, 0, cz), W, D, H, L.roof, L.style === 'stall' ? 0.42 : 0.5);
@@ -487,6 +491,25 @@ export function buildBuilding(type, level, depth = 4.2) {
     }
   }
   return { group: g, info };
+}
+
+// Petits détails qui donnent du volume : soubassement, poteaux d'angle, bandeaux, porte de service, compteur, gouttière
+const STONE = () => std('#5b5853', { roughness: 0.95 });
+function details(g, W, D, back, front, cz, H, floors, wood, home = false) {
+  box(g, W + 0.06, 0.13, 0.06, STONE(), 0, 0, back - 0.01);
+  for (const s of [-1, 1]) box(g, 0.06, 0.13, D + (home ? 0.04 : 0), STONE(), s * (W / 2 + 0.01), 0, cz);
+  if (home) box(g, W + 0.06, 0.13, 0.06, STONE(), 0, 0, front + 0.01);
+  if (wood) for (const s of [-1, 1]) box(g, 0.12, H, 0.12, DARKWOOD(), s * (W / 2 - 0.04), 0, back + 0.04);
+  for (let f = 1; f < floors; f++) {
+    box(g, W + 0.06, 0.07, 0.05, DARKWOOD(), 0, FLOOR * f - 0.04, back - 0.02);
+    for (const s of [-1, 1]) box(g, 0.05, 0.07, D, DARKWOOD(), s * (W / 2 + 0.02), FLOOR * f - 0.04, cz);
+  }
+  const b = sub(g, 0, 0, back - 0.012, Math.PI);
+  plane(b, 0.45, 0.9, std('#3a2a20'), 0, 0.5, 0); // porte de service, entre les fenêtres
+  box(b, 0.52, 0.04, 0.06, DARKWOOD(), 0, 0.95, 0);
+  box(b, 0.16, 0.22, 0.06, std('#9aa0a4', { metalness: 0.4, roughness: 0.5 }), 1.72, 0.75, 0.02); // compteur, dans le coin
+  cyl(b, 0.012, 0.6, std('#555'), 1.72, 0.15, 0.04);
+  if (!home) box(g, W + 0.2, 0.05, 0.08, std('#6d6f72', { metalness: 0.5 }), 0, H - 0.04, back - 0.08); // gouttière
 }
 
 function interior(g, L, level, { W, back, front, cz }, info, rng) {
@@ -597,6 +620,8 @@ function buildHome(g, L, level, depth, info, rng) {
     const sched = ['A', 'B', 'C'][(f + level) % 3], shoji = L.home === 'maison' || L.home === 'hotel';
     windowRow(g, W - 0.4, FLOOR * f + 0.8, front + 0.01, L.home === 'immeuble' ? 4 : 3, sched, shoji);
     windowRow(sub(g, W / 2 + 0.01, 0, cz, Math.PI / 2), D - 0.6, FLOOR * f + 0.8, 0, 2, sched, shoji);
+    windowRow(sub(g, -W / 2 - 0.01, 0, cz, -Math.PI / 2), D - 1.2, FLOOR * f + 0.8, 0, 1, ['B', 'C', 'A'][(f + level) % 3], shoji);
+    if (f > 0 || L.home !== 'maison') windowRow(sub(g, 0, 0, back - 0.01, Math.PI), f ? W - 0.8 : W - 0.4, FLOOR * f + 0.8, 0, f ? 3 : 2, ['C', 'A', 'B'][(f + level) % 3], shoji);
     if (f > 0) {
       box(g, W + 0.1, 0.08, 0.1, DARKWOOD(), 0, FLOOR * f - 0.04, front + 0.05);
       if (L.home === 'appart' || L.home === 'immeuble') { // coursive ou balcons
@@ -608,14 +633,19 @@ function buildHome(g, L, level, depth, info, rng) {
     }
     if (L.home === 'immeuble' || f === floors - 1) acUnit(g, -W / 2 - 0.11, FLOOR * f + 0.3, cz, -Math.PI / 2);
   }
+  details(g, W, D, back, front, cz, H, floors, false, true);
   // porte
   const door = L.home === 'maison' || L.home === 'hotel' ? glowMat('doorShoji', '#ffffff', TEX.shoji(), 0.1, 1.2, 0) : std('#3a2a20');
   plane(g, 0.7, 0.95, door, -1.2, 0.5, front + 0.02);
   info.door = { x: -1.2, z: depth / 2 };
   info.doorIn = { x: -1.2, z: front + 0.1 };
   if (L.home === 'appart') { // escalier extérieur
-    for (let i = 0; i < 9; i++) box(g, 0.5, 0.06, 0.18, std('#6d7075', { metalness: 0.4 }), W / 2 + 0.3, i * 0.16, front - 0.2 - i * 0.17);
-    box(g, 0.04, 1.6, 0.04, std('#6d7075'), W / 2 + 0.55, 0, front - 0.2);
+    const steel = std('#6d7075', { metalness: 0.4, roughness: 0.5 });
+    for (let i = 0; i < 9; i++) box(g, 0.5, 0.05, 0.2, steel, W / 2 + 0.3, 0.16 * (i + 1) - 0.05, front - 1.75 + i * 0.17);
+    box(g, 0.55, 0.05, 0.55, steel, W / 2 + 0.3, FLOOR - 0.05, front + 0.2); // palier qui rejoint la coursive
+    const rail = new THREE.Mesh(new THREE.CylinderGeometry(0.015, 0.015, Math.hypot(1.65, 1.35), 5), steel); // rampe parallèle aux marches
+    rail.position.set(W / 2 + 0.55, 1.275, front - 0.925); rail.rotation.x = Math.atan2(1.65, 1.35); g.add(rail);
+    for (const z of [front - 1.75, front - 0.3]) box(g, 0.03, z < front - 1 ? 0.5 : 1.8, 0.03, steel, W / 2 + 0.55, 0, z);
     box(g, 0.8, 0.12, 0.05, std('#f2eee4'), 1.1, 0.95, front + 0.04);
     plane(g, 0.7, 0.18, textured('plate' + L.plate, TEX.sign(L.plate, '#f2eee4', '#2a2a2a')), 1.1, 1.01, front + 0.07);
   }
@@ -626,7 +656,7 @@ function buildHome(g, L, level, depth, info, rng) {
     lantern(g, -1.85, FLOOR - 0.5, front + 0.6, L.lantern, L.lchar || '', 1, info.glows);
     if (level >= 3) lantern(g, -0.5, FLOOR - 0.5, front + 0.6, L.lantern, L.lchar || '', 1, info.glows);
   }
-  if (L.flat || L.roof === 'flat') flatRoof(g, W, D, H, '#8a8d92');
+  if (L.flat || L.roof === 'flat') flatRoof(sub(g, 0, 0, cz), W, D, H, '#8a8d92');
   else { gableRoof(sub(g, 0, 0, cz), W, D, H, L.roof, 0.48); hisashi(g, W + 0.2, FLOOR, front, L.roof); }
   // jardin devant selon le niveau
   const yard = depth / 2 - front;
@@ -674,7 +704,8 @@ export function makeDecor(id) {
       const s = id === 'sakura' ? 2 : 1, kind = id === 'erable' ? 'green' : 'cherry';
       const trunk = std('#4a3326', { roughness: 0.95 });
       const t = cyl(g, 0.07 * s, 0.9 * s, trunk, 0, 0, 0); t.rotation.z = 0.08;
-      for (const [x, y, z, r] of [[0, 1.05, 0, 0.5], [0.35, 0.95, 0.1, 0.36], [-0.3, 1, -0.1, 0.38], [0.05, 1.3, 0.2, 0.34], [-0.1, 0.9, 0.35, 0.3]]) shape(g, G.ico, foliage(kind), x * s, y * s, z * s, r * 2 * s);
+      for (const [x, y, z, r] of [[0, 1.05, 0, 0.5], [0.35, 0.95, 0.1, 0.36], [-0.3, 1, -0.1, 0.38], [0.05, 1.3, 0.2, 0.34], [-0.1, 0.9, 0.35, 0.3], [0.25, 1.2, -0.25, 0.3], [-0.35, 1.22, 0.15, 0.28], [0.12, 0.82, -0.32, 0.26], [0, 1.48, -0.05, 0.24]]) shape(g, G.ico, foliage(kind), x * s, y * s, z * s, r * 2 * s);
+      for (const k of [-1, 1]) { const br = cyl(g, 0.03 * s, 0.45 * s, trunk, k * 0.1 * s, 0.7 * s, 0); br.rotation.z = -k * 0.7; }
       g.userData.tree = kind;
       break;
     }
@@ -705,26 +736,73 @@ const PG = {
   box: new THREE.BoxGeometry(0.2, 0.16, 0.16),
 };
 const UMB = ['#2a3a5a', '#c8402e', '#e8e2d6', '#3a6a5a', '#6a4a7a', '#d8a23a'];
+const PERSON_MAT = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.85 });
+const _m = new THREE.Matrix4(), _c = new THREE.Color();
+// Assemble plusieurs formes colorées en une seule géométrie (un seul appel de dessin par membre)
+function colored(parts) {
+  const list = parts.map(([geo, color, x = 0, y = 0, z = 0, sx = 1, sy = sx, sz = sx, rx = 0]) => {
+    const g = (geo.index ? geo.toNonIndexed() : geo.clone());
+    g.deleteAttribute('uv');
+    g.applyMatrix4(_m.compose(new THREE.Vector3(x, y, z), new THREE.Quaternion().setFromEuler(new THREE.Euler(rx, 0, 0)), new THREE.Vector3(sx, sy, sz)));
+    _c.set(color).convertSRGBToLinear();
+    const col = new Float32Array(g.attributes.position.count * 3);
+    for (let i = 0; i < col.length; i += 3) col.set([_c.r, _c.g, _c.b], i);
+    g.setAttribute('color', new THREE.BufferAttribute(col, 3));
+    return g;
+  });
+  return mergeGeometries(list);
+}
+const PB = {
+  capsule: new THREE.CapsuleGeometry(1, 1, 3, 8),
+  sphere: new THREE.SphereGeometry(1, 12, 9),
+  cap: new THREE.SphereGeometry(1, 12, 8, 0, Math.PI * 2, 0, Math.PI * 0.55),
+  box: new THREE.BoxGeometry(1, 1, 1),
+  cyl: new THREE.CylinderGeometry(1, 1, 1, 10),
+  cone: new THREE.CylinderGeometry(0.55, 1, 1, 10),
+};
 export function makePerson(rng, uniform) {
   const pick = a => a[Math.floor(rng() * a.length)];
   const root = new THREE.Group(), body = new THREE.Group();
   root.add(body);
-  const cloth = std(uniform || pick(CLOTH), { roughness: 0.9 }), pants = std(pick(['#2a2a33', '#3a3a44', '#4a3a2a', '#1f2a3a', '#7a6a5a'])), skin = std(pick(SKIN));
-  const mk = (geo, m, x, y, z, parent = body) => { const o = new THREE.Mesh(geo, m); o.position.set(x, y, z); o.castShadow = true; parent.add(o); return o; };
-  const legL = mk(PG.leg, pants, -0.045, 0.27, 0), legR = mk(PG.leg, pants, 0.045, 0.27, 0);
-  const torso = mk(PG.body, cloth, 0, 0.4, 0);
-  const armL = mk(PG.arm, cloth, -0.13, 0.51, 0), armR = mk(PG.arm, cloth, 0.13, 0.51, 0);
-  const head = mk(PG.head, skin, 0, 0.62, 0);
-  mk(uniform ? PG.hat : PG.hair, uniform ? std(uniform === '#f4f1ea' ? '#ffffff' : uniform) : std(pick(HAIR)), 0, uniform ? 0.7 : 0.64, -0.005).rotation.x = uniform ? 0 : -0.25;
+  const old = !uniform && rng() < 0.15;
+  const skin = pick(SKIN), top = uniform || pick(CLOTH), bottom = pick(['#2a2a33', '#3a3a44', '#4a3a2a', '#1f2a3a', '#7a6a5a', '#5a6a7a']);
+  const skirt = !uniform && rng() < 0.3, hair = old ? pick(['#9a9a9a', '#c8c8c8', '#7a7a7a']) : pick(HAIR);
+  const style = uniform ? 'short' : pick(['short', 'short', 'long', 'bun', 'pony', 'bob']);
+  const shoe = pick(['#1a1a1a', '#3a2a20', '#e8e8e8', '#5a3a2a']);
+  const mesh = (geo, x, y, z, parent = body) => { const o = new THREE.Mesh(geo, PERSON_MAT); o.position.set(x, y, z); o.castShadow = true; parent.add(o); return o; };
+  // jambes (pivot à la hanche) avec chaussures
+  const legGeo = colored([[PB.capsule, skirt ? '#2a2a33' : bottom, 0, -0.13, 0, 0.038, 0.1, 0.038], [PB.box, shoe, 0, -0.272, 0.018, 0.064, 0.045, 0.1]]);
+  const legL = mesh(legGeo, -0.045, 0.29, 0), legR = mesh(legGeo, 0.045, 0.29, 0);
+  // buste (épaules arrondies), jupe ou ceinture, sac
+  const torsoParts = [[PB.capsule, top, 0, 0.42, 0, 0.1, 0.08, 0.075], [PB.cyl, skirt ? top : bottom, 0, 0.315, 0, 0.098, 0.06, 0.074]];
+  if (skirt) torsoParts.push([PB.cone, pick(['#a33b2e', '#2f4a6a', '#e8e2d6', '#6a4a7a', '#3a5a3a']), 0, 0.25, 0, 0.13, 0.15, 0.11]);
+  if (!uniform && rng() < 0.3) torsoParts.push([PB.box, pick(['#6a4a2a', '#2a2a2a', '#c8a26a', '#8a2a2a']), 0.12, 0.33, 0, 0.04, 0.12, 0.12]); // sac
+  if (uniform) torsoParts.push([PB.box, '#f4f1ea', 0, 0.37, 0.07, 0.15, 0.17, 0.02]); // tablier
+  const torso = mesh(colored(torsoParts), 0, 0, 0);
+  // bras (pivot à l'épaule) avec mains
+  const armGeo = colored([[PB.capsule, top, 0, -0.09, 0, 0.03, 0.08, 0.03], [PB.sphere, skin, 0, -0.2, 0, 0.032]]);
+  const armL = mesh(armGeo, -0.13, 0.53, 0), armR = mesh(armGeo, 0.13, 0.53, 0);
+  // tête : visage, yeux, coiffure, chapeau
+  const headParts = [[PB.sphere, skin, 0, 0, 0, 0.088], [PB.sphere, '#1a1414', -0.031, 0.008, 0.079, 0.011], [PB.sphere, '#1a1414', 0.031, 0.008, 0.079, 0.011]];
+  if (!old || rng() < 0.6) {
+    headParts.push([PB.cap, hair, 0, 0.012, -0.008, 0.094, 0.094, 0.094, -0.35]);
+    if (style === 'long') headParts.push([PB.sphere, hair, 0, -0.06, -0.045, 0.085, 0.12, 0.055]);
+    if (style === 'bob') headParts.push([PB.sphere, hair, 0, -0.02, -0.02, 0.098, 0.075, 0.092]);
+    if (style === 'bun') headParts.push([PB.sphere, hair, 0, 0.08, -0.06, 0.04]);
+    if (style === 'pony') headParts.push([PB.capsule, hair, 0, -0.05, -0.1, 0.025, 0.05, 0.025]);
+  }
+  if (uniform) headParts.push([PB.cyl, uniform === '#f4f1ea' ? '#ffffff' : uniform, 0, 0.1, -0.005, 0.085, uniform === '#f4f1ea' ? 0.12 : 0.05, 0.085]);
+  else if (rng() < 0.15) headParts.push([PB.cyl, pick(['#2a2a2a', '#c8a26a', '#8a3a2a', '#eae0c8']), 0, 0.075, 0, 0.13, 0.012, 0.13], [PB.cyl, pick(['#2a2a2a', '#5a3a2a']), 0, 0.1, 0, 0.08, 0.05, 0.08]);
+  const head = mesh(colored(headParts), 0, 0.665, 0);
+  // parapluie et carton de déménagement
   const umbrella = new THREE.Group();
   const canopy = new THREE.Mesh(PG.umbrella, std(pick(UMB), { side: THREE.DoubleSide, roughness: 0.5 }));
-  canopy.position.y = 0.95; canopy.castShadow = true;
+  canopy.position.y = 0.97; canopy.castShadow = true;
   const stick = new THREE.Mesh(PG.stick, std('#222'));
-  stick.position.y = 0.7;
+  stick.position.y = 0.72;
   umbrella.add(canopy, stick); umbrella.position.set(0.1, 0, 0); umbrella.visible = false;
   body.add(umbrella);
-  const carry = mk(PG.box, std('#c8a26a'), 0, 0.42, 0.14); carry.visible = false; // carton de déménagement
-  const s = 0.92 + rng() * 0.16;
-  root.scale.setScalar(s);
+  const carry = new THREE.Mesh(PG.box, std('#c8a26a')); carry.position.set(0, 0.42, 0.15); carry.visible = false; carry.castShadow = true; body.add(carry);
+  root.scale.setScalar((old ? 0.9 : 0.94) + rng() * 0.14);
   return { root, body, legL, legR, armL, armR, head, torso, umbrella, carry };
 }

@@ -9,12 +9,13 @@ import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js';
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 import { HorizontalTiltShiftShader } from 'three/addons/shaders/HorizontalTiltShiftShader.js';
 import { VerticalTiltShiftShader } from 'three/addons/shaders/VerticalTiltShiftShader.js';
-import { TEX, MATS, SEASON_LEAVES, std, textured, glowMat, box, bake, buildBuilding, makeDecor, lightPool, streak, lantern, seeded } from './models.js';
+import { TEX, MATS, SEASON_LEAVES, std, textured, glowMat, box, bake, buildBuilding, makeDecor, lightPool, streak, lantern, seeded, foliage } from './models.js';
 import { PLOTS, SECTORS, BUILDINGS } from './sim.js';
 import { createPeople } from './people.js';
 import { buildTerrain, groundY, BASE } from './terrain.js';
 import { createLife } from './life.js';
 import { GTAOPass } from 'three/addons/postprocessing/GTAOPass.js';
+import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 
 const GROUND_Y = 0.06;
 const smooth = (a, b, t) => { t = Math.min(1, Math.max(0, (t - a) / (b - a))); return t * t * (3 - 2 * t); };
@@ -108,7 +109,7 @@ export function createWorld(canvas, { low }) {
     const curb = box(scene, 26.6, GROUND_Y, 0.08, std('#8f8b84'), 0, 0, s * 1.4); curb.receiveShadow = true;
   }
   // Marquages : ligne médiane, passages piétons
-  const paint = std('#e8e4da', { roughness: 0.7 });
+  const paint = std('#bdb8ac', { roughness: 0.8 }); // pas trop blanc : sinon ça brille comme un néon au soleil
   for (let x = -12; x <= 12; x += 1.6) if (Math.abs(x) > 1.6 && Math.abs(Math.abs(x) - 9.3) > 1) box(scene, 0.8, 0.005, 0.07, paint, x, 0, 0);
   for (const cx of [0, -9.3, 9.3]) for (let z = -1.1; z <= 1.1; z += 0.44) box(scene, 1.3, 0.005, 0.22, paint, cx, 0, z);
   for (const [x, z] of [[-3, 0.5], [6, -0.6], [-8, -0.4]]) { const m = new THREE.Mesh(new THREE.CylinderGeometry(0.28, 0.28, 0.01, 18), std('#3a3a3c', { metalness: 0.6, roughness: 0.5 })); m.position.set(x, 0.006, z); scene.add(m); }
@@ -117,6 +118,22 @@ export function createWorld(canvas, { low }) {
   groundMats.push(...terrain.groundMats);
   const tableTop = new THREE.Mesh(new THREE.PlaneGeometry(160, 160), new THREE.MeshStandardMaterial({ color: '#0d0f14', roughness: 0.32, metalness: 0.3 }));
   tableTop.rotation.x = -Math.PI / 2; tableTop.position.y = -1.69; tableTop.receiveShadow = true; scene.add(tableTop);
+
+  // Touffes d'herbe dans les recoins : bordures de trottoir, pied du mur de la colline, bord du canal (couleur de saison)
+  {
+    const lines = [[1.47, 0.06], [-1.47, 0.06], [14.68, 0.06], [-15.18, 0.06], [-18.95, 0.06], [12.5, 0.06], [-13.35, 0.06]];
+    const blade = (rz, rx, h) => new THREE.ConeGeometry(0.014, h, 3).translate(0, h / 2, 0).rotateZ(rz).rotateX(rx);
+    const tufts = new THREE.InstancedMesh(mergeGeometries([blade(0, 0, 0.13), blade(0.35, 0.1, 0.11), blade(-0.3, -0.15, 0.1), blade(0.1, 0.4, 0.09), blade(-0.15, -0.4, 0.1)]), foliage('grass'), low ? 160 : 360); // brins d'herbe
+    const r = seeded(73), d = new THREE.Object3D();
+    for (let i = 0; i < tufts.count; i++) {
+      const [z, y] = lines[i % lines.length];
+      const x = r() * 25.6 - 12.8;
+      if (Math.abs(x) < 1 && (z > 12 || z < -14)) { d.scale.setScalar(0); } // pas sur l'escalier ni sur le pont
+      else { d.position.set(x, y, z + (r() - 0.5) * 0.06); d.rotation.set((r() - 0.5) * 0.4, r() * 6, (r() - 0.5) * 0.4); d.scale.set(0.7 + r() * 0.8, 0.6 + r() * 1.1, 0.7 + r() * 0.8); }
+      d.updateMatrix(); tufts.setMatrixAt(i, d.matrix);
+    }
+    tufts.receiveShadow = true; scene.add(tufts);
+  }
 
   // Flaques (visibles quand le sol est mouillé)
   const puddleMat = new THREE.MeshStandardMaterial({ color: '#0d1014', roughness: 0.03, metalness: 0.7, transparent: true, opacity: 0, depthWrite: false });

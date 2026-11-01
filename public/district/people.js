@@ -217,7 +217,7 @@ export function createPeople({ scene, plots, low, emitCoin, onFlash }) {
     const sitting = p.sitH > 0;
     m.legL.rotation.x = sitting ? -1.45 : moving ? s * 0.55 : 0;
     m.legR.rotation.x = sitting ? -1.45 : moving ? -s * 0.55 : 0;
-    m.body.position.y = sitting ? p.sitH - 0.27 : moving ? Math.abs(s) * 0.018 : 0;
+    m.body.position.y = sitting ? p.sitH - 0.29 : moving ? Math.abs(s) * 0.018 : 0;
     m.armL.rotation.x = moving ? -s * 0.4 : 0;
     m.armR.rotation.x = moving ? s * 0.4 : 0;
     m.armR.rotation.z = m.armL.rotation.z = 0;
