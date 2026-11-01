@@ -721,7 +721,7 @@ export function makeDecor(id) {
 }
 
 // ---------- Habitants ----------
-const SKIN = ['#f1c9a5', '#e0ac85', '#c98e64', '#8d5a3b', '#f6d6bd'];
+const SKIN = ['#f5dcc8', '#ebc7aa', '#d4a587', '#a8775a', '#f8e6d6']; // teintes douces : la lumière chaude du soir les fonce déjà
 const HAIR = ['#1b1512', '#2b1d14', '#4a2f1d', '#8a8a8a', '#b07a3a', '#151518'];
 const CLOTH = ['#2f4a6a', '#a33b2e', '#e8e2d6', '#3a5a3a', '#6a4a7a', '#d8a23a', '#2a2a2a', '#7a8a9a', '#c86a8a', '#4a6a8a'];
 const PG = {
@@ -774,14 +774,14 @@ export function makePerson(rng, uniform) {
   const legGeo = colored([[PB.capsule, skirt ? '#2a2a33' : bottom, 0, -0.13, 0, 0.038, 0.1, 0.038], [PB.box, shoe, 0, -0.272, 0.018, 0.064, 0.045, 0.1]]);
   const legL = mesh(legGeo, -0.045, 0.29, 0), legR = mesh(legGeo, 0.045, 0.29, 0);
   // buste (épaules arrondies), jupe ou ceinture, sac
-  const torsoParts = [[PB.capsule, top, 0, 0.42, 0, 0.1, 0.08, 0.075], [PB.cyl, skirt ? top : bottom, 0, 0.315, 0, 0.098, 0.06, 0.074]];
+  const torsoParts = [[PB.capsule, top, 0, 0.43, 0, 0.105, 0.085, 0.078], [PB.sphere, top, -0.098, 0.515, 0, 0.042], [PB.sphere, top, 0.098, 0.515, 0, 0.042], [PB.cyl, skin, 0, 0.575, 0, 0.032, 0.07, 0.032], [PB.cyl, skirt ? top : bottom, 0, 0.315, 0, 0.098, 0.06, 0.074]];
   if (skirt) torsoParts.push([PB.cone, pick(['#a33b2e', '#2f4a6a', '#e8e2d6', '#6a4a7a', '#3a5a3a']), 0, 0.25, 0, 0.13, 0.15, 0.11]);
   if (!uniform && rng() < 0.3) torsoParts.push([PB.box, pick(['#6a4a2a', '#2a2a2a', '#c8a26a', '#8a2a2a']), 0.12, 0.33, 0, 0.04, 0.12, 0.12]); // sac
   if (uniform) torsoParts.push([PB.box, '#f4f1ea', 0, 0.37, 0.07, 0.15, 0.17, 0.02]); // tablier
   const torso = mesh(colored(torsoParts), 0, 0, 0);
   // bras (pivot à l'épaule) avec mains
   const armGeo = colored([[PB.capsule, top, 0, -0.09, 0, 0.03, 0.08, 0.03], [PB.sphere, skin, 0, -0.2, 0, 0.032]]);
-  const armL = mesh(armGeo, -0.13, 0.53, 0), armR = mesh(armGeo, 0.13, 0.53, 0);
+  const armL = mesh(armGeo, -0.122, 0.525, 0), armR = mesh(armGeo, 0.122, 0.525, 0); // collés aux épaules
   // tête : visage, yeux, coiffure, chapeau
   const headParts = [[PB.sphere, skin, 0, 0, 0, 0.088], [PB.sphere, '#1a1414', -0.031, 0.008, 0.079, 0.011], [PB.sphere, '#1a1414', 0.031, 0.008, 0.079, 0.011]];
   if (!old || rng() < 0.6) {
@@ -793,7 +793,7 @@ export function makePerson(rng, uniform) {
   }
   if (uniform) headParts.push([PB.cyl, uniform === '#f4f1ea' ? '#ffffff' : uniform, 0, 0.1, -0.005, 0.085, uniform === '#f4f1ea' ? 0.12 : 0.05, 0.085]);
   else if (rng() < 0.15) headParts.push([PB.cyl, pick(['#2a2a2a', '#c8a26a', '#8a3a2a', '#eae0c8']), 0, 0.075, 0, 0.13, 0.012, 0.13], [PB.cyl, pick(['#2a2a2a', '#5a3a2a']), 0, 0.1, 0, 0.08, 0.05, 0.08]);
-  const head = mesh(colored(headParts), 0, 0.665, 0);
+  const head = mesh(colored(headParts), 0, 0.655, 0); // posée sur le cou
   // parapluie et carton de déménagement
   const umbrella = new THREE.Group();
   const canopy = new THREE.Mesh(PG.umbrella, std(pick(UMB), { side: THREE.DoubleSide, roughness: 0.5 }));
