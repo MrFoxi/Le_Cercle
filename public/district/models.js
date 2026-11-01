@@ -404,9 +404,9 @@ export function buildBuilding(type, level, depth = 4.2) {
     const frieze = floors === 1 && L.roof !== 'flat', H = FLOOR * floors + (frieze ? 0.45 : 0);
     box(g, W, H, 0.1, wallMat, 0, 0, back + 0.05);
     for (const s of [-1, 1]) box(g, 0.1, H, D, wallMat, s * (W / 2 - 0.05), 0, cz);
-    if (frieze) box(g, W, 0.45, 0.1, wallMat, 0, FLOOR, front - 0.05);
+    if (frieze) box(g, W - 0.2, 0.45, 0.1, wallMat, 0, FLOOR, front - 0.05);
     // Façade : poteaux et linteau ; au rez-de-chaussée, ouverte ou vitrée
-    for (const s of [-1, 1]) box(g, 0.14, H, 0.14, DARKWOOD(), s * (W / 2 - 0.07), 0, front - 0.07);
+    for (const s of [-1, 1]) box(g, 0.16, H, 0.16, DARKWOOD(), s * (W / 2 - 0.07), 0, front - 0.07); // dépasse un peu du mur : pas de scintillement
     box(g, W, 0.22, 0.12, DARKWOOD(), 0, FLOOR - 0.22, front - 0.06);
     if (L.glass) {
       const gl = mat('glass', () => new THREE.MeshStandardMaterial({ color: '#cfe8ff', roughness: 0.05, metalness: 0.1, transparent: true, opacity: 0.22, depthWrite: false }));
