@@ -2,7 +2,8 @@
 // les règles (missions, multiball, tilt, protection, fin de partie) s'enchaînent.
 import assert from 'node:assert';
 import { createWorld, addBall, step, launch, R } from './public/pinball/physics.js';
-import { createGame, update, setFlipper, plunge, shake } from './public/pinball/game.js';
+import { createGame, update, setFlipper, plunge, shake, PACE } from './public/pinball/game.js';
+// Les tests avancent en temps de table : 1/60 s de jeu par image, quel que soit le ralenti d'affichage.
 import { TABLES } from './public/pinball/tables.js';
 
 const table = TABLES[0];
@@ -60,7 +61,7 @@ for (const t of TABLES) {
   for (let frame = 0; frame < 60 * 240 && !g.over; frame++) {
     if (frame % 90 === 0) plunge(g, 0.75 + rng() * 0.25);
     for (const f of g.w.flippers) setFlipper(g, f.id, g.w.balls.some(b => !b.ramp && Math.hypot(b.x - f.x, b.y - f.y) < 9 && b.vy < -15));
-    update(g, 1 / 60);
+    update(g, 1 / 60 / PACE);
     for (const fx of g.fx) counts[fx.kind] = (counts[fx.kind] || 0) + 1;
     g.fx.length = 0;
     maxBalls = Math.max(maxBalls, g.w.balls.length);
@@ -77,7 +78,7 @@ for (const t of TABLES) {
 // Règles : drop targets -> porte ouverte -> 2 captures -> multiball (3 billes), puis super jackpot.
 {
   const g = createGame(table, rng);
-  const fire = (type, obj, extra = {}) => { g.w.events.push({ type, obj, ball: g.w.balls[0], speed: 100, x: 0, y: 0, ...extra }); update(g, 1 / 60); };
+  const fire = (type, obj, extra = {}) => { g.w.events.push({ type, obj, ball: g.w.balls[0], speed: 100, x: 0, y: 0, ...extra }); update(g, 1 / 60 / PACE); };
   for (const id of ['D1', 'D2', 'D3']) fire('hit', g.w.walls.find(s => s.id === id));
   assert(g.missions.drops && g.open.door && g.w.saucers[0].active);
   // Deux captures dans le trou : la bille entre dans la poche, elle est capturée puis rendue, la porte se referme
@@ -86,15 +87,15 @@ for (const t of TABLES) {
     const b0 = g.w.balls[0];
     assert(g.open.door, 'porte ouverte avant la capture');
     Object.assign(b0, { x: 23, y: 60.5, vx: 0, vy: 40, held: false });
-    for (let i = 0; i < 6; i++) update(g, 1 / 60);
+    for (let i = 0; i < 6; i++) update(g, 1 / 60 / PACE);
     assert(k === 1 || b0.held, 'bille capturée');
-    for (let i = 0; i < 130; i++) { update(g, 1 / 60); maxB = Math.max(maxB, g.w.balls.length); }
+    for (let i = 0; i < 130; i++) { update(g, 1 / 60 / PACE); maxB = Math.max(maxB, g.w.balls.length); }
     assert(!b0.held && !(b0.x > 20 && b0.x < 26 && b0.y > 58 && b0.y < 65), 'bille rendue hors de la poche');
-    if (k === 0) { assert(!g.open.door, 'porte refermée'); for (let i = 0; i < 120; i++) update(g, 1 / 60); for (const id of ['D1', 'D2', 'D3']) fire('hit', g.w.walls.find(s => s.id === id)); }
+    if (k === 0) { assert(!g.open.door, 'porte refermée'); for (let i = 0; i < 120; i++) update(g, 1 / 60 / PACE); for (const id of ['D1', 'D2', 'D3']) fire('hit', g.w.walls.find(s => s.id === id)); }
   }
   assert(g.multiball && g.missions.multiball);
   assert(maxB >= 3, `multiball : ${maxB} billes`);
-  for (let k = 0; k < 3; k++) { g.w.events.push({ type: 'ramp', ramp: k % 2 ? 'left' : 'right', ball: g.w.balls[0] }); update(g, 1 / 60); }
+  for (let k = 0; k < 3; k++) { g.w.events.push({ type: 'ramp', ramp: k % 2 ? 'left' : 'right', ball: g.w.balls[0] }); update(g, 1 / 60 / PACE); }
   assert(g.missions.ramps && g.open.door, 'super jackpot allumé : porte rouverte');
   fire('saucer', g.w.saucers[0]);
   assert(g.missions.super && g.jackpots === 1);
@@ -108,22 +109,22 @@ for (const t of TABLES) {
 
 // Mécanismes propres aux autres tables
 const byId = id => TABLES.find(t => t.id === id);
-const fireOn = g => (type, obj, extra = {}) => { g.w.events.push({ type, obj, ball: g.w.balls[0], speed: 100, x: 0, y: 0, ...extra }); update(g, 1 / 60); };
+const fireOn = g => (type, obj, extra = {}) => { g.w.events.push({ type, obj, ball: g.w.balls[0], speed: 100, x: 0, y: 0, ...extra }); update(g, 1 / 60 / PACE); };
 {
   // Espace : un portail téléporte la bille ; le trou noir l'aspire et la capture (2 fois = multiball).
   const g = createGame(byId('space'), rng);
   const b = g.w.balls[0];
   const p = g.w.portals[0];
   Object.assign(b, { x: p.x, y: p.y - 3, vx: 0, vy: 200 }); // tirée vers le haut
-  for (let i = 0; i < 4; i++) update(g, 1 / 60);
+  for (let i = 0; i < 4; i++) update(g, 1 / 60 / PACE);
   assert(b.y > 88 && g.counts.portal === 1, `portail : bille en (${b.x.toFixed(1)}, ${b.y.toFixed(1)})`);
   for (let k = 0; k < 2; k++) {
     const ball = g.w.balls.find(x => !x.held);
     Object.assign(ball, { x: 33, y: 52, vx: 0, vy: 0, escape: false });
     let caught = false;
-    for (let i = 0; i < 90 && !caught; i++) { update(g, 1 / 60); caught = ball.held; }
+    for (let i = 0; i < 90 && !caught; i++) { update(g, 1 / 60 / PACE); caught = ball.held; }
     assert(caught, 'le trou noir aspire la bille');
-    for (let i = 0; i < 100; i++) update(g, 1 / 60);
+    for (let i = 0; i < 100; i++) update(g, 1 / 60 / PACE);
   }
   assert(g.missions.multiball, 'multiball cosmique');
 }
@@ -135,7 +136,7 @@ const fireOn = g => (type, obj, extra = {}) => { g.w.events.push({ type, obj, ba
   assert(g.missions.slots, 'machine à sous gagnante au plus tard au 5e essai');
   const before = g.score;
   Object.assign(g.w.balls[0], { x: 23, y: 61, vx: 0, vy: 0 });
-  for (let i = 0; i < 200; i++) update(g, 1 / 60);
+  for (let i = 0; i < 200; i++) update(g, 1 / 60 / PACE);
   assert(g.score > before && g.messages.length + 1, 'roulette');
 }
 {
@@ -151,7 +152,7 @@ const fireOn = g => (type, obj, extra = {}) => { g.w.events.push({ type, obj, ba
   g.mult = 3;
   const trap = g.w.saucers.find(s => s.role === 'trap'), b = g.w.balls[0];
   Object.assign(b, { x: trap.x, y: trap.y + 0.5, vx: 0, vy: -20, escape: false });
-  for (let i = 0; i < 5; i++) update(g, 1 / 60);
+  for (let i = 0; i < 5; i++) update(g, 1 / 60 / PACE);
   assert.strictEqual(g.mult, 1, 'le piège fait perdre le multiplicateur');
 }
 {
@@ -161,11 +162,11 @@ const fireOn = g => (type, obj, extra = {}) => { g.w.events.push({ type, obj, ba
   g.w.time = 0.1; // jet allumé
   Object.assign(b, { x: jet.x, y: jet.y, vx: 0, vy: 0 });
   let up = 0;
-  for (let i = 0; i < 10; i++) { update(g, 1 / 60); up = Math.max(up, b.vy); }
+  for (let i = 0; i < 10; i++) { update(g, 1 / 60 / PACE); up = Math.max(up, b.vy); }
   assert(up > 220 && g.counts.jet >= 1, `jet de vapeur : ${up.toFixed(0)} cm/s`);
   const lava = g.w.fields.find(f => f.kind === 'repel');
   Object.assign(b, { x: lava.x + 1, y: lava.y, vx: 0, vy: 0 });
-  for (let i = 0; i < 6; i++) update(g, 1 / 60);
+  for (let i = 0; i < 6; i++) update(g, 1 / 60 / PACE);
   assert(b.x > lava.x + 1.5 && g.counts.burn >= 1, 'la lave repousse la bille');
 }
 
@@ -176,14 +177,14 @@ const fireOn = g => (type, obj, extra = {}) => { g.w.events.push({ type, obj, ba
   assert(g.tilted && g.w.flippersDead);
   const g2 = createGame(table, rng);
   plunge(g2, 1);
-  for (let i = 0; i < 30; i++) update(g2, 1 / 60);
+  for (let i = 0; i < 30; i++) update(g2, 1 / 60 / PACE);
   g2.w.balls[0].y = -5; // perdue tout de suite
-  update(g2, 1 / 60);
+  update(g2, 1 / 60 / PACE);
   assert.strictEqual(g2.ball, 1);
   assert.strictEqual(g2.w.balls.length, 1, 'bille sauvée');
   // Trois billes perdues hors protection : fin de partie
   g2.saveTimer = 99;
-  for (let k = 0; k < 3; k++) { g2.saveTimer = 99; g2.w.balls.forEach(b => (b.y = -5)); update(g2, 1 / 60); }
+  for (let k = 0; k < 3; k++) { g2.saveTimer = 99; g2.w.balls.forEach(b => (b.y = -5)); update(g2, 1 / 60 / PACE); }
   assert(g2.over);
 }
 console.log('Tests du flipper : OK');

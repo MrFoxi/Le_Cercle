@@ -280,8 +280,12 @@ export function shake(g) {
 export const ballReady = g => g.w.balls.some(b => inLane(g.w, b) && Math.hypot(b.vx, b.vy) < 30);
 
 /* ---------- Une image ---------- */
+// Rythme de la table : tout le temps de jeu (bille, flippers, gravité, minuteries) tourne à 72 % du temps réel.
+// Les trajectoires restent les mêmes, la bille va juste moins vite à l'écran.
+export const PACE = 0.72;
 export function update(g, dt) {
   if (g.over) return;
+  dt *= PACE;
   step(g.w, dt);
   g.comboTimer = Math.max(0, g.comboTimer - dt);
   if (!g.comboTimer) g.combo = 0;
