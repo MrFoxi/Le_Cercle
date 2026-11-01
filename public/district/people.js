@@ -162,7 +162,7 @@ export function createPeople({ scene, plots, low, emitCoin, onFlash }) {
     if (p.kind === 'visitor') return leave(p);
     walkTo(p, null, pick(nodes.map((n, i) => i).filter(i => !nodes[i].edge)), () => decide(p));
   }
-  function leave(p) { walkTo(p, null, pick(EDGES), () => { p.state = 'gone'; p.t = 0.5; }); }
+  function leave(p) { p.leaving = true; walkTo(p, null, pick(EDGES), () => { p.state = 'gone'; p.t = 0.5; }); }
 
   function arriveShop(p, i) {
     if (!plots[i].type || !isOpen(plots[i].type, hour)) return decide(p);
@@ -298,7 +298,7 @@ export function createPeople({ scene, plots, low, emitCoin, onFlash }) {
     tourists,
     near: (x, z, r) => crowd.some(p => p.m.root.visible && Math.hypot(p.x - x, p.z - z) < r),
     // un passant qui marche, pour la caméra cinéma
-    sample: () => pick(crowd.filter(p => p.state === 'walk' && !p.follow && p.path.length > 2)) || null,
+    sample: () => pick(crowd.filter(p => p.state === 'walk' && !p.follow && !p.leaving && p.path.length > 2)) || null,
     update(dt, ctx) {
       state = ctx.state; hour = ctx.hour; wet = ctx.wet;
       dt = Math.min(dt, 0.1);
