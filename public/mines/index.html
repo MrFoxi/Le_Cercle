@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Démineur Rogue</title>
+  <link rel="icon" href="favicon.svg" type="image/svg+xml">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700&family=Inter:wght@400;600;800&family=JetBrains+Mono:wght@800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+  <script type="module" src="main.js"></script>
+</head>
+<body data-theme="moderne">
+  <!-- Accueil -->
+  <section id="home" class="screen">
+    <div class="topbar"><a class="back" href="../">← Le Cercle</a><button class="ghost small" id="soundBtn"></button></div>
+    <header class="hero">
+      <div class="logo" aria-hidden="true"><span>💣</span></div>
+      <h1>Démineur <em>Rogue</em></h1>
+      <p class="tagline">Déduis. Survis. Deviens plus fort.</p>
+    </header>
+    <div class="home-grid">
+      <div class="panel start">
+        <button class="primary big" id="newRun">▶ Nouvelle partie</button>
+        <div class="records" id="records"></div>
+        <details class="howto"><summary>Comment jouer</summary>
+          <p><b>Clic gauche</b> : ouvrir une case · <b>Clic droit</b> : drapeau · <b>Clic sur un chiffre</b> entouré de ses drapeaux : ouvre ses voisins. Sur téléphone : toucher pour ouvrir, appui long (ou mode 🚩) pour le drapeau.</p>
+          <p>Chaque grille se termine <b>par déduction</b> : le premier clic est toujours sûr, et si jamais tu es obligé de deviner, le jeu ne te punit pas.</p>
+          <p>Une mine coûte une vie. Entre les grilles : des pièces, une amélioration à choisir, parfois la boutique. Un <b>boss</b> tous les 5 niveaux. Va le plus loin possible !</p>
+        </details>
+      </div>
+      <div class="panel">
+        <div class="tabs" id="tabs">
+          <button data-tab="board" class="on">🏆 Classement</button>
+          <button data-tab="trophies">🎖 Succès</button>
+          <button data-tab="themes">🎨 Thèmes</button>
+          <button data-tab="stats">📊 Stats</button>
+        </div>
+        <div id="tabBody"></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Partie -->
+  <section id="game" class="screen" hidden>
+    <header class="hud">
+      <button class="ghost small" id="pauseBtn" aria-label="Menu">☰</button>
+      <div class="level" id="hLevel"></div>
+      <div class="stats-row">
+        <span class="stat lives" title="Vies" id="hLives"></span>
+        <span class="stat coins" title="Pièces"><i>🪙</i><b id="hCoins">0</b></span>
+        <span class="stat" title="Mines restantes"><i>💣</i><b id="hMines">0</b></span>
+        <span class="stat" title="Temps"><i>⏱</i><b id="hTime">0:00</b></span>
+      </div>
+    </header>
+    <p class="event" id="event" hidden></p>
+    <div class="board-wrap" id="boardWrap"><div class="board" id="board"></div><div class="fx" id="fx"></div></div>
+    <footer class="bar">
+      <div class="powers" id="powers"></div>
+      <button class="flagmode" id="flagMode" aria-pressed="false" title="Mode drapeau">🚩</button>
+      <div class="owned" id="owned"></div>
+    </footer>
+  </section>
+
+  <div class="overlay" id="overlay" hidden><div class="modal" id="modal"></div></div>
+  <div class="flash" id="flash"></div>
+  <div id="toast" role="alert" hidden></div>
+</body>
+</html>
