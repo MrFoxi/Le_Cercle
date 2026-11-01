@@ -132,6 +132,17 @@ export function upgrade(s, plot) {
 }
 
 // Déplacer un bâtiment : vers une parcelle libre, ou échange avec celle d'un autre.
+// Démolir : la moitié de ce qu'a coûté le bâtiment (construction + améliorations) est rendue.
+export const demolishRefund = p => Math.floor((BUILDINGS[p.type].cost + Array.from({ length: p.level - 1 }, (_, k) => upgradeCost(p.type, k + 1)).reduce((a, b) => a + b, 0)) / 2);
+export function demolish(s, plot) {
+  const p = s.plots[plot];
+  if (!p || s.plots.filter(Boolean).length <= 1) return false; // on garde au moins un bâtiment
+  s.money += demolishRefund(p);
+  s.plots[plot] = null;
+  s.residents = Math.min(s.residents, capacity(s));
+  return true;
+}
+
 export function move(s, from, to) {
   if (from === to || !s.plots[from] || !s.sectors[PLOTS[to].sector]) return false;
   [s.plots[from], s.plots[to]] = [s.plots[to], s.plots[from]];

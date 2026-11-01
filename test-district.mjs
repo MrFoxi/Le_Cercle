@@ -97,4 +97,14 @@ assert.strictEqual(S.newState().plots[START_PLOT].type, 'ramen');
   assert(marks.rue < 1800, 'la deuxième rue arrive dans la première demi-heure');
   assert(marks.jardins > 3 * 3600, 'le quartier complet demande plusieurs heures');
 }
+// Démolir : moitié du coût total rendue, jamais le dernier bâtiment, habitants plafonnés
+{
+  const s = S.newState(0); s.money = 1e6; s.earned = 1e6;
+  assert(!S.demolish(s, START_PLOT), 'on garde au moins un bâtiment');
+  const lot = PLOTS.findIndex((p, i) => p.sector === 0 && !s.plots[i]);
+  S.build(s, 'appart', lot); S.upgrade(s, lot); s.residents = S.capacity(s);
+  const m = s.money, back = S.demolishRefund(s.plots[lot]);
+  assert.strictEqual(back, Math.floor((BUILDINGS.appart.cost + S.upgradeCost('appart', 1)) / 2));
+  assert(S.demolish(s, lot) && s.plots[lot] === null && s.money === m + back && s.residents === 0);
+}
 console.log('Tests de Little District : OK');

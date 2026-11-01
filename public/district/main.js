@@ -140,7 +140,7 @@ function render(auto) {
 }
 const cost = n => `${money(n)} ¥`;
 function building(i) {
-  const p = state.plots[i];
+  const p = state.plots[i], built = state.plots.filter(Boolean);
   if (!p) return lot(i);
   const b = BUILDINGS[p.type], info = world.plots[i].info, o = isOpen(p.type, hour);
   const up = p.level < MAX_LEVEL ? S.upgradeCost(p.type, p.level) : 0;
@@ -157,7 +157,8 @@ function building(i) {
     ${p.level < MAX_LEVEL ? `<div class="next"><small>Niveau ${p.level + 1}</small>${esc(home ? homeText(p.level + 1) : LEVEL_TEXT[p.level + 1])} · +${money((S.levelIncome(p.type, p.level + 1) - S.levelIncome(p.type, p.level)) * S.multiplier(state) * 60)} ¥/min</div>
       <div class="actions"><button class="primary" data-act="upgrade" ${state.money < up ? 'disabled' : ''}>Améliorer · ${cost(up)}</button></div>`
       : '<div class="next"><small>Niveau maximum</small>Ce bâtiment est au sommet du quartier.</div>'}
-    <div class="actions"><button class="ghost" data-act="move">↔ Déplacer</button><button class="ghost" data-act="look">🔍 Regarder</button></div>`;
+    <div class="actions"><button class="ghost" data-act="move">↔ Déplacer</button><button class="ghost" data-act="look">🔍 Regarder</button></div>
+    ${built.length > 1 ? `<div class="actions"><button class="ghost" data-act="demolish">🧨 Démolir (+${cost(S.demolishRefund(p))})</button></div>` : ''}`;
 }
 const homeText = l => ({ 2: 'Une famille de plus', 3: 'Lanternes et jardinet', 4: 'Un étage de plus (immeuble)', 5: 'Un étage de plus', 6: 'Lanterne de pierre au jardin', 7: 'Encore un étage (immeuble)', 8: 'Un érable dans le jardin', 9: 'Plus d’habitants', 10: 'Le plus bel immeuble du quartier' })[l];
 function lot(i) {
@@ -264,6 +265,11 @@ function act(a, data) {
   const i = panel?.arg;
   if (a === 'upgrade' && S.upgrade(state, i)) { world.syncPlot(i, state, true); sound('upgrade'); toast(`${BUILDINGS[state.plots[i].type].name} passe au niveau ${state.plots[i].level}`); afterChange(); }
   if (a === 'move') { close(); setMode('move', { movingFrom: i }); }
+  if (a === 'demolish') {
+    if (!data.sure) { const b = panelEl.querySelector('[data-act=demolish]'); b.dataset.sure = '1'; b.textContent = 'Sûr ? Le bâtiment disparaîtra'; b.classList.add('primary'); return; }
+    const name = BUILDINGS[state.plots[i].type].name, gain = S.demolishRefund(state.plots[i]);
+    if (S.demolish(state, i)) { world.syncPlot(i, state); sound('place'); toast(`🧨 ${name} démoli : +${money(gain)} ¥`); close(); afterChange(); }
+  }
   if (a === 'look') { const p = PLOTS[i]; world.focus(p.x, p.z + p.face * 0.6, 8); }
   if (a === 'sector' && S.buySector(state, +data.k)) { PLOTS.forEach((_, j) => world.syncPlot(j, state)); sound('build'); toast(`📜 ${SECTORS[+data.k].name} t’appartient !`); close(); afterChange(); }
   if (a === 'erase') { setMode('erase'); close(); }
