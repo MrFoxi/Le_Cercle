@@ -9,6 +9,7 @@ const app = express();
 app.get('/health', (req, res) => res.send('ok'));
 app.use('/api/size', require('./size/api')); // Size It Up : les vraies tailles restent côté serveur
 app.use('/api/pays', require('./pays/api')); // classement de Trouve le pays
+app.use('/api/pinball', require('./pinball/api')); // classement mondial du flipper
 app.get('/imposteur/engine.js', (req, res) => res.type('js').send(require('./imposteur/engine'))); // règles de L'Imposteur pour le mode un seul appareil
 // Three.js pour Solar Explorer, servi depuis node_modules (pas de CDN)
 app.use('/vendor/three/build', express.static(path.join(__dirname, 'node_modules/three/build')));

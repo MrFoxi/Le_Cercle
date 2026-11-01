@@ -1,0 +1,86 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>3D Pinball</title>
+  <link rel="icon" href="favicon.svg" type="image/svg+xml">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@600;800;900&family=Inter:wght@400;600;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+  <script type="importmap">{ "imports": { "three": "/vendor/three/build/three.module.js", "three/addons/": "/vendor/three/addons/" } }</script>
+  <script type="module" src="main.js"></script>
+</head>
+<body>
+  <!-- Menu : choix de la table, objectifs, progression -->
+  <section id="menu" class="screen">
+    <div class="topbar">
+      <a class="back" href="../">← Le Cercle</a>
+      <button class="ghost small" data-open="settings">🔊 Son</button>
+    </div>
+    <header class="hero">
+      <h1>3D <span>PINBALL</span></h1>
+      <p class="tagline">Le flipper d’arcade</p>
+    </header>
+    <div class="tables" id="tables"></div>
+    <div class="menu-grid">
+      <div class="panel" id="tableInfo"></div>
+      <div class="panel">
+        <div class="tabs" id="tabs">
+          <button data-tab="board" class="on">🏆 Classement</button>
+          <button data-tab="trophies">🎖 Succès</button>
+          <button data-tab="skins">⚪ Billes</button>
+          <button data-tab="stats">📊 Stats</button>
+        </div>
+        <div id="tabBody"></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Partie -->
+  <section id="game" class="screen" hidden>
+    <canvas id="view"></canvas>
+    <div class="hud">
+      <div class="hud-score"><b id="hScore">0</b><small>Record <span id="hBest">0</span></small></div>
+      <div class="hud-chips">
+        <span class="chip" title="Billes">⚪ <b id="hBalls"></b></span>
+        <span class="chip mult" title="Multiplicateur">× <b id="hMult">1</b></span>
+        <span class="chip" id="hCombo" hidden>Combo <b></b></span>
+        <button class="chip icon" id="pauseBtn" aria-label="Pause">⏸</button>
+      </div>
+    </div>
+    <aside class="missions" id="missions"></aside>
+    <div class="callout" id="callout" aria-live="polite"></div>
+    <div class="launch-hint" id="launchHint" hidden>Lancer : maintiens <kbd>↓</kbd>, <kbd>Entrée</kbd> ou le clic, puis relâche</div>
+    <div class="power" id="power" hidden><i></i></div>
+    <div class="tilt-meter" id="tiltMeter"><i></i></div>
+    <!-- Commandes tactiles -->
+    <div class="touchpad" id="touch">
+      <button class="zone left" data-flip="L" aria-label="Flipper gauche"></button>
+      <button class="zone right" data-flip="R" aria-label="Flipper droit"></button>
+      <button class="tbtn launch" id="tLaunch">🚀 Lancer</button>
+      <button class="tbtn nudge" id="tNudge">↔ Secouer</button>
+    </div>
+  </section>
+
+  <!-- Pause -->
+  <div class="overlay" id="pause" hidden>
+    <div class="modal">
+      <h2>Pause</h2>
+      <button class="primary big" data-act="resume">Reprendre</button>
+      <button class="ghost" data-act="restart">Recommencer</button>
+      <button class="ghost" data-act="menu">Changer de table</button>
+      <div class="sound" id="pauseSound"></div>
+      <a class="ghost btn" href="../">Retour au menu principal</a>
+      <p class="hint">Commandes : <kbd>←</kbd>/<kbd>A</kbd> flipper gauche · <kbd>→</kbd>/<kbd>D</kbd> flipper droit · <kbd>↓</kbd>/<kbd>Entrée</kbd> ou clic : lancer (maintenir pour charger) · <kbd>Espace</kbd> secouer · <kbd>Échap</kbd> pause</p>
+    </div>
+  </div>
+
+  <!-- Fin de partie -->
+  <div class="overlay" id="end" hidden><div class="modal wide" id="endBody"></div></div>
+
+  <dialog id="settingsDlg"><h2>Son</h2><div class="sound" id="menuSound"></div><form method="dialog"><button class="primary">Fermer</button></form></dialog>
+  <div id="toast" role="alert" hidden></div>
+</body>
+</html>
