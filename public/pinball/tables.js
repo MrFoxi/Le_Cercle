@@ -49,9 +49,9 @@ const arcade = {
     seg(45.4, 51.2, 45.4, 54.2, { kind: 'drop', id: 'D3', e: 0.25 }),
   ],
   circles: [
-    { x: 17, y: 84, r: 2.8, kind: 'bumper', id: 'B1', kick: 190, e: 0.7 },
-    { x: 29, y: 84, r: 2.8, kind: 'bumper', id: 'B2', kick: 190, e: 0.7 },
-    { x: 23, y: 75, r: 2.8, kind: 'bumper', id: 'B3', kick: 190, e: 0.7 },
+    { x: 17, y: 84, r: 2.8, kind: 'bumper', id: 'B1', kick: 230, e: 0.7 },
+    { x: 29, y: 84, r: 2.8, kind: 'bumper', id: 'B2', kick: 230, e: 0.7 },
+    { x: 23, y: 75, r: 2.8, kind: 'bumper', id: 'B3', kick: 230, e: 0.7 },
   ],
   flippers: [
     { id: 'L', x: 14.8, y: 12, len: 7.2, r0: 1.1, r1: 0.55, rest: -0.55, up: 0.5 },
@@ -71,7 +71,7 @@ const arcade = {
     { id: 'right', name: 'Rampe droite', color: '#22d3ee', points: [[36.7, 64, 0], [36.9, 71, 1.5], [38, 82, 4.5], [38.5, 93, 8], [33, 101.5, 10], [23, 102.5, 10], [13, 101.5, 10], [6, 95, 9], [2.6, 84, 7], [2.4, 66, 4], [2.3, 50, 1.2], [2.3, 44, 0.2], [2.3, 40.5, 0]] },
   ],
   saucers: [{ x: 23, y: 62, r: 2.6, id: 'saucer' }], // couvre toute la poche : une bille entrée est toujours capturée
-  lane: { x0: 46, y1: 14, start: [49, 4], min: 160, max: 520 },
+  lane: { x0: 46, y1: 14, start: [49, 4], min: 300, max: 560 }, // même un lancer faible sort du couloir
   // Lumières décoratives et indicateurs (l'état vient des règles : allumée, éteinte, clignotante)
   lights: [
     { id: 'L1', x: 17, y: 98.5, color: '#ffd23f' }, { id: 'L2', x: 23, y: 98.5, color: '#ffd23f' }, { id: 'L3', x: 29, y: 98.5, color: '#ffd23f' },

@@ -2,10 +2,13 @@
 // Pas de Three.js ici : testée seule par test-pinball.mjs. 600 sous-pas par seconde : à la vitesse
 // maximale, la bille avance d'à peine 1 cm par sous-pas, moins que son rayon : elle ne traverse rien.
 export const R = 1.35; // bille de 27 mm
-export const G = 270; // gravité le long de la table inclinée (cm/s²)
+export const G = 380; // gravité le long de la table inclinée (cm/s²) : assez forte pour que la bille ne traîne jamais
 const G_RAMP = 520; // gravité qui freine la bille quand elle monte une rampe
 const FLIP_SPEED = 45; // vitesse de rotation des flippers (rad/s) : coup complet en ~25 ms, comme un vrai
-const MAX_SPEED = 620;
+const MAX_SPEED = 540;
+const DRAG = 0.0009; // freinage qui croît avec le carré de la vitesse : plafonne les excès en douceur (≈ la moitié de la gravité vers 450 cm/s)
+const KICK_MAX = 300; // vitesse maximale de sortie d'un slingshot
+const FLIP_MAX = 480; // vitesse maximale d'un tir de flipper
 export const STEP = 1 / 600;
 
 // Courbe lisse (Catmull-Rom) échantillonnée à pas réguliers, avec la longueur cumulée.
@@ -43,7 +46,7 @@ export function createWorld(table) {
   return {
     walls: table.walls.map(w => ({ e: 0.45, r: 0.3, active: true, ...w })),
     circles: table.circles.map(c => ({ e: 0.5, active: true, ...c })),
-    flippers: table.flippers.map(f => ({ e: 0.5, ...f, angle: f.rest, omega: 0, pressed: false })),
+    flippers: table.flippers.map(f => ({ e: 0.32, ...f, angle: f.rest, omega: 0, pressed: false })),
     triggers: table.triggers.map(t => ({ active: true, ...t })),
     ramps: table.ramps.map(r => ({ ...r, pts: sampleRamp(r.points) })),
     saucers: table.saucers.map(s => ({ active: false, ...s })),
@@ -118,7 +121,12 @@ function hitWall(w, b, s) {
   b.x = qx + nx * rad;
   b.y = qy + ny * rad;
   const speed = bounce(b, nx, ny, s.e);
-  if (s.kick && speed > 6) { b.vx += nx * s.kick; b.vy += ny * s.kick; }
+  if (s.kick && speed > 6) {
+    // Slingshot : poussée ajoutée, mais la vitesse de sortie reste dans une fourchette régulière.
+    b.vx += nx * s.kick; b.vy += ny * s.kick;
+    const out = Math.hypot(b.vx, b.vy);
+    if (out > KICK_MAX) { b.vx *= KICK_MAX / out; b.vy *= KICK_MAX / out; }
+  }
   if (speed > 6 || (s.kick && speed > 0)) w.events.push({ type: 'hit', obj: s, ball: b, speed, x: qx, y: qy });
 }
 
@@ -133,8 +141,10 @@ function hitCircle(w, b, c) {
   const speed = bounce(b, nx, ny, c.e);
   // Bumper : la bille repart toujours fort, même si elle l'a juste effleuré.
   if (c.kick) {
-    const out = b.vx * nx + b.vy * ny;
-    if (out < c.kick) { b.vx += nx * (c.kick - out); b.vy += ny * (c.kick - out); }
+    // Bumper : la bille repart toujours à la même vitesse vers l'extérieur, qu'elle arrive lente ou rapide.
+    const tx = -ny, ty = nx, side = (b.vx * tx + b.vy * ty) * 0.6;
+    b.vx = nx * c.kick + tx * side;
+    b.vy = ny * c.kick + ty * side;
   }
   if (speed > 4 || c.kick) w.events.push({ type: 'hit', obj: c, ball: b, speed, x: c.x + nx * c.r, y: c.y + ny * c.r });
 }
@@ -154,6 +164,8 @@ function hitFlipper(w, b, f) {
   // Vitesse de la surface du flipper au point de contact : c'est elle qui donne la puissance du tir.
   const px = b.x - f.x, py = b.y - f.y, svx = -f.omega * py, svy = f.omega * px;
   const speed = bounce(b, nx, ny, f.e, svx, svy);
+  const out = Math.hypot(b.vx, b.vy);
+  if (out > FLIP_MAX) { b.vx *= FLIP_MAX / out; b.vy *= FLIP_MAX / out; } // tirs puissants mais toujours contrôlables
   if (speed > 10) w.events.push({ type: 'hit', obj: f, ball: b, speed, x: qx, y: qy });
 }
 
@@ -196,8 +208,9 @@ function substep(w, h) {
     if (b.ramp) { rampStep(w, b, h); continue; }
     const x0 = b.x, y0 = b.y;
     b.vy -= G * h;
-    b.vx *= 1 - 0.12 * h; // roulement
-    b.vy *= 1 - 0.12 * h;
+    const sp0 = Math.hypot(b.vx, b.vy), slow = 1 - (0.12 + DRAG * sp0) * h; // roulement + freinage des grandes vitesses
+    b.vx *= slow;
+    b.vy *= slow;
     const sp = Math.hypot(b.vx, b.vy);
     if (sp > MAX_SPEED) { b.vx *= MAX_SPEED / sp; b.vy *= MAX_SPEED / sp; }
     b.x += b.vx * h;
@@ -249,7 +262,7 @@ function rampStep(w, b, h) {
     const q = rampAt(r, end - 0.01);
     b.ramp = null;
     b.x = q.x; b.y = q.y; b.z = 0;
-    const v = Math.max(st.v, 60);
+    const v = Math.min(Math.max(st.v, 60), 280); // sortie de rampe vive mais pas folle
     b.vx = q.dx * v; b.vy = q.dy * v;
     w.events.push({ type: 'ramp', ramp: r.id, ball: b });
     return;

@@ -29,9 +29,9 @@ const inside = b => b.x > -0.5 && b.x < 52.5 && b.y < 111 && !Number.isNaN(b.x);
   const d = 4, nx = Math.sin(-f.rest), ny = Math.cos(f.rest);
   const b = addBall(w, f.x + d * Math.cos(f.rest) + nx * 2.2, f.y + d * Math.sin(f.rest) + ny * 2.2, 0, 0);
   f.pressed = true;
-  let top = 0;
-  for (let i = 0; i < 90; i++) { step(w, 1 / 60); top = Math.max(top, b.y); }
-  assert(top > 60, `le flipper doit envoyer la bille haut (atteint ${top.toFixed(1)} cm)`);
+  let top = 0, fast = 0;
+  for (let i = 0; i < 90; i++) { step(w, 1 / 60); top = Math.max(top, b.y); fast = Math.max(fast, Math.hypot(b.vx, b.vy)); }
+  assert(top > 45 && fast > 300 && fast <= 540, `tir du flipper : ${fast.toFixed(0)} cm/s, jusqu’à ${top.toFixed(1)} cm`);
 }
 
 // Rampe : une bille rapide dans l'embouchure fait tout le tour ; une bille lente redescend.
