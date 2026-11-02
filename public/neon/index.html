@@ -1,0 +1,110 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Sillage Néon</title>
+  <link rel="icon" href="favicon.svg" type="image/svg+xml">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@600;800;900&family=Rajdhani:wght@500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+  <script src="/socket.io/socket.io.js"></script>
+  <script type="importmap">{ "imports": { "three": "/vendor/three/build/three.module.js", "three/addons/": "/vendor/three/addons/" } }</script>
+  <script type="module" src="main.js"></script>
+</head>
+<body>
+  <canvas id="view" aria-label="La grille"></canvas>
+  <div id="labels" aria-hidden="true"></div>
+
+  <!-- Accueil -->
+  <section id="home" class="screen">
+    <a class="back" href="../">← Le Cercle</a>
+    <header class="hero">
+      <h1>Sillage <span>Néon</span></h1>
+      <p class="tagline">Ta moto laisse un mur de lumière. Enferme les autres, ne touche rien.</p>
+    </header>
+    <form class="card" id="nameForm">
+      <label>Ton pseudo <input name="pseudo" maxlength="20" required autocomplete="nickname" placeholder="Pseudo"></label>
+    </form>
+    <div class="grid">
+      <div class="card">
+        <h2>Jouer tout de suite</h2>
+        <p class="hint">Une partie contre 3 robots, sans attendre personne.</p>
+        <button class="primary big" id="soloBtn">Contre les robots</button>
+      </div>
+      <form class="card" id="createForm">
+        <h2>Créer un salon</h2>
+        <div class="chips">
+          <label class="chip"><input type="radio" name="vis" value="public" checked> 🌍 Public</label>
+          <label class="chip"><input type="radio" name="vis" value="private"> 🔒 Privé</label>
+        </div>
+        <button class="primary">Créer</button>
+      </form>
+      <form class="card" id="joinForm">
+        <h2>Entrer avec un code</h2>
+        <input name="code" maxlength="5" required autocomplete="off" class="code-input" placeholder="ABCDE" aria-label="Code du salon">
+        <div class="row"><button class="primary" name="mode" value="play">Rejoindre</button><button class="ghost" name="mode" value="watch">👁 Regarder</button></div>
+      </form>
+    </div>
+    <div class="card">
+      <h2>Salons en cours</h2>
+      <ul id="rooms" class="list"></ul>
+    </div>
+    <div class="card rules">
+      <h2>Comment on joue</h2>
+      <ul>
+        <li>Ta moto avance toute seule et laisse derrière elle un <b>mur de lumière</b>.</li>
+        <li>Touche un mur, une traînée (même la tienne) ou une autre moto : <b>tu es éliminé</b>, et ta traînée disparaît.</li>
+        <li>Tu tournes à angle droit, jamais en demi-tour. Le <b>turbo</b> double ta vitesse 1,5 s : parfait pour couper la route.</li>
+        <li>Chaque moto détruite avant la tienne te rapporte 1 point. Après toutes les manches, le plus de points gagne.</li>
+      </ul>
+      <p class="hint"><kbd>Z</kbd><kbd>Q</kbd><kbd>S</kbd><kbd>D</kbd> ou flèches : tourner · <kbd>Espace</kbd> ou <kbd>Maj</kbd> : turbo. Sur téléphone : glisse le doigt dans la direction voulue, ou les flèches à l’écran.</p>
+    </div>
+  </section>
+
+  <!-- Salon -->
+  <section id="room" class="screen" hidden>
+    <button class="back" id="leave">← Quitter le salon</button>
+    <h1 class="title">Salon <span class="code" id="roomCode"></span> <button class="ghost small" id="copyLink">🔗 Copier le lien</button></h1>
+    <div class="grid two">
+      <div class="card">
+        <h2>Joueurs <small id="count"></small></h2>
+        <ul id="players" class="list"></ul>
+        <button class="ghost" id="addBot">🤖 Ajouter un robot</button>
+        <p class="hint" id="spect"></p>
+      </div>
+      <div class="card">
+        <h2>Partie</h2>
+        <label>Manches <select id="rounds"><option value="3">3 manches</option><option value="5">5 manches</option><option value="7">7 manches</option></select></label>
+        <p class="hint" id="roomHint"></p>
+        <button class="primary big" id="startBtn">C’est parti !</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- En jeu -->
+  <section id="hud" hidden>
+    <div class="top"><span id="hRound"></span><span id="hAlive"></span></div>
+    <div id="count3" class="countdown" hidden></div>
+    <ul id="feed" class="feed"></ul>
+    <div id="energy" class="dash"><i></i><span>Turbo</span></div>
+    <div id="spectating" class="spectating" hidden>Moto détruite… tu regardes la fin de la manche.</div>
+    <div class="touch" id="touch" hidden>
+      <div class="pad"><button data-dir="3" aria-label="Haut">▲</button><button data-dir="2" aria-label="Gauche">◀</button><button data-dir="0" aria-label="Droite">▶</button><button data-dir="1" aria-label="Bas">▼</button></div>
+      <div class="btns"><button id="boostBtn" aria-label="Turbo">⚡</button></div>
+    </div>
+    <button class="ghost small quit" id="quitGame">Quitter</button>
+  </section>
+
+  <!-- Fin de manche / fin de partie -->
+  <div id="board" class="overlay" hidden>
+    <div class="card">
+      <h2 id="boardTitle"></h2>
+      <ol id="boardList" class="ranking"></ol>
+      <p class="hint" id="boardHint"></p>
+      <div class="row center" id="boardButtons"></div>
+    </div>
+  </div>
+</body>
+</html>

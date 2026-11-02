@@ -171,10 +171,11 @@
       { id: 'district', name: 'Little District', desc: 'Des quartiers miniatures en 3D qui vivent tout seuls : ruelle japonaise, villas, village côtier, cité fortifiée, néo-cité volante et village blanc grec. Construis, décore, contemple.', players: 'Solo', tags: ['solo', '3d'], added: '2026-11-01', badge: { kind: 'new', until: '2026-11-30' } },
       { id: 'formula', name: 'Top Formula', desc: 'Course de monoplaces vue du dessus : 3 circuits, aspiration, DRS, robots de 5 niveaux, contre-la-montre avec fantôme et courses en ligne entre amis.', players: '1 à 10 joueurs', tags: ['multi', 'solo', 'arcade', '3d'], live: true, added: '2026-11-02', badge: { kind: 'new', until: '2026-12-02' } },
       { id: 'chute', name: 'Chute Libre', desc: 'Le sol s’effondre sous tes pieds : 4 étages de dalles qui tombent dès qu’on les touche. Saute, bouscule, et sois le dernier debout. De 2 à 12 joueurs, robots compris.', players: '1 à 12 joueurs', tags: ['multi', 'solo', 'soiree', 'arcade', '3d'], live: true, added: '2026-11-03', badge: { kind: 'new', until: '2026-12-03' } },
+      { id: 'neon', name: 'Sillage Néon', desc: 'Des motos de lumière qui laissent un mur derrière elles : enferme les autres, ne touche rien, et garde ton turbo pour leur couper la route. De 2 à 8 joueurs, robots compris.', players: '1 à 8 joueurs', tags: ['multi', 'solo', 'soiree', 'arcade', '3d'], live: true, added: '2026-11-03', badge: { kind: 'new', until: '2026-12-03' } },
     ];
     const FILTERS = { all: 'Tous', multi: 'Multijoueur', solo: 'Solo', soiree: 'Cartes & soirée', strategie: 'Stratégie', arcade: 'Arcade', '3d': '3D', quiz: 'Quiz' };
     const AVATARS = ['🦊', '🐼', '🐯', '🦁', '🐸', '🐙', '🦄', '🐺', '🐵', '🐨', '🦉', '🐲', '🤠', '😎', '🎩', '👑'];
-    const PSEUDO_KEYS = ['pseudo', 'cote-pseudo', 'imp-pseudo', 'p4-pseudo', 'bn-pseudo', 'se-pseudo', 'sc-pseudo', 'golf-pseudo', 'formula-pseudo', 'chute-pseudo']; // chaque jeu lit la sienne
+    const PSEUDO_KEYS = ['pseudo', 'cote-pseudo', 'imp-pseudo', 'p4-pseudo', 'bn-pseudo', 'se-pseudo', 'sc-pseudo', 'golf-pseudo', 'formula-pseudo', 'chute-pseudo', 'neon-pseudo']; // chaque jeu lit la sienne
     const $ = id => document.getElementById(id);
     const store = {
       get: k => { try { return localStorage.getItem(k); } catch { return null; } },

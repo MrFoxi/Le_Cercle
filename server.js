@@ -30,8 +30,9 @@ require('./golf/server')(sockets.of('/golf')); // Mini-golf
 require('./strategy/server')(sockets.of('/strategy')); // Strategy Club
 require('./formula/server')(sockets.of('/formula')); // Top Formula
 require('./chute/server')(sockets.of('/chute')); // Chute Libre
+require('./neon/server')(sockets.of('/neon')); // Sillage Néon
 // Nombre de personnes connectées à chaque jeu multijoueur, pour la page d'accueil.
-const ONLINE = ['7-5', 'cote', 'p4', 'imposteur', 'bataille', 'solar', 'golf', 'strategy', 'formula', 'chute'];
+const ONLINE = ['7-5', 'cote', 'p4', 'imposteur', 'bataille', 'solar', 'golf', 'strategy', 'formula', 'chute', 'neon'];
 app.get('/api/online', (req, res) => res.json(Object.fromEntries(ONLINE.map(n => [n, sockets.of('/' + n).sockets.size]))));
 // Bandeau d'activité de l'accueil : joueurs en ligne, parties ouvertes, derniers exploits.
 app.get('/api/activity', (req, res) => res.json({ online: Object.fromEntries(ONLINE.map(n => [n, sockets.of('/' + n).sockets.size])), tables: activity.openTables(), recent: activity.recent() }));
