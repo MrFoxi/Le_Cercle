@@ -12,6 +12,7 @@ app.use('/api/size', require('./size/api')); // Size It Up : les vraies tailles 
 app.use('/api/pays', require('./pays/api')); // classement de Trouve le pays
 app.use('/api/pinball', require('./pinball/api')); // classement mondial du flipper
 app.use('/api/mines', require('./mines/api')); // classement mondial du Démineur Rogue
+app.use('/api/formula', require('./formula/api')); // records du contre-la-montre de Top Formula
 app.get('/imposteur/engine.js', (req, res) => res.type('js').send(require('./imposteur/engine'))); // règles de L'Imposteur pour le mode un seul appareil
 // Three.js pour Solar Explorer, servi depuis node_modules (pas de CDN)
 app.use('/vendor/three/build', express.static(path.join(__dirname, 'node_modules/three/build')));
@@ -27,8 +28,9 @@ require('./bataille/server')(sockets.of('/bataille')); // Bataille navale
 require('./solar/server')(sockets.of('/solar')); // Solar Explorer
 require('./golf/server')(sockets.of('/golf')); // Mini-golf
 require('./strategy/server')(sockets.of('/strategy')); // Strategy Club
+require('./formula/server')(sockets.of('/formula')); // Top Formula
 // Nombre de personnes connectées à chaque jeu multijoueur, pour la page d'accueil.
-const ONLINE = ['7-5', 'cote', 'p4', 'imposteur', 'bataille', 'solar', 'golf', 'strategy'];
+const ONLINE = ['7-5', 'cote', 'p4', 'imposteur', 'bataille', 'solar', 'golf', 'strategy', 'formula'];
 app.get('/api/online', (req, res) => res.json(Object.fromEntries(ONLINE.map(n => [n, sockets.of('/' + n).sockets.size]))));
 // Bandeau d'activité de l'accueil : joueurs en ligne, parties ouvertes, derniers exploits.
 app.get('/api/activity', (req, res) => res.json({ online: Object.fromEntries(ONLINE.map(n => [n, sockets.of('/' + n).sockets.size])), tables: activity.openTables(), recent: activity.recent() }));

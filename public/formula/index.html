@@ -1,0 +1,198 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Top Formula</title>
+  <link rel="icon" href="favicon.svg" type="image/svg+xml">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Titillium+Web:ital,wght@0,400;0,600;0,700;0,900;1,700;1,900&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+  <script src="/socket.io/socket.io.js"></script>
+  <script type="importmap">{ "imports": { "three": "/vendor/three/build/three.module.js", "three/addons/": "/vendor/three/addons/" } }</script>
+  <script type="module" src="main.js"></script>
+</head>
+<body>
+  <canvas id="view" aria-label="Circuit vu du dessus"></canvas>
+
+  <!-- Menu principal -->
+  <section id="menu" class="screen">
+    <div class="topbar">
+      <a class="back" href="../">← Le Cercle</a>
+      <span class="credits" title="Crédits gagnés en course">🪙 <b class="creditsVal">0</b></span>
+    </div>
+    <header class="hero">
+      <h1><span>TOP</span> FORMULA</h1>
+      <p class="tagline">Course de monoplaces vue du dessus</p>
+    </header>
+    <nav class="modes">
+      <button class="mode" data-go="setup"><b>Course rapide</b><small>Toi contre les robots : circuit, tours, adversaires, difficulté.</small></button>
+      <button class="mode" data-go="tt"><b>Contre-la-montre</b><small>Seul en piste avec ton fantôme. Bats ton record et le classement mondial.</small></button>
+      <button class="mode" data-go="online"><b>Multijoueur</b><small>Salon public ou privé, invite tes amis, course en direct.</small></button>
+      <button class="mode alt" data-go="garage"><b>Garage</b><small>Couleurs, motif, numéro : ta livrée.</small></button>
+    </nav>
+    <div class="panel help">
+      <h2>Commandes</h2>
+      <ul class="keys">
+        <li><kbd>Z</kbd><kbd>↑</kbd> accélérer</li>
+        <li><kbd>S</kbd><kbd>↓</kbd> freiner, marche arrière</li>
+        <li><kbd>Q</kbd><kbd>D</kbd><kbd>←</kbd><kbd>→</kbd> tourner</li>
+        <li><kbd>Espace</kbd> frein à main (dérapage)</li>
+        <li><kbd>E</kbd> ou <kbd>Maj</kbd> ouvrir le DRS (zones bleues, à moins d’une seconde d’un rival)</li>
+        <li><kbd>R</kbd> se remettre en piste · <kbd>Échap</kbd> pause</li>
+      </ul>
+      <p class="hint">Reste dans l’aspiration d’une voiture pour gagner de la vitesse, puis déboîte. Un virage pris trop vite et ça glisse : lâche l’accélérateur pour retrouver l’adhérence. Manette compatible.</p>
+      <label class="field inline">🔊 Volume <input type="range" id="volume" min="0" max="1" step="0.05"></label>
+      <label class="field inline">✨ Qualité <select id="quality"><option value="high">Haute</option><option value="low">Économe</option></select></label>
+    </div>
+  </section>
+
+  <!-- Course rapide -->
+  <section id="setup" class="screen" hidden>
+    <div class="topbar"><button class="back" data-go="menu">← Menu</button></div>
+    <h2 class="title">Course rapide</h2>
+    <div class="tracks" data-tracks="quick"></div>
+    <div class="panel options">
+      <label class="field">Tours <select id="qLaps"></select></label>
+      <label class="field">Adversaires <output id="qOppOut">7</output><input type="range" id="qOpp" min="0" max="9" value="7"></label>
+      <div class="field">Difficulté <div class="chips" id="qLevel"></div></div>
+    </div>
+    <button class="primary big" id="qGo">Lancer la course</button>
+  </section>
+
+  <!-- Contre-la-montre -->
+  <section id="tt" class="screen" hidden>
+    <div class="topbar"><button class="back" data-go="menu">← Menu</button></div>
+    <h2 class="title">Contre-la-montre</h2>
+    <div class="tracks" data-tracks="tt"></div>
+    <div class="panel board">
+      <h3>Classement mondial · <span id="ttTrackName"></span></h3>
+      <ol id="ttBoard"><li class="hint">Chargement…</li></ol>
+      <p class="hint">Ton record : <b id="ttMine">—</b>. Tours illimités, ton meilleur tour devient ton fantôme.</p>
+    </div>
+    <button class="primary big" id="ttGo">En piste</button>
+  </section>
+
+  <!-- Garage -->
+  <section id="garage" class="screen" hidden>
+    <div class="topbar"><button class="back" data-go="menu">← Menu</button><span class="credits">🪙 <b class="creditsVal">0</b></span></div>
+    <h2 class="title">Garage</h2>
+    <div class="garage">
+      <canvas id="garageView" aria-label="Aperçu de ta monoplace"></canvas>
+      <div class="panel">
+        <div class="field">Carrosserie <div class="swatches" data-look="color"></div></div>
+        <div class="field">Couleur secondaire <div class="swatches" data-look="accent"></div></div>
+        <div class="field">Casque <div class="swatches" data-look="helmet"></div></div>
+        <div class="field">Jantes <div class="swatches" data-look="rim"></div></div>
+        <div class="field">Motif <div class="chips" id="motifs"></div></div>
+        <label class="field">Numéro <input type="number" id="number" min="1" max="99"></label>
+      </div>
+    </div>
+  </section>
+
+  <!-- Multijoueur : pseudo, salons -->
+  <section id="online" class="screen" hidden>
+    <div class="topbar"><button class="back" data-go="menu">← Menu</button></div>
+    <h2 class="title">Multijoueur</h2>
+    <form class="panel" id="nameForm">
+      <label class="field">Ton pseudo <input name="pseudo" maxlength="20" required autocomplete="nickname" placeholder="Pseudo"></label>
+    </form>
+    <div class="online-grid">
+      <form class="panel" id="createForm">
+        <h3>Créer un salon</h3>
+        <div class="chips" role="radiogroup" aria-label="Visibilité">
+          <label class="chip"><input type="radio" name="vis" value="public" checked> 🌍 Public</label>
+          <label class="chip"><input type="radio" name="vis" value="private"> 🔒 Privé</label>
+        </div>
+        <button class="primary">Créer</button>
+      </form>
+      <form class="panel" id="joinForm">
+        <h3>Entrer avec un code</h3>
+        <input name="code" maxlength="5" required autocomplete="off" class="code-input" placeholder="ABCDE" aria-label="Code du salon">
+        <div class="row"><button class="primary" name="mode" value="play">Rejoindre</button><button class="ghost" name="mode" value="watch">👁 Regarder</button></div>
+      </form>
+    </div>
+    <div class="panel">
+      <h3>Salons en cours</h3>
+      <ul id="rooms" class="rooms"></ul>
+    </div>
+  </section>
+
+  <!-- Salon -->
+  <section id="room" class="screen" hidden>
+    <div class="topbar"><button class="back" id="leaveRoom">← Quitter le salon</button></div>
+    <h2 class="title">Salon <span class="code" id="roomCode"></span> <button class="ghost small" id="copyLink">🔗 Copier le lien</button></h2>
+    <div class="room-grid">
+      <div class="panel">
+        <h3>Pilotes</h3>
+        <ul id="roomPlayers" class="players"></ul>
+        <p class="hint" id="roomSpect"></p>
+      </div>
+      <div class="panel">
+        <h3>Course</h3>
+        <div class="tracks small" data-tracks="room"></div>
+        <label class="field">Tours <select id="rLaps"></select></label>
+        <p class="hint" id="roomHint"></p>
+        <div class="row">
+          <button class="ghost" id="readyBtn">Je suis prêt</button>
+          <button class="primary" id="startBtn">Lancer la course</button>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Interface de course -->
+  <section id="hud" hidden>
+    <div class="hud-top">
+      <div class="pos"><b id="hPos">P1</b><span id="hPosOf">/8</span></div>
+      <div class="lap">Tour <b id="hLap">1</b><span id="hLapOf">/3</span></div>
+      <div class="times">
+        <div><span>Tour</span><b id="hCur">0:00.000</b></div>
+        <div><span>Meilleur</span><b id="hBest">—</b></div>
+        <div id="hDeltaRow" hidden><span>Écart</span><b id="hDelta">—</b></div>
+      </div>
+    </div>
+    <ol id="tower" class="tower"></ol>
+    <canvas id="minimap" width="220" height="220" aria-hidden="true"></canvas>
+    <div class="dash">
+      <div class="speed"><b id="hSpeed">0</b><span>km/h</span></div>
+      <div class="gear" id="hGear">N</div>
+      <div class="flags">
+        <span id="hDrs" class="drs">DRS</span>
+        <span id="hSlip" class="slip">ASPIRATION</span>
+      </div>
+      <div class="damage" title="État de la voiture"><i id="hDamage"></i></div>
+    </div>
+    <div id="lights" class="lights" hidden><i></i><i></i><i></i><i></i><i></i></div>
+    <div id="banner" class="banner" hidden></div>
+    <div id="toast" class="toast" hidden></div>
+    <button id="pauseBtn" class="pause-btn" aria-label="Pause">❚❚</button>
+    <div class="touch" id="touch" hidden>
+      <div class="left"><button data-key="ArrowLeft" aria-label="Gauche">◀</button><button data-key="ArrowRight" aria-label="Droite">▶</button></div>
+      <div class="right"><button data-key="KeyE" class="small" aria-label="DRS">DRS</button><button data-key="ArrowDown" aria-label="Frein">⏹</button><button data-key="ArrowUp" aria-label="Accélérer">▲</button></div>
+    </div>
+  </section>
+
+  <!-- Pause -->
+  <div id="pause" class="overlay" hidden>
+    <div class="panel">
+      <h2>Pause</h2>
+      <button class="primary" id="resume">Reprendre</button>
+      <button class="ghost" id="restart">Recommencer</button>
+      <button class="ghost" id="quit">Quitter la course</button>
+    </div>
+  </div>
+
+  <!-- Résultats -->
+  <section id="results" class="screen" hidden>
+    <h2 class="title" id="resTitle">Résultats</h2>
+    <div class="podium" id="podium"></div>
+    <div class="res-grid">
+      <div class="panel stats" id="resStats"></div>
+      <div class="panel"><table class="classif"><thead><tr><th>Pos</th><th>Pilote</th><th>Temps</th><th>Meilleur tour</th></tr></thead><tbody id="resTable"></tbody></table></div>
+    </div>
+    <div class="row center" id="resButtons"></div>
+  </section>
+</body>
+</html>
