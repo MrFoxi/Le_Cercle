@@ -1,14 +1,33 @@
 // Little District : ambiance sonore synthétisée (aucun fichier). Musique douce, pluie, rumeur de la rue, cuisine, grillons, tonnerre.
 let ctx = null, music, sfx, noise, amb = {};
 const vol = { music: 0.5, sfx: 0.7 };
-// Grille lo-fi en do majeur : Fa maj7, Mi m7, Ré m9, Do maj9 (une mesure chacun). bass : la note grave.
-const CHORDS = [
-  { bass: 41, notes: [53, 57, 60, 64], tones: [69, 72, 76, 77] },
-  { bass: 40, notes: [52, 55, 59, 62], tones: [67, 71, 74, 76] },
-  { bass: 38, notes: [50, 53, 57, 60, 64], tones: [69, 72, 74, 77] },
-  { bass: 36, notes: [48, 52, 55, 59, 62], tones: [67, 72, 74, 76] },
-];
-const BEAT = 60 / 66; // tempo lent
+import { DISTRICT } from './theme.js';
+// Une musique lo-fi par quartier : grille d'accords (bass : note grave, notes : l'accord, tones : notes de mélodie),
+// tempo, instrument d'accompagnement (keys), instrument de mélodie (lead), rythmique (drums).
+const C = (bass, notes, tones) => ({ bass, notes, tones });
+const STYLES = {
+  // ruelle japonaise : piano électrique feutré et koto pincé, sans batterie
+  japon: { bpm: 66, keys: 'rhodes', lead: 'koto', drums: null, chords: [
+    C(41, [53, 57, 60, 64], [69, 72, 76, 77]), C(40, [52, 55, 59, 62], [67, 71, 74, 76]), C(38, [50, 53, 57, 60, 64], [69, 72, 74, 77]), C(36, [48, 52, 55, 59, 62], [67, 72, 74, 76])] },
+  // villas : bossa jazzy, Rhodes, vibraphone, batterie feutrée qui balance
+  moderne: { bpm: 80, keys: 'rhodes', lead: 'vibe', drums: 'kit', swing: true, chords: [
+    C(38, [54, 57, 61, 64], [69, 73, 74, 76, 78]), C(35, [50, 54, 57, 61], [71, 73, 74, 78]), C(40, [55, 59, 62, 66], [71, 74, 76, 78]), C(33, [55, 61, 64, 66], [69, 71, 73, 76])] },
+  // front de mer : guitare grattée, sifflet, shaker
+  cotier: { bpm: 86, keys: 'guitar', lead: 'flute', drums: 'shaker', chords: [
+    C(43, [55, 59, 62, 67], [67, 71, 74, 79]), C(40, [55, 59, 62, 64], [67, 71, 74, 76]), C(36, [55, 59, 60, 64], [64, 67, 71, 72]), C(38, [54, 57, 62, 66], [66, 69, 74, 78])] },
+  // vieille ville : harpe en arpèges, flûte à bec, mineur et lent
+  europe: { bpm: 62, keys: 'harp', lead: 'flute', drums: null, chords: [
+    C(45, [57, 60, 64, 69], [69, 72, 76, 74]), C(41, [57, 60, 65, 69], [69, 72, 77, 76]), C(36, [55, 60, 64, 67], [67, 72, 76, 74]), C(43, [55, 59, 62, 67], [67, 71, 74, 72])] },
+  // néo-cité : nappe de synthé, arpège, kick et charleston
+  futur: { bpm: 74, keys: 'pad', lead: 'arp', drums: 'kit', chords: [
+    C(33, [57, 60, 64, 71], [69, 72, 76, 79]), C(29, [57, 60, 64, 65], [69, 72, 76, 77]), C(36, [55, 59, 60, 64], [67, 71, 72, 76]), C(31, [55, 59, 62, 64], [67, 71, 74, 76])] },
+  // village blanc : guitare et bouzouki en trémolo, couleur grecque (ré mineur, mi bémol)
+  med: { bpm: 72, keys: 'guitar', lead: 'bouzouki', drums: 'shaker', chords: [
+    C(38, [57, 62, 65, 69], [69, 74, 77, 76]), C(39, [55, 58, 63, 67], [67, 70, 75, 74]), C(38, [57, 62, 65, 69], [69, 74, 77, 72]), C(36, [55, 60, 64, 67], [67, 72, 76, 74])] },
+};
+const STYLE = STYLES[DISTRICT] || STYLES.japon;
+const CHORDS = STYLE.chords;
+const BEAT = 60 / STYLE.bpm;
 const hz = m => 440 * 2 ** ((m - 69) / 12);
 
 export function startAudio() {
@@ -97,18 +116,41 @@ export function thunder() {
   burst(t + 0.1, 1.2, 300, 0.18, 'lowpass', 0.5);
 }
 
-// Musique : piano électrique feutré, basse ronde, quelques notes de mélodie sur les accords. Plus rare et plus grave la nuit.
-function epiano(m, t, dur, g) {
-  const f = hz(m), e = ctx.createGain();
-  e.gain.setValueAtTime(0, t);
-  e.gain.linearRampToValueAtTime(g, t + 0.02);
-  e.gain.exponentialRampToValueAtTime(g * 0.35, t + 0.9);
-  e.gain.exponentialRampToValueAtTime(0.0001, t + dur);
-  e.connect(music.input);
-  for (const [mul, k] of [[1, 1], [2, 0.12], [3, 0.03]]) { // fondamentale + harmoniques légères : son de Rhodes doux
-    const o = ctx.createOscillator(), og = ctx.createGain();
-    o.type = 'sine'; o.frequency.value = f * mul; o.detune.value = (Math.random() - 0.5) * 6;
-    og.gain.value = k; o.connect(og).connect(e); o.start(t); o.stop(t + dur + 0.05);
+// Les instruments, tous synthétisés.
+function osc(type, f, t, dur, e, detune = 0) { const o = ctx.createOscillator(); o.type = type; o.frequency.value = f; o.detune.value = detune; o.connect(e); o.start(t); o.stop(t + dur + 0.05); return o; }
+function env(t, a, peak, dur, sustain = 0.35) {
+  const e = ctx.createGain();
+  e.gain.setValueAtTime(0, t); e.gain.linearRampToValueAtTime(peak, t + a);
+  e.gain.exponentialRampToValueAtTime(Math.max(peak * sustain, 0.0002), t + a + 0.5); e.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+  return e;
+}
+function play(kind, m, t, dur, g) {
+  const f = hz(m);
+  if (kind === 'rhodes') { // piano électrique feutré : fondamentale et harmoniques légères
+    const e = env(t, 0.02, g, dur); e.connect(music.input);
+    for (const [mul, k] of [[1, 1], [2, 0.12], [3, 0.03]]) { const og = ctx.createGain(); og.gain.value = k; og.connect(e); osc('sine', f * mul, t, dur, og, (Math.random() - 0.5) * 6); }
+  } else if (kind === 'vibe') { // vibraphone : son pur qui tremble doucement
+    const e = env(t, 0.01, g, dur * 1.3, 0.5), trem = ctx.createGain(), lfo = ctx.createOscillator(), depth = ctx.createGain();
+    lfo.frequency.value = 5; depth.gain.value = 0.35; lfo.connect(depth).connect(trem.gain); trem.gain.value = 0.65;
+    e.connect(trem).connect(music.input); osc('sine', f, t, dur * 1.3, e); osc('sine', f * 4, t, 0.3, e).detune.value = 3;
+    lfo.start(t); lfo.stop(t + dur * 1.3);
+  } else if (kind === 'flute') { // flûte / sifflet : attaque douce, léger vibrato
+    const e = env(t, 0.08, g * 0.8, dur, 0.7), v = ctx.createOscillator(), vd = ctx.createGain();
+    v.frequency.value = 5.5; vd.gain.value = f * 0.006; v.connect(vd);
+    const o = osc('sine', f, t, dur, e); vd.connect(o.frequency); v.start(t + 0.15); v.stop(t + dur);
+    e.connect(music.input);
+  } else if (kind === 'pad') { // nappe de synthé : deux dents de scie désaccordées, très filtrées
+    const e = ctx.createGain(), lp = ctx.createBiquadFilter();
+    lp.type = 'lowpass'; lp.frequency.value = 700;
+    e.gain.setValueAtTime(0, t); e.gain.linearRampToValueAtTime(g * 0.45, t + 1.2); e.gain.setValueAtTime(g * 0.45, t + dur - 1); e.gain.linearRampToValueAtTime(0, t + dur + 0.6);
+    lp.connect(e).connect(music.input); osc('sawtooth', f, t, dur + 0.6, lp, -8); osc('sawtooth', f, t, dur + 0.6, lp, 8);
+  } else { // cordes pincées : koto, guitare, harpe, bouzouki, arpège de synthé
+    const bright = { koto: 2600, guitar: 1800, harp: 2200, bouzouki: 3400, arp: 1500 }[kind];
+    const lp = ctx.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.setValueAtTime(bright, t); lp.frequency.exponentialRampToValueAtTime(400, t + dur);
+    const e = ctx.createGain(); e.gain.setValueAtTime(0, t); e.gain.linearRampToValueAtTime(g, t + 0.004); e.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    lp.connect(e).connect(music.input);
+    osc({ koto: 'triangle', guitar: 'triangle', harp: 'triangle', bouzouki: 'sawtooth', arp: 'square' }[kind], f, t, dur, lp, (Math.random() - 0.5) * 8);
+    if (kind === 'koto' || kind === 'bouzouki') osc('sine', f * 2, t, dur * 0.5, lp); // timbre plus métallique
   }
 }
 function bassNote(m, t, dur, g) {
@@ -117,25 +159,52 @@ function bassNote(m, t, dur, g) {
   e.gain.setValueAtTime(0, t); e.gain.linearRampToValueAtTime(g, t + 0.08); e.gain.setValueAtTime(g, t + dur * 0.6); e.gain.linearRampToValueAtTime(0, t + dur);
   o.connect(e).connect(music.input); o.start(t); o.stop(t + dur + 0.05);
 }
+// Rythmique feutrée (étouffée par le filtre de la musique, comme sur une vieille cassette)
+function kick(t, g) { const o = ctx.createOscillator(), e = ctx.createGain(); o.frequency.setValueAtTime(110, t); o.frequency.exponentialRampToValueAtTime(42, t + 0.18); e.gain.setValueAtTime(g, t); e.gain.exponentialRampToValueAtTime(0.0001, t + 0.3); o.connect(e).connect(music.input); o.start(t); o.stop(t + 0.32); }
+function tick(t, g, f = 7000, d = 0.05) { const src = ctx.createBufferSource(), b = ctx.createBiquadFilter(), e = ctx.createGain(); src.buffer = noise; b.type = 'bandpass'; b.frequency.value = f; b.Q.value = 0.8; e.gain.setValueAtTime(g, t); e.gain.exponentialRampToValueAtTime(0.0001, t + d); src.connect(b).connect(e).connect(music); src.start(t, Math.random()); src.stop(t + d + 0.02); }
 let nextBar = 0, bar = 0;
 function scheduleMusic() {
   const loop = () => {
     if (ctx.state === 'running' && vol.music > 0) while (nextBar < ctx.currentTime + 1.5) {
       const t = Math.max(nextBar, ctx.currentTime + 0.05), c = CHORDS[bar % CHORDS.length], len = BEAT * 4, night = state.night > 0.5;
       music.warm.frequency.setTargetAtTime(night ? 1300 : 2000, t, 2);
-      // accord égrené doucement, puis rejoué plus bas sur le temps 3
-      c.notes.forEach((n, i) => epiano(n, t + i * 0.035, len * 0.95, 0.05));
-      if (Math.random() < 0.7) c.notes.slice(1).forEach((n, i) => epiano(n, t + BEAT * 2.5 + i * 0.03, len * 0.5, 0.025));
+      const K = STYLE.keys, sw = STYLE.swing ? 0.08 : 0; // swing : les contretemps arrivent un peu en retard
+      // l'accompagnement
+      if (K === 'rhodes') {
+        c.notes.forEach((n, i) => play('rhodes', n, t + i * 0.035, len * 0.95, 0.05));
+        if (Math.random() < 0.7) c.notes.slice(1).forEach((n, i) => play('rhodes', n, t + BEAT * 2.5 + sw + i * 0.03, len * 0.5, 0.025));
+      } else if (K === 'guitar') { // grattée : bas, bas-haut, haut-bas
+        for (const [b, up, g] of [[0, false, 0.05], [1.5, false, 0.03], [2, true, 0.03], [3, false, 0.04], [3.5, true, 0.025]]) {
+          const ns = up ? [...c.notes].reverse() : c.notes;
+          ns.forEach((n, i) => play('guitar', n, t + b * BEAT + i * 0.022, BEAT * 1.4, g));
+        }
+      } else if (K === 'harp') { // arpèges montants et descendants
+        const ns = [...c.notes, c.notes[1] + 12, ...c.notes.slice(1, -1).reverse()];
+        ns.forEach((n, i) => play('harp', n, t + i * (len / ns.length), BEAT * 2.4, 0.045));
+      } else if (K === 'pad') c.notes.forEach(n => play('pad', n, t, len, 0.05));
       bassNote(c.bass, t, BEAT * 2.2, 0.09);
-      bassNote(c.bass + (Math.random() < 0.5 ? 7 : 12), t + BEAT * 2.5, BEAT * 1.4, 0.06);
-      // mélodie : une petite phrase une mesure sur deux, sur les notes de l'accord
-      if (bar % 2 === 0 || Math.random() < 0.3) {
+      bassNote(c.bass + (Math.random() < 0.5 ? 7 : 12), t + BEAT * 2.5 + sw, BEAT * 1.4, 0.06);
+      // la mélodie
+      const L = STYLE.lead;
+      if (L === 'arp') { // arpège régulier en doubles croches, plus calme la nuit
+        const ns = [...c.notes, ...c.tones.slice(0, 2)];
+        for (let k = 0; k < (night ? 8 : 16); k++) play('arp', ns[k % ns.length] + 12, t + k * (len / (night ? 8 : 16)), BEAT * 0.5, 0.02);
+      } else if (bar % 2 === 0 || Math.random() < 0.3) {
         let beat = Math.random() < 0.5 ? 0.5 : 1;
         for (let k = 0; k < (night ? 2 : 3) && beat < 4; k++) {
-          epiano(c.tones[Math.floor(Math.random() * c.tones.length)] - (night ? 12 : 0), t + beat * BEAT, BEAT * 2.5, 0.035);
+          const n = c.tones[Math.floor(Math.random() * c.tones.length)] - (night ? 12 : 0), at = t + beat * BEAT + (beat % 1 ? sw : 0);
+          if (L === 'bouzouki') for (let r = 0; r < 6; r++) play('bouzouki', n, at + r * 0.09, 0.22, 0.03 * (1 - r * 0.08)); // trémolo
+          else play(L, n, at, BEAT * (L === 'flute' ? 1.6 : 2.5), L === 'koto' ? 0.05 : 0.035);
           beat += [0.5, 1, 1, 1.5][Math.floor(Math.random() * 4)];
         }
       }
+      // la rythmique (plus discrète la nuit)
+      const dg = night ? 0.5 : 1;
+      if (STYLE.drums === 'kit') {
+        kick(t, 0.22 * dg); kick(t + BEAT * 2, 0.18 * dg); if (Math.random() < 0.4) kick(t + BEAT * 2.5 + sw, 0.12 * dg);
+        for (let k = 0; k < 8; k++) tick(t + k * BEAT * 0.5 + (k % 2 ? sw : 0), (k % 2 ? 0.012 : 0.02) * dg);
+        tick(t + BEAT, 0.03 * dg, 1800, 0.12); tick(t + BEAT * 3, 0.03 * dg, 1800, 0.12); // caisse claire balai
+      } else if (STYLE.drums === 'shaker') for (let k = 0; k < 8; k++) tick(t + k * BEAT * 0.5, (k % 2 ? 0.016 : 0.008) * dg, 5000, 0.07);
       nextBar = t + len; bar++;
     }
     setTimeout(loop, 500);
