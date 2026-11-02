@@ -56,7 +56,7 @@ kbd { display: inline-block; min-width: 24px; padding: 0 6px; margin: 0 2px; bor
 #hud { position: fixed; inset: 0; z-index: 3; pointer-events: none; color: #fff; }
 #hud button, #hud .stick { pointer-events: auto; }
 .top { position: absolute; top: 12px; left: 50%; transform: translateX(-50%); display: flex; gap: 10px; }
-.top span { background: rgba(4, 5, 13, .75); padding: 6px 14px; border-radius: 8px; font: 800 .85rem var(--title); letter-spacing: .05em; border: 1px solid rgba(34, 211, 238, .3); }
+.top span { white-space: nowrap; background: rgba(4, 5, 13, .75); padding: 6px 14px; border-radius: 8px; font: 800 .85rem var(--title); letter-spacing: .05em; border: 1px solid rgba(34, 211, 238, .3); }
 .countdown { position: absolute; top: 32%; left: 50%; transform: translate(-50%, -50%); font: 900 7rem var(--title); color: var(--mint); text-shadow: 0 0 20px rgba(34, 211, 238, .9), 0 0 60px rgba(34, 211, 238, .5); animation: pop .5s ease-out; }
 @keyframes pop { from { transform: translate(-50%, -50%) scale(1.8); opacity: 0; } }
 .feed { position: absolute; top: 56px; right: 12px; list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; justify-items: end; }
@@ -86,6 +86,7 @@ kbd { display: inline-block; min-width: 24px; padding: 0 6px; margin: 0 2px; bor
 .ranking li.me { background: rgba(34, 211, 238, .18); }
 
 @media (max-width: 760px) {
+  .top { top: 52px; } .top span { font-size: .7rem; padding: 5px 10px; }
   .grid, .grid.two { grid-template-columns: 1fr; }
   .countdown { font-size: 5rem; }
 }

@@ -46,7 +46,7 @@ export function createView(canvas) {
   // Murs de lumière : un pavé fin par case, et leur reflet au sol (plus large, transparent).
   const wallMat = new THREE.MeshBasicMaterial({ toneMapped: false, transparent: true, opacity: 0.92 });
   const walls = new THREE.InstancedMesh(new THREE.BoxGeometry(1, 1.1, 0.2), wallMat, MAX);
-  const glowMat = new THREE.MeshBasicMaterial({ toneMapped: false, transparent: true, opacity: 0.22, blending: THREE.AdditiveBlending, depthWrite: false });
+  const glowMat = new THREE.MeshBasicMaterial({ toneMapped: false, transparent: true, opacity: 0.07, blending: THREE.AdditiveBlending, depthWrite: false });
   const glowGeo = new THREE.PlaneGeometry(1, 1.4); glowGeo.rotateX(-Math.PI / 2);
   const glows = new THREE.InstancedMesh(glowGeo, glowMat, MAX);
   for (const m of [walls, glows]) { m.count = 0; m.frustumCulled = false; scene.add(m); }
@@ -102,13 +102,28 @@ export function createView(canvas) {
   composer.addPass(new OutputPass());
 
   let size = 60, shake = 0;
+  const camBase = new THREE.Vector3(), corner = new THREE.Vector3();
+  // On recule la caméra jusqu'à ce que les 4 coins de l'arène (bordure comprise) tiennent dans l'écran, avec une marge.
   function frameCamera() {
-    const c = (size - 1) / 2, w = canvas.clientWidth, h = canvas.clientHeight, portrait = w < h;
-    camera.fov = portrait ? 60 : 42;
+    const c = (size - 1) / 2, w = canvas.clientWidth || 1, h = canvas.clientHeight || 1, portrait = w < h;
+    camera.fov = portrait ? 50 : 40;
     camera.aspect = w / h; camera.updateProjectionMatrix();
-    const d = size * (portrait ? 1.45 : 0.95);
-    camera.position.set(c, d, c + size * (portrait ? 0.35 : 0.6));
-    camera.lookAt(c, 0, c + size * 0.04);
+    const dir = new THREE.Vector3(0, 1, portrait ? 0.22 : 0.5).normalize();
+    const e = size / 2 + 1.5, lo = portrait && matchMedia('(pointer: coarse)').matches ? -0.3 : -0.92; // en bas : la place des boutons tactiles
+    let d = size * 1.2, shift = 0;
+    for (let it = 0; it < 24; it++) {
+      const center = new THREE.Vector3(c, 0, c + shift);
+      camera.position.copy(center).addScaledVector(dir, d);
+      camera.lookAt(center); camera.updateMatrixWorld();
+      let mx = 0, y0 = Infinity, y1 = -Infinity;
+      for (const [x, z] of [[-e, -e], [e, -e], [-e, e], [e, e]]) {
+        corner.set(c + x, 0.6, c + z).project(camera);
+        mx = Math.max(mx, Math.abs(corner.x)); y0 = Math.min(y0, corner.y); y1 = Math.max(y1, corner.y);
+      }
+      d *= Math.max(mx / 0.92, (y1 - y0) / (0.92 - lo));
+      shift -= ((y0 + y1) / 2 - (0.92 + lo) / 2) * size * 0.5; // arène trop basse à l'écran : on vise plus au sud
+    }
+    camBase.copy(camera.position);
   }
 
   return {
@@ -130,7 +145,7 @@ export function createView(canvas) {
       segs.push({ x0, y0, x1, y1, name, len, cube: x0 === x1 && y0 === y1 });
       walls.count = glows.count = segs.length;
       col.set(color).multiplyScalar(2.2); walls.setColorAt(k, col);
-      col.set(color).multiplyScalar(1.4); glows.setColorAt(k, col);
+      col.set(color).multiplyScalar(0.9); glows.setColorAt(k, col);
       walls.instanceColor.needsUpdate = glows.instanceColor.needsUpdate = true;
       if (!byName.has(name)) byName.set(name, []);
       byName.get(name).push(k);
@@ -138,6 +153,7 @@ export function createView(canvas) {
       walls.instanceMatrix.needsUpdate = glows.instanceMatrix.needsUpdate = true;
       return k;
     },
+    setSeg(k, x0, y0, x1, y1, len) { const s = segs[k]; if (!s) return; Object.assign(s, { x0, y0, x1, y1, len, cube: false }); draw(k); walls.instanceMatrix.needsUpdate = glows.instanceMatrix.needsUpdate = true; },
     setLen(k, len) { if (segs[k] && segs[k].len !== len) { segs[k].len = len; draw(k); walls.instanceMatrix.needsUpdate = glows.instanceMatrix.needsUpdate = true; } },
     // Moto détruite : sa traînée s'affaisse et disparaît.
     clear(name) { for (const k of byName.get(name) ?? []) segs[k].fade = 0; },
@@ -170,8 +186,7 @@ export function createView(canvas) {
         if (B.t > 1.2) { scene.remove(B.pts, B.ring); bursts.splice(k, 1); }
       }
       shake *= Math.exp(-dt * 8);
-      frameCamera();
-      camera.position.x += (Math.random() - 0.5) * shake; camera.position.z += (Math.random() - 0.5) * shake;
+      camera.position.set(camBase.x + (Math.random() - 0.5) * shake, camBase.y, camBase.z + (Math.random() - 0.5) * shake);
       composer.render();
     },
     project(x, y, z) {

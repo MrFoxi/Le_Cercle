@@ -11,6 +11,7 @@ const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;',
 const params = new URLSearchParams(location.search);
 const socket = io('/neon');
 const TICK = 1 / 12;
+const DIRS = [[1, 0], [0, 1], [-1, 0], [0, -1]];
 
 /* ---------------- Sons (synthétisés) ---------------- */
 let ac = null, hum = null;
@@ -119,6 +120,8 @@ socket.on('state', s => {
       heads.set(n, { x: b.x, y: b.y, px: b.x, py: b.y, dir: b.dir, alive: b.alive, boost: 0, segs: [] });
       if (b.alive) view.addSeg(n, colorOf(n), b.x, b.y, b.x, b.y);
     }
+    pending = [];
+    tip = s.bikes[s.me]?.alive ? view.addSeg(s.me, colorOf(s.me), s.bikes[s.me].x, s.bikes[s.me].y, s.bikes[s.me].x + 1, s.bikes[s.me].y, 0) : -1;
     if (s.tick > 0) sync(); // arrivé en cours de manche
     $('#feed').innerHTML = ''; $('#board').hidden = true; $('#spectating').hidden = true;
   }
@@ -164,6 +167,8 @@ if (params.has('debug')) Object.assign(window, { view, heads: null });
 view.resize(); addEventListener('resize', () => view.resize());
 const heads = new Map(); if (params.has('debug')) window.heads = heads; // pseudo -> { x, y, px, py, dir, alive, boost, segs }
 let lastK = 0, snapAt = 0, myEnergy = 100;
+// Prédiction de sa propre moto : on affiche tout de suite le virage demandé, sans attendre l'aller-retour avec le serveur.
+let pending = [], tip = -1; // virages envoyés pas encore vus appliqués ; bout de traînée prédit
 socket.on('snap', snap => {
   if (lastK && snap.k !== lastK + 1) { sync(); return; } // un pas perdu : on redemande la grille entière
   lastK = snap.k; snapAt = performance.now() / 1000;
@@ -174,11 +179,17 @@ socket.on('snap', snap => {
     if (alive && (x !== h.x || y !== h.y)) {
       // les cases parcourues pendant ce pas (1, ou 2 avec le turbo), en ligne droite
       const steps = Math.abs(x - h.x) + Math.abs(y - h.y), dx = Math.sign(x - h.x), dy = Math.sign(y - h.y);
-      for (let j = 0; j < steps; j++) h.segs.push(view.addSeg(n, colorOf(n), h.x + dx * j, h.y + dy * j, h.x + dx * (j + 1), h.y + dy * (j + 1), 0));
+      // sa propre moto est affichée en avance : ses cases sont déjà parcourues à l'écran
+      for (let j = 0; j < steps; j++) { const k = view.addSeg(n, colorOf(n), h.x + dx * j, h.y + dy * j, h.x + dx * (j + 1), h.y + dy * (j + 1), n === room?.me ? 1 : 0); if (n !== room?.me) h.segs.push(k); }
     }
     Object.assign(h, { px: h.x, py: h.y, x, y, dir, boost });
-    if (n === room?.me) { if (boost && !h.wasBoost) SFX.boost(); h.wasBoost = boost; myEnergy = energy; }
-    if (!alive && h.alive) { view.explode(x, y, colorOf(n)); view.clear(n); boom(n === room?.me ? 0.45 : 0.2); }
+    if (n === room?.me) {
+      if (boost && !h.wasBoost) SFX.boost(); h.wasBoost = boost; myEnergy = energy;
+      const now = performance.now() / 1000;
+      if (pending[0] && dir === pending[0].d) pending.shift(); // virage appliqué par le serveur
+      pending = pending.filter(p => now - p.at < 0.6);
+    }
+    if (!alive && h.alive) { view.explode(x, y, colorOf(n)); view.clear(n); boom(n === room?.me ? 0.45 : 0.2); if (n === room?.me) tip = -1; }
     h.alive = !!alive;
   }
 });
@@ -199,13 +210,23 @@ function sync() {
       if (!linked && !(x > 0 && g[c - 1] === v) && !(y > 0 && g[c - S] === v)) view.addSeg(name, colorOf(name), x, y, x, y);
     });
     for (const h of heads.values()) h.segs = [];
+    const me = heads.get(room?.me);
+    tip = me?.alive ? view.addSeg(room.me, colorOf(room.me), me.x, me.y, me.x + 1, me.y, 0) : -1;
     lastK = d.k;
   });
 }
 
 /* ---------------- Commandes ---------------- */
 const KEYDIR = { ArrowRight: 0, KeyD: 0, ArrowDown: 1, KeyS: 1, ArrowLeft: 2, KeyA: 2, ArrowUp: 3, KeyW: 3 };
-const turn = d => { socket.emit('turn', d); SFX.turn(); };
+const turn = d => {
+  const me = heads.get(room?.me);
+  if (me?.alive && room.phase !== 'roundEnd') {
+    const lastDir = pending.length ? pending.at(-1).d : me.dir;
+    if (d === lastDir || (d + 2) % 4 === lastDir || pending.length >= 3) return; // même règle que le serveur
+    pending.push({ d, at: performance.now() / 1000 });
+  }
+  socket.emit('turn', d); SFX.turn();
+};
 const boostNow = () => socket.emit('boost');
 addEventListener('keydown', e => {
   if (e.target.closest?.('input, select') || !document.body.classList.contains('playing')) return;
@@ -243,6 +264,14 @@ function frame(now) {
     // entre deux pas : les motos glissent de leur ancienne case à la nouvelle, et les traînées poussent avec elles
     const f = s.phase === 'play' ? Math.min(1, (t - snapAt) / TICK) : 1;
     for (const [n, h] of heads) {
+      if (n === s.me && h.alive && s.phase === 'play') {
+        // ma moto : à sa case + la fraction du pas suivant, déjà dans la direction demandée
+        const d = pending[0]?.d ?? h.dir, steps = h.boost ? 2 : 1, len = f * steps;
+        const x = h.x + DIRS[d][0] * len, y = h.y + DIRS[d][1] * len;
+        if (tip >= 0) view.setSeg(tip, h.x, h.y, h.x + DIRS[d][0], h.y + DIRS[d][1], len);
+        list.push({ name: n, color: colorOf(n), x, y, dir: d, alive: true, boost: h.boost });
+        continue;
+      }
       const x = h.px + (h.x - h.px) * f, y = h.py + (h.y - h.py) * f;
       h.segs.forEach((k, j) => view.setLen(k, Math.max(0, Math.min(1, f * h.segs.length - j))));
       list.push({ name: n, color: colorOf(n), x, y, dir: h.dir, alive: h.alive, boost: h.boost });
