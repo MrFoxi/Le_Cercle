@@ -16,6 +16,8 @@ import { buildTerrain, groundY, BASE } from './terrain.js';
 import { createLife } from './life.js';
 import { DISTRICT, T } from './theme.js';
 import { streetLamp, GROUND } from './styles.js';
+import { LAYOUT } from './layouts.js';
+import { buildLand } from './land.js';
 const JP = DISTRICT === 'japon';
 import { GTAOPass } from 'three/addons/postprocessing/GTAOPass.js';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
@@ -95,7 +97,8 @@ export function createWorld(canvas, { low }) {
   const sun = new THREE.DirectionalLight('#fff', 2.5);
   sun.castShadow = true;
   sun.shadow.mapSize.set(low ? 1024 : 2048, low ? 1024 : 2048);
-  Object.assign(sun.shadow.camera, { left: -17, right: 17, top: 17, bottom: -17, near: 1, far: 80 });
+  const SH = LAYOUT ? 24 : 17;
+  Object.assign(sun.shadow.camera, { left: -SH, right: SH, top: SH, bottom: -SH, near: 1, far: 90 });
   sun.shadow.bias = -0.0006; sun.shadow.normalBias = 0.03;
   scene.add(hemi, sun, sun.target);
   // Quelques vraies lumières, données aux bâtiments les plus proches de la caméra ; le reste, ce sont des taches de lumière peintes.
@@ -105,6 +108,7 @@ export function createWorld(canvas, { low }) {
   const groundMats = [];
   const groundMat = (key, tex, rep, tint) => { const t = tex.clone(); t.needsUpdate = true; t.repeat.set(...rep); const m = new THREE.MeshStandardMaterial({ map: t, roughness: 0.9 }); if (tint) m.userData.tint = new THREE.Color(tint).multiplyScalar(key === 'road' ? 1 : GROUND.gain || 1); groundMats.push(m); return m; };
   const flat = (w, d, m, x, y, z) => { const o = new THREE.Mesh(new THREE.PlaneGeometry(w, d), m); o.rotation.x = -Math.PI / 2; o.position.set(x, y, z); o.receiveShadow = true; scene.add(o); return o; };
+  if (!LAYOUT) {
   flat(26.6, 2.8, GROUND.roadPave ? groundMat('road', TEX.pave(), [9, 0.9], GROUND.road) : groundMat('road', TEX.asphalt(), [7, 0.8], GROUND.road), 0, ROAD_Y, 0); // au-dessus du socle, jamais à la même hauteur
   for (const s of [-1, 1]) {
     flat(26.6, 1.26, groundMat('walk', TEX.slab(), [26, 1.26], GROUND.pave), 0, GROUND_Y, s * 2.07); // commence après la bordure
@@ -116,15 +120,16 @@ export function createWorld(canvas, { low }) {
   for (let x = -12; x <= 12; x += 1.6) if (!GROUND.roadPave && Math.abs(x) > 1.6 && Math.abs(Math.abs(x) - 9.3) > 1) box(scene, 0.8, 0.006, 0.07, paint, x, ROAD_Y, 0);
   for (const cx of [0, -9.3, 9.3]) for (let z = -1.1; z <= 1.1; z += 0.44) box(scene, 1.3, 0.006, 0.22, paint, cx, ROAD_Y, z);
   for (const [x, z] of [[-3, 0.5], [6, -0.6], [-8, -0.4]]) { const m = new THREE.Mesh(new THREE.CylinderGeometry(0.28, 0.28, 0.01, 18), std('#3a3a3c', { metalness: 0.6, roughness: 0.5 })); m.position.set(x, ROAD_Y + 0.006, z); scene.add(m); }
+  }
   // Relief : colline du sanctuaire, canal, rive d'en face ; socle en bois ; table sombre et brillante dessous
-  const terrain = buildTerrain(scene, low);
+  const terrain = LAYOUT ? buildLand(scene, low) : buildTerrain(scene, low);
   groundMats.push(...terrain.groundMats);
   const tableTop = new THREE.Mesh(new THREE.PlaneGeometry(160, 160), new THREE.MeshStandardMaterial({ color: '#0d0f14', roughness: 0.32, metalness: 0.3 }));
   tableTop.rotation.x = -Math.PI / 2; tableTop.position.y = -1.69; tableTop.receiveShadow = true; scene.add(tableTop);
 
-  if (T.futur) for (const s of [-1, 1]) box(scene, 26.6, 0.012, 0.05, glowMat('roadNeon', s < 0 ? '#ff4fd8' : '#3ff0ff', null, 1, 3, 0), 0, ROAD_Y, s * 1.25);
+  if (T.futur && !LAYOUT) for (const s of [-1, 1]) box(scene, 26.6, 0.012, 0.05, glowMat('roadNeon', s < 0 ? '#ff4fd8' : '#3ff0ff', null, 1, 3, 0), 0, ROAD_Y, s * 1.25);
   // Touffes d'herbe dans les recoins : bordures de trottoir, pied du mur de la colline, bord du canal (couleur de saison)
-  {
+  if (!LAYOUT) {
     const lines = [[1.47, 0.06], [-1.47, 0.06], [14.68, 0.06], [-15.18, 0.06], [-18.95, 0.06], [12.5, 0.06], [-13.35, 0.06]];
     const blade = (rz, rx, h) => new THREE.ConeGeometry(0.014, h, 3).translate(0, h / 2, 0).rotateZ(rz).rotateX(rx);
     const tufts = new THREE.InstancedMesh(mergeGeometries([blade(0, 0, 0.13), blade(0.35, 0.1, 0.11), blade(-0.3, -0.15, 0.1), blade(0.1, 0.4, 0.09), blade(-0.15, -0.4, 0.1)]), foliage('grass'), low ? 160 : 360); // brins d'herbe
@@ -142,7 +147,7 @@ export function createWorld(canvas, { low }) {
   // Flaques (visibles quand le sol est mouillé)
   const puddleMat = new THREE.MeshStandardMaterial({ color: '#0d1014', roughness: 0.03, metalness: 0.7, transparent: true, opacity: 0, depthWrite: false });
   const prng = seeded(41);
-  for (let i = 0; i < 16; i++) {
+  for (let i = 0; i < (LAYOUT ? 0 : 16); i++) {
     const m = new THREE.Mesh(new THREE.CircleGeometry(1, 20), puddleMat);
     m.rotation.x = -Math.PI / 2;
     const onRoad = i < 9;
@@ -156,7 +161,7 @@ export function createWorld(canvas, { low }) {
   const scenery = new THREE.Group(); scene.add(scenery);
   const poleMat = std('#5d5a55', { roughness: 0.8 }), wireMat = new THREE.MeshBasicMaterial({ color: '#111' });
   const poles = [-11.8, -6.8, -1.9, 1.9, 6.8, 11.8];
-  for (const s of [-1, 1]) {
+  if (!LAYOUT) for (const s of [-1, 1]) {
     poles.forEach(x => {
       const z = s * 2.5;
       if (!JP) {
@@ -184,14 +189,14 @@ export function createWorld(canvas, { low }) {
     }
   }
   const trees = [];
-  for (const [x, z, id] of [[12.4, 12.4, 'cerisier'], [-12.4, 12.4, 'erable'], [12.4, -12.4, 'erable'], [-12.4, -12.4, 'cerisier'], [-12.5, 7.4, 'cerisier'], [12.5, -7.4, 'cerisier']]) {
+  if (!LAYOUT) for (const [x, z, id] of [[12.4, 12.4, 'cerisier'], [-12.4, 12.4, 'erable'], [12.4, -12.4, 'erable'], [-12.4, -12.4, 'cerisier'], [-12.5, 7.4, 'cerisier'], [12.5, -7.4, 'cerisier']]) {
     const t = makeDecor(id); t.position.set(x, GROUND_Y, z); t.scale.setScalar(1.15); t.rotation.y = x * z;
     t.traverse(o => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; } });
     scenery.add(t); trees.push(t);
   }
   // Guirlandes de saison au-dessus de la grand-rue : lanternes d'été, illuminations d'hiver
   const festoon = { ete: new THREE.Group(), hiver: new THREE.Group() };
-  for (const x of [-9.3, -4.3, 4.3, 9.3]) {
+  if (!LAYOUT) for (const x of [-9.3, -4.3, 4.3, 9.3]) {
     const curve = new THREE.QuadraticBezierCurve3(new THREE.Vector3(x - 0.6, 2.7, -2.45), new THREE.Vector3(x, 2.2, 0), new THREE.Vector3(x + 0.6, 2.7, 2.45));
     for (const k of ['ete', 'hiver']) festoon[k].add(new THREE.Mesh(new THREE.TubeGeometry(curve, 16, 0.01, 4), wireMat));
     for (let i = 1; i < 10; i++) {
@@ -208,12 +213,12 @@ export function createWorld(canvas, { low }) {
   const pickables = [];
   const plots = PLOTS.map((p, i) => {
     const holder = new THREE.Group();
-    holder.position.set(p.x, GROUND_Y, p.z); holder.rotation.y = p.face > 0 ? 0 : Math.PI;
+    holder.position.set(p.x, GROUND_Y + p.y, p.z); holder.rotation.y = p.ry;
     plotRoot.add(holder);
-    const pick = new THREE.Mesh(new THREE.BoxGeometry(4.3, 3, p.depth), new THREE.MeshBasicMaterial({ visible: false }));
+    const pick = new THREE.Mesh(new THREE.BoxGeometry(p.w, 3, p.depth), new THREE.MeshBasicMaterial({ visible: false }));
     pick.position.y = 1.5; pick.userData.plot = i; holder.add(pick); pickables.push(pick);
     // Contour (mode construction et sélection)
-    const ring = new THREE.Mesh(new THREE.PlaneGeometry(4.3, p.depth), new THREE.MeshBasicMaterial({ map: ringTex(), color: '#9cffb8', transparent: true, opacity: 0, depthWrite: false }));
+    const ring = new THREE.Mesh(new THREE.PlaneGeometry(p.w, p.depth), new THREE.MeshBasicMaterial({ map: ringTex(), color: '#9cffb8', transparent: true, opacity: 0, depthWrite: false }));
     ring.rotation.x = -Math.PI / 2; ring.position.y = 0.05; ring.renderOrder = 3; holder.add(ring);
     return { holder, ring, model: null, info: null, key: '', lot: null, glows: [], anim: 0 };
   });
@@ -225,12 +230,19 @@ export function createWorld(canvas, { low }) {
     return (ringTex.t = new THREE.CanvasTexture(c));
   }
   // Terrain vague (parcelle libre) ou à vendre (barrière + panneau 売地)
-  function makeLot(depth, forSale, kind) {
+  function makeLot(depth, forSale, kind, w = 4.3) {
     const g = new THREE.Group();
-    const dirt = box(g, 4.2, 0.03, depth - 0.1, textured('dirtT', TEX.dirt()), 0, 0, 0); dirt.receiveShadow = true;
-    const r = seeded(Math.round(depth * 100));
-    for (let i = 0; i < 8; i++) { const t = new THREE.Mesh(new THREE.IcosahedronGeometry(0.12 + r() * 0.1, 0), std('#5f7a3a', { flatShading: true })); t.position.set(r() * 3.6 - 1.8, 0.06, r() * (depth - 1) - (depth - 1) / 2); t.scale.y = 0.6; g.add(t); }
-    if (forSale) {
+    const dirt = box(g, w - 0.1, 0.03, depth - 0.1, LAYOUT ? std('#6f9a45', { roughness: 1 }) : textured('dirtT', TEX.dirt()), 0, 0, 0); // plan propre : pelouse prête à bâtir dirt.receiveShadow = true;
+    const r = seeded(Math.round(depth * 100 + w));
+    for (let i = 0; i < 8 * w / 4.3; i++) { const t = new THREE.Mesh(new THREE.IcosahedronGeometry(0.12 + r() * 0.1, 0), std('#5f7a3a', { flatShading: true })); t.position.set((r() - 0.5) * (w - 0.7), 0.06, r() * (depth - 1) - (depth - 1) / 2); t.scale.y = 0.6; g.add(t); }
+    if (forSale && LAYOUT) { // terrain à vendre : barrière et panneau, sans vieille maison
+      const fence = std('#c8c4b8');
+      for (let x = -w / 2 + 0.1; x <= w / 2; x += 0.5) box(g, 0.06, 0.4, 0.06, fence, x, 0, depth / 2 - 0.1);
+      box(g, w - 0.1, 0.05, 0.04, fence, 0, 0.3, depth / 2 - 0.1);
+      box(g, 0.05, 0.75, 0.05, std('#7a5a3a'), 1.2, 0, depth / 2 - 0.4);
+      const sign = new THREE.Mesh(new THREE.PlaneGeometry(0.55, 0.36), textured('forsale', TEX.sign('À VENDRE', '#f4efe4', '#b8321f')));
+      sign.position.set(1.2, 0.72, depth / 2 - 0.37); g.add(sign);
+    } else if (forSale) {
       // Vieille maison fermée (rideau de fer baissé) : le quartier a de l'arrière-plan dès le début
       const { group } = buildBuilding(kind, 1, depth);
       const old = bake(group);
@@ -274,7 +286,7 @@ export function createWorld(canvas, { low }) {
     P.key = key;
     clearPlot(P);
     if (p) {
-      const { group, info } = buildBuilding(p.type, p.level, PLOTS[i].depth);
+      const { group, info } = buildBuilding(p.type, p.level, PLOTS[i].depth, PLOTS[i].w);
       const baked = bake(group);
       P.model = baked; P.info = info; P.type = p.type;
       P.holder.add(baked);
@@ -282,7 +294,7 @@ export function createWorld(canvas, { low }) {
       if (anim) { P.anim = 1; baked.scale.set(1, 0.01, 1); burst(P.holder.position); }
     } else {
       P.info = null; P.type = null;
-      P.lot = makeLot(PLOTS[i].depth, !open, ['maison', 'appart'][i % 2]);
+      P.lot = makeLot(PLOTS[i].depth, !open, ['maison', 'appart'][i % 2], PLOTS[i].w);
       P.holder.add(P.lot);
     }
     people.plotChanged(i);
@@ -298,7 +310,7 @@ export function createWorld(canvas, { low }) {
     for (const c of [...decorRoot.children]) decorRoot.remove(c);
     state.decor.forEach((d, k) => {
       const g = makeDecor(d.id);
-      g.position.set(d.x, GROUND_Y, d.z); g.rotation.y = d.r || 0;
+      g.position.set(d.x, GROUND_Y + (LAYOUT ? LAYOUT.height(d.x, d.z) : 0), d.z); g.rotation.y = d.r || 0;
       g.traverse(o => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; o.userData.decor = k; } });
       g.userData.glowMeshes = addGlows(g, g.userData.glows);
       decorRoot.add(g);
@@ -317,7 +329,7 @@ export function createWorld(canvas, { low }) {
       ghost.traverse(o => { if (o.isMesh) o.castShadow = false; });
       scene.add(ghost);
     }
-    ghost.position.set(x, GROUND_Y + 0.02, z); ghost.rotation.y = r;
+    ghost.position.set(x, GROUND_Y + 0.02 + (LAYOUT ? LAYOUT.height(x, z) : 0), z); ghost.rotation.y = r;
     ghost.traverse(o => { if (o.isMesh && !o.userData.pool && !o.userData.streak) o.material = ok ? ghostOk : ghostKo; });
   }
 
@@ -560,7 +572,7 @@ export function createWorld(canvas, { low }) {
         rainPos[k + 1] -= sp; rainPos[k + 4] -= sp;
         if (rainPos[k + 1] < 0) {
           const rs = ripState.find(r => r.t >= 1);
-          const gy = groundY(rainPos[k], rainPos[k + 2]);
+          const gy = LAYOUT ? LAYOUT.height(rainPos[k], rainPos[k + 2]) + 0.07 : groundY(rainPos[k], rainPos[k + 2]);
           if (rs && gy != null && Math.random() < 0.25) Object.assign(rs, { x: rainPos[k], z: rainPos[k + 2], t: 0, y: gy });
           resetDrop(i, 11 + Math.random() * 3);
         }
@@ -651,6 +663,7 @@ export function createWorld(canvas, { low }) {
   function groundAt(cx, cy) {
     setRay(cx, cy);
     const v = new THREE.Vector3();
+    if (LAYOUT) { const h = ray.intersectObjects(terrain.meshes, false)[0]; return h ? { x: h.point.x, z: h.point.z } : null; } // terrasses : on vise le vrai sol
     return ray.ray.intersectPlane(groundPlane, v) ? { x: v.x, z: v.z } : null;
   }
   // Contours des parcelles : mode construction, déplacement, sélection
@@ -680,7 +693,8 @@ export function createWorld(canvas, { low }) {
       camera.position.copy(controls.target).addScaledVector(dir, lerp(fly.d0, fly.d1, e));
       if (fly.t >= 1) fly = null;
     }
-    const cx = THREE.MathUtils.clamp(controls.target.x, -12, 12) - controls.target.x, cz = THREE.MathUtils.clamp(controls.target.z, BASE.z0 + 2, BASE.z1 - 2) - controls.target.z;
+    const B = LAYOUT?.bounds || { x0: -12, x1: 12, z0: BASE.z0 + 2, z1: BASE.z1 - 2 };
+    const cx = THREE.MathUtils.clamp(controls.target.x, B.x0, B.x1) - controls.target.x, cz = THREE.MathUtils.clamp(controls.target.z, B.z0, B.z1) - controls.target.z;
     controls.target.x += cx; controls.target.z += cz; camera.position.x += cx; camera.position.z += cz;
     controls.target.y = 0;
     controls.update();

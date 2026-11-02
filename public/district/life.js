@@ -7,6 +7,7 @@ import { NAV } from './people.js';
 import { CANAL, HILL, SEA, BEACH } from './terrain.js';
 import { T } from './theme.js';
 import { makeHoverCar } from './styles.js';
+import { LAYOUT } from './layouts.js';
 
 const Y = 0.06;
 const rnd = (a, b) => a + Math.random() * (b - a);
@@ -110,7 +111,7 @@ export function createLife({ scene, people, low, camera, target, onSound }) {
   }
 
   // ---------- Pigeons : picorent en groupe, s'envolent quand on s'approche ----------
-  const SPOTS = [[0, 16.2, 1.66], [4.5, -14.8, Y], [-5, -14.8, Y], [-7, 2.2, Y], [8, -7.4, Y], SEA ? [5, -16.2, BEACH.y] : [-3.2, -20.5, Y], [6, 16.6, 1.66]];
+  const SPOTS = LAYOUT ? LAYOUT.pigeons.map(([x, z]) => [x, z, LAYOUT.height(x, z) + Y]) : [[0, 16.2, 1.66], [4.5, -14.8, Y], [-5, -14.8, Y], [-7, 2.2, Y], [8, -7.4, Y], SEA ? [5, -16.2, BEACH.y] : [-3.2, -20.5, Y], [6, 16.6, 1.66]];
   const flock = { spot: 0, t: rnd(30, 60), birds: [] };
   for (let i = 0; i < 7; i++) {
     const b = makePigeon(); root.add(b.root);
@@ -205,7 +206,8 @@ export function createLife({ scene, people, low, camera, target, onSound }) {
       const g = new THREE.Group();
       const body = new THREE.Mesh(new THREE.CylinderGeometry(0.11, 0.08, 0.2, 10, 1, true), glowMat('skyLantern', '#ffb35a', null, 1.5, 3.2, 0, { side: THREE.DoubleSide }));
       g.add(body);
-      g.position.set(rnd(-9, 9), HILL.y + 0.5, rnd(16, 20));
+      if (LAYOUT) g.position.set(rnd(-9, 9), LAYOUT.T[3] + 0.5, rnd(LAYOUT.BAND[3][0] + 1, LAYOUT.BAND[3][1] - 1)); // depuis le sommet
+      else g.position.set(rnd(-9, 9), HILL.y + 0.5, rnd(16, 20));
       root.add(g);
       skyLanterns.push({ g, vx: rnd(-0.08, 0.08), vz: rnd(-0.2, -0.05), ph: rnd(0, 6) });
     }
@@ -295,7 +297,7 @@ export function createLife({ scene, people, low, camera, target, onSound }) {
     g.traverse(o => { if (o.isMesh) { o.castShadow = true; o.userData.vendor = true; } });
     const dir = Math.random() < 0.5 ? 1 : -1;
     g.rotation.y = dir > 0 ? 0 : Math.PI;
-    g.position.set(-14 * dir, Y, dir > 0 ? -1.0 : 1.0);
+    if (LAYOUT) g.position.set(-16 * dir, LAYOUT.vendor.y, LAYOUT.vendor.z); else g.position.set(-14 * dir, Y, dir > 0 ? -1.0 : 1.0);
     root.add(g); pickables.push(g);
     vendor = { g, man, dir, ph: 0, bell: 2 };
     return vendor;
@@ -323,7 +325,7 @@ export function createLife({ scene, people, low, camera, target, onSound }) {
       stepPigeons(dt);
       stepBirds(dt, night > 0.5 || rain);
       stepKoi(dt);
-      stepFireflies(dt, night > 0.6 && !rain && (season === 'ete' || season === 'printemps'));
+      stepFireflies(dt, !LAYOUT && night > 0.6 && !rain && (season === 'ete' || season === 'printemps'));
       stepSkyLanterns(dt, festival && night > 0.4);
       stepFireworks(dt, festival && night > 0.5);
       // arc-en-ciel face à la caméra, au fond de la maquette
@@ -349,7 +351,7 @@ export function createLife({ scene, people, low, camera, target, onSound }) {
         m.armL.rotation.x = m.armR.rotation.x = -1.2;
         if (Math.random() < dt * 4) { const v = new THREE.Vector3(0.3, 1.15, 0).applyMatrix4(vendor.g.matrixWorld); fx.emit(v.x, v.y, v.z, { life: 1.5, vy: 0.35, color: '#bbbbbb', size: 0.18 }); }
         if ((vendor.bell -= dt) < 0) { vendor.bell = 7; onSound?.('vendor'); }
-        if (Math.abs(vendor.g.position.x) > 14.5) removeVendor();
+        if (Math.abs(vendor.g.position.x) > (LAYOUT ? 16.5 : 14.5)) removeVendor();
       }
       fx.update(dt);
     },

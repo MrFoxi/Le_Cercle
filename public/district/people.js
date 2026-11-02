@@ -3,6 +3,7 @@ import * as THREE from 'three';
 import { makePerson, seeded, std } from './models.js';
 import { makeCat, animateCat } from './animals.js';
 import { T } from './theme.js';
+import { LAYOUT } from './layouts.js';
 const SEA = !!T.sea, HOVER = !!T.futur; // plage au lieu de la rive d'en face · habitants qui lévitent
 import { PLOTS, BUILDINGS } from './sim.js';
 
@@ -14,22 +15,26 @@ export const isOpen = (type, h) => { const o = OPEN[type]; return !!o && ((h >= 
 // Réseau de chemins : trottoirs, ruelle, sentiers, passages piétons, escalier de la colline, promenade et pont du canal
 const XS = [-12.6, -9.3, -6.8, -4.3, 0, 4.3, 6.8, 9.3, 12.6];
 const nodes = [], index = new Map(), adj = [];
-const node = (x, z, y = Y) => { const k = `${x},${z}`; if (!index.has(k)) { index.set(k, nodes.length); nodes.push({ x, z, y, edge: Math.abs(x) > 12 }); adj.push([]); } return index.get(k); };
+const node = (x, z, y = Y) => { const k = `${x},${z}`; if (!index.has(k)) { index.set(k, nodes.length); nodes.push({ x, z, y, edge: !LAYOUT && Math.abs(x) > 12 }); adj.push([]); } return index.get(k); };
 const link = (a, b) => { const d = Math.hypot(nodes[a].x - nodes[b].x, nodes[a].z - nodes[b].z, nodes[a].y - nodes[b].y); adj[a].push([b, d]); adj[b].push([a, d]); };
-for (const z of SEA ? [-14.3, -7.4, -2, 2, 7.4] : [-20.2, -14.3, -7.4, -2, 2, 7.4]) for (let i = 1; i < XS.length; i++) link(node(XS[i - 1], z), node(XS[i], z));
+if (!LAYOUT) for (const z of SEA ? [-14.3, -7.4, -2, 2, 7.4] : [-20.2, -14.3, -7.4, -2, 2, 7.4]) for (let i = 1; i < XS.length; i++) link(node(XS[i - 1], z), node(XS[i], z));
 const ZS = [-14.3, -12.6, -10.15, -7.4, -4.8, -2, 2, 4.8, 7.4, 10.15, 12.6];
-for (let i = 1; i < ZS.length; i++) link(node(0, ZS[i - 1]), node(0, ZS[i]));
-for (const x of [-9.3, 9.3]) link(node(x, -2), node(x, 2));
+if (!LAYOUT) { for (let i = 1; i < ZS.length; i++) link(node(0, ZS[i - 1]), node(0, ZS[i])); for (const x of [-9.3, 9.3]) link(node(x, -2), node(x, 2)); }
 const chain = pts => pts.reduce((a, [x, z, y]) => { const b = node(x, z, y); if (a != null) link(a, b); return b; }, null);
-chain([[0, 12.6], [0, 14.95, HY], [0, 16.5, HY], [0, 17.3, HY]]); // escalier puis sanctuaire
 const HXS = [-10.5, -5.5, 0, 5.5, 10.5];
+if (LAYOUT) { // chemins du plan : la hauteur vient du sol (rampes comprises)
+  for (const path of LAYOUT.paths) chain(path.map(([x, z, y]) => [x, z, (y ?? LAYOUT.height(x, z)) + Y]));
+  for (const [x, z] of LAYOUT.edges) nodes[index.get(`${x},${z}`)].edge = true;
+} else {
+chain([[0, 12.6], [0, 14.95, HY], [0, 16.5, HY], [0, 17.3, HY]]); // escalier puis sanctuaire
 for (let i = 1; i < HXS.length; i++) link(node(HXS[i - 1], 16.5, HY), node(HXS[i], 16.5, HY));
 if (SEA) chain([[0, -14.3], [0, -15.6, 0.12], [0, -20.2, 0.12]]); // ponton
 else chain([[0, -14.3], [0, -15.4, 0.14], [0, -17.05, 0.66], [0, -18.7, 0.14], [0, -20.2]]); // pont
+}
 const SHRINE = index.get('0,17.3');
 export const NAV = { nodes, adj, index };
 const EDGES = nodes.map((n, i) => (n.edge ? i : -1)).filter(i => i >= 0);
-const doorNode = i => index.get(`${PLOTS[i].x},${Math.abs(PLOTS[i].z) > 8 ? Math.sign(PLOTS[i].z) * 7.4 : Math.sign(PLOTS[i].z) * 2}`);
+const doorNode = i => (LAYOUT ? DOOR_NODES[i] : index.get(`${PLOTS[i].x},${Math.abs(PLOTS[i].z) > 8 ? Math.sign(PLOTS[i].z) * 7.4 : Math.sign(PLOTS[i].z) * 2}`));
 
 function route(a, b) {
   const dist = nodes.map(() => Infinity), prev = nodes.map(() => -1), done = new Set();
@@ -45,7 +50,8 @@ function route(a, b) {
   for (let u = b; u >= 0; u = prev[u]) out.unshift(u);
   return out[0] === a ? out : [a];
 }
-const nearestNode = (x, z) => nodes.reduce((best, n, i) => (Math.hypot(n.x - x, n.z - z) < Math.hypot(nodes[best].x - x, nodes[best].z - z) ? i : best), 0);
+const nearestNode = (x, z, y) => nodes.reduce((best, n, i) => (Math.hypot(n.x - x, n.z - z, y == null ? 0 : n.y - y) < Math.hypot(nodes[best].x - x, nodes[best].z - z, y == null ? 0 : nodes[best].y - y) ? i : best), 0);
+const DOOR_NODES = LAYOUT ? PLOTS.map(p => nearestNode(p.x + Math.sin(p.ry) * p.depth / 2, p.z + Math.cos(p.ry) * p.depth / 2, p.y + Y)) : null;
 
 export function createPeople({ scene, plots, low, emitCoin, onFlash }) {
   const rng = seeded(1234);
@@ -61,10 +67,10 @@ export function createPeople({ scene, plots, low, emitCoin, onFlash }) {
 
   function spawn(kind, at, opts = {}) {
     const m = makePerson(rng);
-    m.root.position.set(at.x, Y, at.z);
+    m.root.position.set(at.x, at.y ?? Y, at.z);
     m.root.scale.multiplyScalar(0.01);
     root.add(m.root);
-    const p = { m, kind, x: at.x, z: at.z, y: Y, dir: rng() * 6, path: [], state: 'idle', t: 0, ph: rng() * 6, speed: 0.5 + rng() * 0.22, lane: (rng() - 0.5) * 0.45, umbrella: rng() < 0.85, grow: 0, size: m.root.scale.x * 100, trips: 0, chatCd: 3 + rng() * 6, ...opts };
+    const p = { m, kind, x: at.x, z: at.z, y: at.y ?? Y, dir: rng() * 6, path: [], state: 'idle', t: 0, ph: rng() * 6, speed: 0.5 + rng() * 0.22, lane: (rng() - 0.5) * 0.45, umbrella: rng() < 0.85, grow: 0, size: m.root.scale.x * 100, trips: 0, chatCd: 3 + rng() * 6, ...opts };
     if (!opts.follow && !opts.tour && kind === 'visitor' && rng() < 0.13) { // promène son chien
       p.dog = makeCat([['#c8a26a', '#efe0c4'], ['#3a2a20', '#6a5040'], ['#f2efe8', '#ffffff']][Math.floor(rng() * 3)], { dog: true });
       p.dog.root.position.set(0.34, 0, 0.18);
@@ -141,6 +147,10 @@ export function createPeople({ scene, plots, low, emitCoin, onFlash }) {
       const i = pick(open), spot = toWorld(i, (rng() - 0.5) * 2.6, PLOTS[i].depth / 2 - 0.1);
       return walkTo(p, spot, doorNode(i), () => { p.state = 'look'; p.t = 3 + rng() * 4; p.face = yawOf(i) + Math.PI; p.exitPts = []; });
     }
+    if (LAYOUT && r < 0.84) { // s'arrêter à un point de vue du quartier
+      const [vx, vz, face] = pick(LAYOUT.views), n = nearestNode(vx, vz);
+      return walkTo(p, { x: vx + (rng() - 0.5) * 0.8, z: vz + (rng() - 0.5) * 0.3, y: nodes[n].y }, n, () => { p.state = 'look'; p.t = 5 + rng() * 6; p.face = face; p.exitPts = []; });
+    }
     if (r < 0.77) { // prier au sanctuaire de la colline
       const spot = { x: (rng() - 0.5) * 1.2, z: 17.25 + rng() * 0.2, y: HY };
       return walkTo(p, spot, SHRINE, () => { p.state = 'look'; p.anim = 'bow'; p.t = 4 + rng() * 3; p.face = 0; p.exitPts = []; });
@@ -153,14 +163,14 @@ export function createPeople({ scene, plots, low, emitCoin, onFlash }) {
     if (p.tour) return leave(p);
     if (r < 0.9 && p.home != null && plots[p.home].type) {
       const i = p.home, d = doorOf(i), info = plots[i].info, inn = toWorld(i, info.doorIn?.x ?? 0, info.doorIn?.z ?? 0);
-      return walkTo(p, d, doorNode(i), () => { p.state = 'home'; p.t = 25 + rng() * 50; p.m.root.visible = false; p.m.carry.visible = false; p.exitPts = [{ x: d.x, z: d.z, y: Y }]; }, [{ x: inn.x, z: inn.z, y: Y }]);
+      return walkTo(p, d, doorNode(i), () => { p.state = 'home'; p.t = 25 + rng() * 50; p.m.root.visible = false; p.m.carry.visible = false; p.exitPts = [{ x: d.x, z: d.z, y: d.y }]; }, [{ x: inn.x, z: inn.z, y: inn.y }]);
     }
     if (r < 0.95) {
       const benches = (state.decor || []).map((d, k) => ({ ...d, k })).filter(d => d.id === 'banc' && !crowd.some(o => o.bench === d.k));
       if (benches.length) {
-        const b = pick(benches), seat = { x: b.x + Math.sin(b.r || 0) * 0.04, z: b.z + Math.cos(b.r || 0) * 0.04 };
+        const b = pick(benches), by = LAYOUT ? LAYOUT.height(b.x, b.z) + Y : Y, seat = { x: b.x + Math.sin(b.r || 0) * 0.04, z: b.z + Math.cos(b.r || 0) * 0.04, y: by };
         p.bench = b.k;
-        return walkTo(p, seat, nearestNode(b.x, b.z), () => { p.state = 'sit'; p.sitH = 0.25; p.t = 8 + rng() * 10; p.face = b.r || 0; p.exitPts = []; });
+        return walkTo(p, seat, nearestNode(b.x, b.z, by), () => { p.state = 'sit'; p.sitH = 0.25; p.t = 8 + rng() * 10; p.face = b.r || 0; p.exitPts = []; });
       }
     }
     if (p.kind === 'visitor') return leave(p);
@@ -175,17 +185,17 @@ export function createPeople({ scene, plots, low, emitCoin, onFlash }) {
       const k = crowd.filter(o => o.queue === i).length;
       if (k >= 3) return decide(p);
       const side = toWorld(i, -1.6 + k * 0.38, PLOTS[i].depth / 2 + 0.25);
-      p.queue = i; p.state = 'walk'; p.path = [{ x: side.x, z: side.z, y: Y }]; p.then = () => { p.state = 'queue'; p.t = 14; p.face = yawOf(i) + Math.PI; };
+      p.queue = i; p.state = 'walk'; p.path = [{ x: side.x, z: side.z, y: side.y }]; p.then = () => { p.state = 'queue'; p.t = 14; p.face = yawOf(i) + Math.PI; };
       return;
     }
     takeSeat(p, i, seat);
   }
   function takeSeat(p, i, seat) {
     p.queue = null; seat.taken = p; p.seat = seat; p.shop = i;
-    const front = toWorld(i, seat.x, seat.z + 0.45, IN_Y - Y), at = toWorld(i, seat.x, seat.z, IN_Y - Y);
+    const front = toWorld(i, seat.x, seat.z + 0.45, IN_Y - Y), at = toWorld(i, seat.x, seat.z, IN_Y - Y); // hauteurs : plancher de la parcelle
     p.state = 'walk';
-    p.path = [{ x: front.x, z: front.z, y: IN_Y }, { x: at.x, z: at.z, y: IN_Y }];
-    p.then = () => { p.state = 'sit'; p.sitH = seat.sit; p.anim = seat.eat ? 'eat' : seat.sing ? 'sing' : seat.play ? 'play' : 'browse'; p.t = 10 + rng() * 14; p.face = seat.ry + yawOf(i); p.exitPts = [{ x: front.x, z: front.z, y: IN_Y }, (({ x, z }) => ({ x, z, y: Y }))(doorOf(i))]; };
+    p.path = [{ x: front.x, z: front.z, y: front.y }, { x: at.x, z: at.z, y: at.y }];
+    p.then = () => { p.state = 'sit'; p.sitH = seat.sit; p.anim = seat.eat ? 'eat' : seat.sing ? 'sing' : seat.play ? 'play' : 'browse'; p.t = 10 + rng() * 14; p.face = seat.ry + yawOf(i); p.exitPts = [{ x: front.x, z: front.z, y: front.y }, doorOf(i)]; };
   }
   function standUp(p) {
     if (p.seat) {

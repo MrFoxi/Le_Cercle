@@ -25,13 +25,13 @@ const STONE = () => canvasTex('stonewall', 256, 128, (x, w, h) => {
   for (let i = 0; i < 2500; i++) { x.fillStyle = `rgba(0,0,0,${Math.random() * 0.15})`; x.fillRect(Math.random() * w, Math.random() * h, 2, 2); }
   for (let i = 0; i < 40; i++) { x.fillStyle = 'rgba(70,100,50,.35)'; x.beginPath(); x.arc(Math.random() * w, Math.random() * h, 2 + Math.random() * 5, 0, 7); x.fill(); } // mousse
 }, { repeat: [1, 1] });
-const GRASS = () => canvasTex('grass', 256, 256, (x, w, h) => {
+export const GRASS = () => canvasTex('grass', 256, 256, (x, w, h) => {
   const r = seeded(37);
   x.fillStyle = '#41552e'; x.fillRect(0, 0, w, h);
   for (let i = 0; i < 9000; i++) { x.fillStyle = `hsl(${80 + r() * 30}, ${30 + r() * 25}%, ${18 + r() * 22}%)`; x.fillRect(r() * w, r() * h, 1.5, 3 + r() * 3); }
 }, { repeat: [1, 1] });
 // Carte de reliefs pour l'eau : vaguelettes qui défilent
-const WATER_N = () => canvasTex('waterN', 256, 256, (x, w, h) => {
+export const WATER_N = () => canvasTex('waterN', 256, 256, (x, w, h) => {
   const hgt = new Float32Array(w * h), r = seeded(43);
   const waves = Array.from({ length: 14 }, () => [r() * 6.28, (1 + r() * 4) * 2 * Math.PI / w, (1 + r() * 4) * 2 * Math.PI / h, r()]);
   for (let j = 0; j < h; j++) for (let i = 0; i < w; i++) {

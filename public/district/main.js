@@ -135,7 +135,7 @@ function tip(text, rotate) {
 }
 function refreshRings() {
   const m = new Map();
-  if (mode === 'build' || mode === 'move') PLOTS.forEach((p, i) => { if (state.sectors[p.sector] && (!state.plots[i] || mode === 'move') && i !== movingFrom) m.set(i, state.plots[i] ? '#ffd28a' : '#9cffb8'); });
+  if (mode === 'build' || mode === 'move') PLOTS.forEach((p, i) => { if (state.sectors[p.sector] && (!state.plots[i] || mode === 'move') && i !== movingFrom && (mode === 'build' ? !buildType || S.allowed(buildType, i) : S.allowed(state.plots[movingFrom].type, i))) m.set(i, state.plots[i] ? '#ffd28a' : '#9cffb8'); });
   if (mode === 'move' && movingFrom != null) m.set(movingFrom, '#ffffff');
   if (mode === 'view' && sel != null) m.set(sel, '#ffd28a');
   world.highlight(m);
@@ -162,7 +162,7 @@ function building(i) {
   const p = state.plots[i], built = state.plots.filter(Boolean);
   if (!p) return lot(i);
   const b = BUILDINGS[p.type], info = world.plots[i].info, o = isOpen(p.type, hour);
-  const up = p.level < MAX_LEVEL ? S.upgradeCost(p.type, p.level) : 0;
+  const up = p.level < MAX_LEVEL ? S.upgradeCost(p.type, p.level, PLOTS[i].size) : 0;
   const home = b.cat === 'home';
   return `<h2>${ICON[p.type]} ${esc(b.name)}${home ? '' : `<span class="status ${o ? '' : 'off'}">${o ? 'Ouvert' : 'Fermé'}</span>`}</h2>
     <p class="sub">${esc(b.desc)}</p>
@@ -173,11 +173,11 @@ function building(i) {
       ${home ? `<div><small>Habitants</small><b>${b.home * p.level}</b></div><div><small>Bonus au quartier</small><b>+${b.home * p.level * 2} %</b></div>`
         : `<div><small>Clients servis</small><b>${money(p.served)}</b></div><div><small>Places · personnel</small><b>${info?.seats.length ?? 0} · ${info?.staff.length ?? 0}</b></div>`}
     </div>
-    ${p.level < MAX_LEVEL ? `<div class="next"><small>Niveau ${p.level + 1}</small>${esc(home ? homeText(p.level + 1) : LEVEL_TEXT[p.level + 1])} · +${money((S.levelIncome(p.type, p.level + 1) - S.levelIncome(p.type, p.level)) * S.multiplier(state) * 60)} ¥/min</div>
+    ${p.level < MAX_LEVEL ? `<div class="next"><small>Niveau ${p.level + 1}</small>${esc(home ? homeText(p.level + 1) : LEVEL_TEXT[p.level + 1])} · +${money((S.levelIncome(p.type, p.level + 1) - S.levelIncome(p.type, p.level)) * PLOTS[i].size * S.multiplier(state) * 60)} ¥/min</div>
       <div class="actions"><button class="primary" data-act="upgrade" ${state.money < up ? 'disabled' : ''}>Améliorer · ${cost(up)}</button></div>`
       : '<div class="next"><small>Niveau maximum</small>Ce bâtiment est au sommet du quartier.</div>'}
     <div class="actions"><button class="ghost" data-act="move">↔ Déplacer</button><button class="ghost" data-act="look">🔍 Regarder</button></div>
-    ${built.length > 1 ? `<div class="actions"><button class="ghost" data-act="demolish">🧨 Démolir (+${cost(S.demolishRefund(p))})</button></div>` : ''}`;
+    ${built.length > 1 ? `<div class="actions"><button class="ghost" data-act="demolish">🧨 Démolir (+${cost(S.demolishRefund(p, PLOTS[i].size))})</button></div>` : ''}`;
 }
 const homeText = l => ({ 2: 'Une famille de plus', 3: 'Lanternes et jardinet', 4: 'Un étage de plus (immeuble)', 5: 'Un étage de plus', 6: 'Lanterne de pierre au jardin', 7: 'Encore un étage (immeuble)', 8: 'Un érable dans le jardin', 9: 'Plus d’habitants', 10: 'Le plus bel immeuble du quartier' })[l];
 function lot(i) {
@@ -191,16 +191,20 @@ function sale(i) {
 }
 let buildTab = 'food';
 function buildList(plot) {
+  const P = plot !== undefined ? PLOTS[plot] : null, size = P?.size || 1;
+  // parcelle réservée (villa ou commerce) : on n'affiche que ce qui peut y être construit
+  if (P?.kind && (P.kind === 'villa') !== (buildTab === 'home')) buildTab = P.kind === 'villa' ? 'home' : 'food';
+  const tabs = Object.entries(CATS).filter(([k]) => !P?.kind || (P.kind === 'villa') === (k === 'home'));
   const types = Object.values(BUILDINGS).filter(b => b.cat === buildTab && b.id !== 'ramen' || (buildTab === 'food' && b.id === 'ramen' && !state.plots.some(p => p?.type === 'ramen')));
   return `${plot === undefined ? '<h2>Construire</h2><p class="sub">Choisis un bâtiment, puis une parcelle libre.</p>' : ''}
-    <div class="tabs">${Object.entries(CATS).map(([k, v]) => `<button data-tab="${k}" class="${k === buildTab ? 'on' : ''}">${v}</button>`).join('')}</div>
+    <div class="tabs">${tabs.map(([k, v]) => `<button data-tab="${k}" class="${k === buildTab ? 'on' : ''}">${v}</button>`).join('')}</div>
     <div class="cards">${types.map(b => {
-      const ok = S.unlocked(state, b.id), rate = S.levelIncome(b.id, 1) * S.multiplier(state) * 60;
-      return `<button data-build="${b.id}" ${plot !== undefined ? `data-plot="${plot}"` : ''} class="${ok ? '' : 'locked'} ${buildType === b.id ? 'sel' : ''}" ${ok && state.money >= b.cost ? '' : 'disabled'}>
+      const ok = S.unlocked(state, b.id), rate = S.levelIncome(b.id, 1) * size * S.multiplier(state) * 60, price = Math.round(b.cost * size);
+      return `<button data-build="${b.id}" ${plot !== undefined ? `data-plot="${plot}"` : ''} class="${ok ? '' : 'locked'} ${buildType === b.id ? 'sel' : ''}" ${ok && state.money >= price ? '' : 'disabled'}>
         <span class="ico">${ICON[b.id]}</span><b>${esc(b.name)}</b><small>${b.home ? `${b.home} habitants · ` : ''}+${money(rate)} ¥/min</small>
-        <span class="price">${ok ? (b.cost ? cost(b.cost) : 'Gratuit') : `🔒 à ${money(b.need)} ¥ gagnés`}</span></button>`;
+        <span class="price">${ok ? (price ? cost(price) : 'Gratuit') : `🔒 à ${money(b.need)} ¥ gagnés`}</span></button>`;
     }).join('')}</div>
-    <p class="hint">Tu as gagné ${money(state.earned)} ¥ en tout. De nouveaux bâtiments se débloquent au fil de tes gains.</p>`;
+    <p class="hint">${P && size > 1 ? `Grande parcelle : prix et revenus ×${String(size).replace('.', ',')}. ` : ''}${!P && PLOTS.some(q => q.kind) ? 'Les logements se construisent sur les grandes parcelles (prix et revenus ×2,5 à ×5), les commerces sur le quai. ' : ''}Tu as gagné ${money(state.earned)} ¥ en tout. De nouveaux bâtiments se débloquent au fil de tes gains.</p>`;
 }
 function decorList() {
   const ids = Object.keys(DECOR);
@@ -292,10 +296,10 @@ function act(a, data) {
   if (a === 'move') { close(); setMode('move', { movingFrom: i }); }
   if (a === 'demolish') {
     if (!data.sure) { const b = panelEl.querySelector('[data-act=demolish]'); b.dataset.sure = '1'; b.textContent = 'Sûr ? Le bâtiment disparaîtra'; b.classList.add('primary'); return; }
-    const name = BUILDINGS[state.plots[i].type].name, gain = S.demolishRefund(state.plots[i]);
+    const name = BUILDINGS[state.plots[i].type].name, gain = S.demolishRefund(state.plots[i], PLOTS[i].size);
     if (S.demolish(state, i)) { world.syncPlot(i, state); sound('place'); toast(`🧨 ${name} démoli : +${money(gain)} ¥`); close(); afterChange(); }
   }
-  if (a === 'look') { const p = PLOTS[i]; world.focus(p.x, p.z + p.face * 0.6, 8); }
+  if (a === 'look') { const p = PLOTS[i]; world.focus(p.x, p.z + Math.cos(p.ry) * 0.6, Math.max(8, p.w * 1.4)); }
   if (a === 'sector' && S.buySector(state, +data.k)) { PLOTS.forEach((_, j) => world.syncPlot(j, state)); sound('build'); toast(`📜 ${SECTORS[+data.k].name} t’appartient !`); close(); afterChange(); }
   if (a === 'erase') { setMode('erase'); close(); }
   if (a === 'drot') { state.decor[i].r = ((state.decor[i].r || 0) + Math.PI / 4) % (Math.PI * 2); world.syncDecor(state); sound('click'); }

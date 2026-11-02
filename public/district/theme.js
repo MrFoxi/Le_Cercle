@@ -22,13 +22,13 @@ export const THEMES = {
     b: {}, d: {},
   },
   moderne: {
-    name: 'Quartier moderne', jp: 'VILLAS', title: 'Les Villas', pitch: 'Des villas d’architecte, des piscines et des palmiers. Le quartier chic, version miniature.',
-    sectors: ['L’allée des palmiers', 'Les hauteurs', 'Le domaine', 'La marina'],
-    hill: 'La villa du sommet', hillView: 'Vue des hauteurs', south: 'Le lac', festival: '🎉 Pool party ce soir ! Musique, feux d’artifice et invités en plus (revenus ×1,5)', festivalName: 'Pool party',
+    name: 'Quartier moderne', jp: 'VILLAS', title: 'Les Villas', pitch: 'Une colline au-dessus de la marina, des villas d’architecte en terrasses et une route en lacets. Le quartier chic, version miniature.',
+    sectors: ['La marina', 'Les premières villas', 'Les hauteurs', 'Le sommet'],
+    hill: 'Le sommet', hillView: 'Le belvédère', south: 'La marina', festival: '🎉 Pool party ce soir ! Musique, feux d’artifice et invités en plus (revenus ×1,5)', festivalName: 'Pool party',
     vendor: ['🍦', 'Glacier', 'Le glacier ambulant passe dans l’allée. Touche son triporteur !', 'Glaces offertes à tout le quartier', ''],
     font: '"Inter", system-ui, sans-serif', levels: GENERIC_LEVELS, weather: { neige: 0.2, brouillard: 0.5 },
     b: {
-      ramen: ['Snack de la piscine', 'Le premier commerce de l’allée : burgers et smoothies au bord de l’eau.', '🍔'], street: ['Food-truck', 'Un camion à tacos garé sous les palmiers.', '🌮'],
+      ramen: ['Café de la marina', 'Le premier commerce du quai : brunchs et smoothies face aux yachts.', '🥂'], street: ['Food-truck', 'Un camion à tacos garé sous les palmiers.', '🌮'],
       cafe: ['Café design', 'Béton ciré, plantes suspendues et latte art.', '☕'], konbini: ['Épicerie fine', 'Huiles, fromages et produits rares.', '🧺'],
       appart: ['Villa cube', 'Un cube blanc et une grande baie vitrée.', '🏠'], fleurs: ['Jardinerie', 'Cactus, oliviers en pot et palmiers nains.', '🌵'],
       pain: ['Boulangerie bio', 'Pains au levain et viennoiseries dorées.', '🥐'], maison: ['Villa à piscine', 'Une terrasse en bois et une piscine turquoise.', '🏊'],

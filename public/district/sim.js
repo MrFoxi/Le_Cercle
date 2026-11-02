@@ -1,5 +1,6 @@
 // Little District : logique pure (économie, parcelles, décorations, objectifs, hors ligne). Aucun Three.js ici.
 import { T, DISTRICT, saveKey } from './theme.js';
+import { LAYOUT } from './layouts.js';
 export const MAX_LEVEL = 10;
 export const CATS = { food: 'Restauration', shop: 'Commerces', fun: 'Loisirs', home: 'Logements' };
 
@@ -45,12 +46,16 @@ export const SECTORS = [
   { name: 'Le haut quartier', cost: 500000 },
   { name: 'Les jardins', cost: 26000000 },
 ];
-export const PLOTS = [];
-for (const [z, sector] of [[-4.8, 0], [4.8, 0], [-4.8, 1], [4.8, 1], [10.15, 2], [-10.15, 3]]) {
+// Quartiers avec leur propre plan : parcelles de tailles variées (size multiplie prix et revenus), réservées aux commerces ou aux villas.
+export const PLOTS = LAYOUT ? LAYOUT.plots.map(p => ({ ...p })) : [];
+if (!LAYOUT) for (const [z, sector] of [[-4.8, 0], [4.8, 0], [-4.8, 1], [4.8, 1], [10.15, 2], [-10.15, 3]]) {
   const xs = sector === 0 ? [-4.3, 4.3] : sector === 1 ? [-9.3, 9.3] : [-9.3, -4.3, 4.3, 9.3];
   for (const x of xs) PLOTS.push({ x, z, face: z < 0 ? 1 : -1, sector, depth: Math.abs(z) > 8 ? 4.5 : 4.2 });
 }
-export const START_PLOT = PLOTS.findIndex(p => p.x === 4.3 && p.z === -4.8);
+for (const p of PLOTS) { p.y ??= 0; p.ry ??= p.face > 0 ? 0 : Math.PI; p.w ??= 4.3; p.size ??= 1; }
+export const START_PLOT = LAYOUT ? LAYOUT.start : PLOTS.findIndex(p => p.x === 4.3 && p.z === -4.8);
+// Une parcelle « villa » n'accepte que des logements, une parcelle « shop » que des commerces.
+export const allowed = (type, i) => !PLOTS[i].kind || (PLOTS[i].kind === 'villa') === (BUILDINGS[type].cat === 'home');
 
 // Décorations : prix, et celles qui se débloquent par les objectifs (rare).
 export const DECOR = {
@@ -92,11 +97,12 @@ export function newState(now = Date.now()) {
 }
 
 export const levelIncome = (type, level) => BUILDINGS[type].base * level * 1.12 ** (level - 1);
-export const upgradeCost = (type, level) => Math.round(Math.max(50, BUILDINGS[type].cost * 0.5) * 2.2 ** (level - 1));
+export const upgradeCost = (type, level, size = 1) => Math.round(Math.max(50, BUILDINGS[type].cost * 0.5) * 2.2 ** (level - 1) * size);
+export const buildCost = (type, i) => Math.round(BUILDINGS[type].cost * PLOTS[i].size);
 export const capacity = s => s.plots.reduce((n, p) => n + (p && BUILDINGS[p.type].home ? BUILDINGS[p.type].home * p.level : 0), 0);
 export const charm = s => Math.min(0.3, s.decor.reduce((n, d) => n + (DECOR[d.id]?.rare ? 0.03 : 0.01), 0));
 export const multiplier = s => (1 + 0.01 * s.residents) * (1 + charm(s)) * (s.boost || 1); // boost : événement en cours
-export const incomeOf = (s, i) => (s.plots[i] ? levelIncome(s.plots[i].type, s.plots[i].level) * multiplier(s) : 0);
+export const incomeOf = (s, i) => (s.plots[i] ? levelIncome(s.plots[i].type, s.plots[i].level) * PLOTS[i].size * multiplier(s) : 0);
 export const totalIncome = s => s.plots.reduce((n, p, i) => n + incomeOf(s, i), 0);
 export const clientRate = (s, i) => (s.plots[i] && BUILDINGS[s.plots[i].type].ticket ? incomeOf(s, i) / BUILDINGS[s.plots[i].type].ticket : 0);
 export const unlocked = (s, type) => s.earned >= BUILDINGS[type].need;
@@ -118,8 +124,8 @@ export function tick(s, dt) {
 
 export function build(s, type, plot) {
   const b = BUILDINGS[type];
-  if (!b || s.plots[plot] || !s.sectors[PLOTS[plot].sector] || !unlocked(s, type) || s.money < b.cost) return false;
-  s.money -= b.cost;
+  if (!b || s.plots[plot] || !s.sectors[PLOTS[plot].sector] || !unlocked(s, type) || !allowed(type, plot) || s.money < buildCost(type, plot)) return false;
+  s.money -= buildCost(type, plot);
   s.plots[plot] = { type, level: 1, served: 0 };
   s.decor = s.decor.filter(d => !inPlot(d, plot) || (s.money += refund(d), false)); // la parcelle est libérée
   return true;
@@ -128,7 +134,7 @@ export function build(s, type, plot) {
 export function upgrade(s, plot) {
   const p = s.plots[plot];
   if (!p || p.level >= MAX_LEVEL) return false;
-  const c = upgradeCost(p.type, p.level);
+  const c = upgradeCost(p.type, p.level, PLOTS[plot].size);
   if (s.money < c) return false;
   s.money -= c;
   p.level++;
@@ -137,18 +143,18 @@ export function upgrade(s, plot) {
 
 // Déplacer un bâtiment : vers une parcelle libre, ou échange avec celle d'un autre.
 // Démolir : la moitié de ce qu'a coûté le bâtiment (construction + améliorations) est rendue.
-export const demolishRefund = p => Math.floor((BUILDINGS[p.type].cost + Array.from({ length: p.level - 1 }, (_, k) => upgradeCost(p.type, k + 1)).reduce((a, b) => a + b, 0)) / 2);
+export const demolishRefund = (p, size = 1) => Math.floor((BUILDINGS[p.type].cost * size + Array.from({ length: p.level - 1 }, (_, k) => upgradeCost(p.type, k + 1, size)).reduce((a, b) => a + b, 0)) / 2);
 export function demolish(s, plot) {
   const p = s.plots[plot];
   if (!p || s.plots.filter(Boolean).length <= 1) return false; // on garde au moins un bâtiment
-  s.money += demolishRefund(p);
+  s.money += demolishRefund(p, PLOTS[plot].size);
   s.plots[plot] = null;
   s.residents = Math.min(s.residents, capacity(s));
   return true;
 }
 
 export function move(s, from, to) {
-  if (from === to || !s.plots[from] || !s.sectors[PLOTS[to].sector]) return false;
+  if (from === to || !s.plots[from] || !s.sectors[PLOTS[to].sector] || !allowed(s.plots[from].type, to) || (s.plots[to] && !allowed(s.plots[to].type, from))) return false;
   [s.plots[from], s.plots[to]] = [s.plots[to], s.plots[from]];
   s.decor = s.decor.filter(d => !inPlot(d, to) || (s.money += refund(d), false));
   return true;
@@ -162,11 +168,11 @@ export function buySector(s, k) {
 }
 
 const refund = d => Math.floor((DECOR[d.id]?.cost || 0) / 2);
-export const inPlot = (d, i) => Math.abs(d.x - PLOTS[i].x) < 2.2 && Math.abs(d.z - PLOTS[i].z) < PLOTS[i].depth / 2;
+export const inPlot = (d, i) => Math.abs(d.x - PLOTS[i].x) < PLOTS[i].w / 2 && Math.abs(d.z - PLOTS[i].z) < PLOTS[i].depth / 2; // parcelles toutes alignées sur les axes
 
 // Où peut-on poser une décoration ? Pas sur la chaussée, ni sur un bâtiment ou une parcelle à vendre, ni sur une autre déco.
 export function canPlace(s, x, z, ignore = -1) {
-  if (Math.abs(x) > 12.6 || Math.abs(z) > 12.6 || Math.abs(z) < 1.45) return false;
+  if (LAYOUT ? !LAYOUT.decorOK(x, z) : Math.abs(x) > 12.6 || Math.abs(z) > 12.6 || Math.abs(z) < 1.45) return false;
   for (let i = 0; i < PLOTS.length; i++) if (inPlot({ x, z }, i) && (s.plots[i] || !s.sectors[PLOTS[i].sector])) return false;
   return s.decor.every((d, k) => k === ignore || Math.hypot(d.x - x, d.z - z) > 0.55);
 }
@@ -190,6 +196,8 @@ export function removeDecor(s, k) {
 // Objectifs facultatifs : progression [actuel, but] et récompense.
 const lvl = (s, type) => Math.max(0, ...s.plots.filter(p => p?.type === type).map(p => p.level));
 const shops = s => built(s).filter(p => BUILDINGS[p.type].cat !== 'home').length;
+// Combien de types différents tiennent sur les parcelles du quartier (4 types de logement, 13 de commerces)
+const MAX_TYPES = Math.min(12, PLOTS.some(p => p.kind) ? Math.min(4, PLOTS.filter(p => p.kind === 'villa').length) + Math.min(13, PLOTS.filter(p => p.kind !== 'villa').length) : 12);
 export const OBJECTIVES = [
   { id: 'up2',      text: `Améliorer : ${BUILDINGS.ramen.name}`,          goal: 2,     get: s => lvl(s, 'ramen'),                    reward: { money: 100 } },
   { id: 'c50',      text: 'Accueillir 50 clients',                     goal: 50,    get: s => s.clients,                          reward: { money: 150 } },
@@ -203,7 +211,7 @@ export const OBJECTIVES = [
   { id: 'c500',     text: 'Accueillir 500 clients',                    goal: 500,   get: s => s.clients,                          reward: { money: 2500 } },
   { id: 'ramen5',   text: `${BUILDINGS.ramen.name} au niveau 5`,                         goal: 5,     get: s => lvl(s, 'ramen'),                    reward: { decor: 'sakura' } },
   { id: 'hab20',    text: 'Accueillir 20 habitants',                   goal: 20,    get: s => s.residents,                        reward: { decor: 'jizo' } },
-  { id: 'rue1',     text: 'Développer entièrement la grand-rue',       goal: 8,     get: s => s.plots.filter((p, i) => p && PLOTS[i].depth < 4.4).length, reward: { money: 20000 } },
+  { id: 'rue1',     text: 'Développer entièrement les deux premiers secteurs', goal: PLOTS.filter(p => p.sector <= 1).length, get: s => s.plots.filter((p, i) => p && PLOTS[i].sector <= 1).length, reward: { money: 20000 } },
   { id: 'cats',     text: 'Un bâtiment de chaque catégorie',           goal: 4,     get: s => new Set(built(s).map(p => BUILDINGS[p.type].cat)).size, reward: { decor: 'kiosque' } },
   { id: 'haut',     text: 'Acheter le Haut quartier',                  goal: 1,     get: s => +s.sectors[2],                      reward: { money: 15000 } },
   { id: 'lvl10',    text: 'Un bâtiment au niveau 10',                  goal: 10,    get: s => Math.max(0, ...built(s).map(p => p.level)), reward: { decor: 'fontaine' } },
@@ -211,7 +219,7 @@ export const OBJECTIVES = [
   { id: 'deco30',   text: 'Installer trente décorations',              goal: 30,    get: s => s.decor.length,                     reward: { money: 30000 } },
   { id: 'hab50',    text: 'Accueillir 50 habitants',                   goal: 50,    get: s => s.residents,                        reward: { money: 80000 } },
   { id: 'jardins',  text: 'Acheter les Jardins',                       goal: 1,     get: s => +s.sectors[3],                      reward: { money: 100000 } },
-  { id: 'types12',  text: 'Construire 12 types de bâtiments',          goal: 12,    get: s => new Set(built(s).map(p => p.type)).size, reward: { money: 300000 } },
+  { id: 'types12',  text: `Construire ${MAX_TYPES} types de bâtiments`, goal: MAX_TYPES,    get: s => new Set(built(s).map(p => p.type)).size, reward: { money: 300000 } },
   { id: 'c50000',   text: 'Accueillir 50 000 clients',                 goal: 50000, get: s => s.clients,                          reward: { money: 500000 } },
 ];
 export const progress = (s, o) => Math.min(o.goal, Math.floor(o.get(s)));

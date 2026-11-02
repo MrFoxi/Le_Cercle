@@ -4,6 +4,7 @@ import * as THREE from 'three';
 import { PLOTS, BUILDINGS } from './sim.js';
 import { HILL, CANAL } from './terrain.js';
 import { T } from './theme.js';
+import { LAYOUT } from './layouts.js';
 
 const V = (x, y, z) => new THREE.Vector3(x, y, z);
 const lerp = (a, b, t) => a + (b - a) * t;
@@ -22,7 +23,7 @@ export function createCinema(world, { fade, label }) {
     comptoir: state => {
       const shops = state.plots.map((p, i) => [p, i]).filter(([p, i]) => p && BUILDINGS[p.type].cat !== 'home' && PLOTS[i].depth < 4.4).sort((a, b) => b[0].level - a[0].level); // grand-rue : la caméra a de la place
       if (!shops.length) return null;
-      const [p, i] = shops[Math.floor(Math.random() * Math.min(2, shops.length))], P = PLOTS[i], f = P.face, s = sign();
+      const [p, i] = shops[Math.floor(Math.random() * Math.min(2, shops.length))], P = PLOTS[i], f = Math.cos(P.ry), s = sign();
       return { name: BUILDINGS[p.type].name, dur: 15, at: t => ({ pos: V(P.x + s * lerp(1.6, 0.6, t), lerp(1.7, 1.3, t), P.z + f * (P.depth / 2 + lerp(3.2, 1.9, t))), look: V(P.x, 0.6, P.z + f * 0.4), blur: 1.4 }) };
     },
     colline: () => {
@@ -39,7 +40,7 @@ export function createCinema(world, { fade, label }) {
       const obj = p ? p.m.root : c.length ? c[Math.floor(Math.random() * c.length)].obj : null;
       if (!obj) return null;
       const cam = obj.position.clone().add(V(0, 2, -2.5)), look = obj.position.clone();
-      return { name: p ? 'Un habitant' : 'Un chat du quartier', dur: 18, lost: () => !obj.parent || !obj.visible || Math.abs(obj.position.x) > 11.5, at: (t, dt) => {
+      return { name: p ? 'Un habitant' : 'Un chat du quartier', dur: 18, lost: () => !obj.parent || !obj.visible || Math.abs(obj.position.x) > (LAYOUT ? 16 : 11.5), at: (t, dt) => {
         const back = V(-Math.sin(obj.rotation.y), 0, -Math.cos(obj.rotation.y));
         cam.lerp(obj.position.clone().addScaledVector(back, 3.2).add(V(0, 2.4, 0)), Math.min(1, dt * 1.2));
         look.lerp(obj.position.clone().add(V(0, 0.35, 0)), Math.min(1, dt * 3));
@@ -49,10 +50,29 @@ export function createCinema(world, { fade, label }) {
     feux: (state, ctx) => (ctx.festival && ctx.night > 0.5 ? { name: 'Feux d’artifice', dur: 18, at: t => ({ pos: V(lerp(-0.7, 0.7, t), 1.2, 7.4), look: V(0, 4, -6), blur: 0.6 }) } : null),
   };
 
+  // Quartier avec son propre plan : ses propres plans de cinéma
+  if (LAYOUT) {
+    for (const k of ['rue', 'colline', 'sanctuaire', 'canal', 'feux']) delete SHOTS[k];
+    const C = LAYOUT.view, M = LAYOUT.MARINA, TT = LAYOUT.T;
+    Object.assign(SHOTS, {
+      ensemble: () => { const a0 = rnd(0.3, 2.8), d = sign(); return { name: 'Le quartier', dur: 18, at: t => ({ pos: V(C.x + Math.cos(a0 + d * t * 0.35) * 46, 30, C.z + Math.sin(a0 + d * t * 0.35) * 46), look: V(C.x, 2, C.z), blur: 0.7 }) }; },
+      dessus: () => { const a0 = rnd(0, 6.28); return { name: 'Vu du ciel', dur: 14, at: t => ({ pos: V(Math.sin(a0 + t * 0.3) * 4, 56, C.z + Math.cos(a0 + t * 0.3) * 4), look: V(0, 0, C.z), blur: 0.4 }) }; },
+      marina: () => { const d = sign(); return { name: T.south, dur: 16, at: t => { const x = lerp(-13 * d, 3 * d, t); return { pos: V(x, 4.6, M.z0 + 4.5), look: V(x + d * 3, 2.4, -4), blur: 0.9 }; } }; },
+      lacets: () => ({ name: 'Les lacets', dur: 18, at: t => ({ pos: V(lerp(12, -4, t), lerp(2.2, 15, t), lerp(15, -2, t)), look: V(0, lerp(1.5, TT[3], t), lerp(2, -16, t)), blur: 0.8 }) }),
+      belvedere: () => ({ name: T.hillView, dur: 16, at: t => ({ pos: V(lerp(-15, -11, t), TT[3] + 2.6, -14.2), look: V(lerp(-4, 4, t), 0.5, 10), blur: 0.7 }) }),
+      villa: state => {
+        const best = state.plots.map((p, i) => [p, i]).filter(([p, i]) => p && PLOTS[i].kind === 'villa').sort((a, b) => b[0].level - a[0].level || PLOTS[b[1]].size - PLOTS[a[1]].size)[0];
+        if (!best) return null;
+        const P = PLOTS[best[1]], s = sign();
+        return { name: BUILDINGS[best[0].type].name, dur: 15, at: t => ({ pos: V(P.x + s * lerp(P.w * 0.6, P.w * 0.25, t), P.y + lerp(3.4, 2.4, t), P.z + P.depth / 2 + 2.6), look: V(P.x, P.y + 1, P.z), blur: 1.1 }) };
+      },
+    });
+  }
+
   function next(ctx) {
     const keys = Object.keys(SHOTS).filter(k => k !== last);
     // les feux d'artifice passent en priorité quand il y en a
-    if (SHOTS.feux(ctx.state, ctx) && last !== 'feux' && Math.random() < 0.5) keys.unshift('feux');
+    if (SHOTS.feux?.(ctx.state, ctx) && last !== 'feux' && Math.random() < 0.5) keys.unshift('feux');
     else keys.sort(() => Math.random() - 0.5);
     for (const k of keys) {
       const s = SHOTS[k](ctx.state, ctx);

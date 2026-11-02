@@ -230,10 +230,67 @@ function home(g, type, level, depth, info, rng) {
   info.glows.push({ x: -1.2, y: 0.6, z: front + 0.3, color: '#ffc27a', pool: true });
 }
 
-function buildThemed(type, level, depth = 4.2) {
+// Grande villa du quartier moderne : elle s'agrandit avec le niveau (aile, garage, étage, pool-house, toit-terrasse).
+function bigVilla(g, type, level, w, D, info) {
+  const pal = { appart: ['#e6e3dc', '#8a6a4a'], maison: ['#ebe6dc', '#9a7a52'], immeuble: ['#d8d6d2', '#3a3a3e'], hotel: ['#efe7d8', '#a88a62'] }[type];
+  const white = std(pal[0], { roughness: 0.9 }), accent = std(pal[1], { roughness: 0.75 }), frame = trimM();
+  box(g, w, 0.04, D, std('#6f9a45', { roughness: 1 }), 0, 0, 0);
+  const back = -D / 2 + 0.2, md = D * 0.48, mw = w * 0.5, mx = -w / 2 + 0.4 + mw / 2, front = back + md, H = FLOOR * 1.2;
+  const glass = sched => glowMat('villaGlass' + sched, '#ffffff', TEX.window(), 0.04, 0.85, sched);
+  const volume = (x, z, vw, vd, y, h, wall, sched) => {
+    box(g, vw, h, vd, wall, x, y, z);
+    box(g, vw + 0.12, 0.1, vd + 0.12, frame, x, y + h, z); // dalle de toit fine et sombre
+    plane(g, vw - 0.5, h * 0.72, glass(sched), x, y + h * 0.46, z + vd / 2 + 0.01);
+    box(g, vw - 0.4, 0.04, 0.05, frame, x, y + h * 0.1, z + vd / 2 + 0.02);
+    for (const k of [-1, 1]) plane(sub(g, x + k * (vw / 2 + 0.01), 0, z, k * Math.PI / 2), vd - 0.8, h * 0.5, glass(sched), 0, y + h * 0.5, 0);
+  };
+  volume(mx, back + md / 2, mw, md, 0, H, white, 'A');
+  for (let i = 0; i < 6; i++) box(g, 0.06, H * 0.9, 0.05, accent, mx + mw / 2 - 0.25 - i * 0.12, 0, front + 0.03); // claustra en bois
+  if (level >= 3) volume(mx + mw / 2 + w * 0.11, back + md * 0.42, w * 0.18, md * 0.8, 0, FLOOR * 0.9, accent, 'B');
+  if (level >= 4) { // garage et voiture
+    const gx = w / 2 - 1.15;
+    box(g, 1.7, FLOOR * 0.8, md * 0.8, white, gx, 0, back + md * 0.42); box(g, 1.4, FLOOR * 0.62, 0.03, std('#3a3a3e', { metalness: 0.5 }), gx, 0, back + md * 0.82 + 0.01);
+    const car = sub(g, gx, 0, front + 0.75, Math.PI / 2), paint = std(['#c8323a', '#26282c', '#e8e6e0', '#2a5fa8'][hashN(type) % 4], { roughness: 0.25, metalness: 0.5 });
+    box(car, 1.1, 0.22, 0.5, paint, 0, 0.08, 0); box(car, 0.6, 0.18, 0.44, std('#1a2230', { roughness: 0.1 }), -0.05, 0.3, 0);
+    for (const [x, z] of [[-0.35, -0.25], [0.35, -0.25], [-0.35, 0.25], [0.35, 0.25]]) { const wh = cyl(car, 0.09, 0.06, std('#111'), x, 0.09, z); wh.rotation.x = Math.PI / 2; }
+  }
+  if (level >= 5) volume(mx + 0.2, back + md / 2 + 0.5, mw * 0.85, md, H + 0.1, FLOOR * 0.95, level % 2 ? accent : white, 'C'); // étage en porte-à-faux
+  // piscine et terrasse en bois
+  const pw = Math.min(w * 0.42, 2.2 + 0.15 * level), px = w * 0.18, pz = D / 2 - 1.35;
+  box(g, pw + 0.9, 0.08, 1.7, textured('deck', TEX.wood('#9a7a52')), px, 0.02, pz);
+  const pool = box(g, pw, 0.03, 1.1, std('#3fc0d8', { roughness: 0.05, metalness: 0.1, emissive: '#0a5a6a', emissiveIntensity: 0.4 }), px, 0.09, pz);
+  pool.userData.noShadow = true;
+  info.glows.push({ x: px, y: 0.3, z: pz, color: '#5fe0ff', pool: true, r: pw * 0.6 });
+  for (let i = 0; i < Math.min(4, 1 + Math.floor(level / 3)); i++) { // transats
+    const lx = px - pw / 2 + 0.3 + i * 0.55, l = sub(g, lx, 0, pz - 0.85);
+    box(l, 0.3, 0.04, 0.6, std('#f4f2ee'), 0, 0.14, 0); const b2 = box(l, 0.3, 0.04, 0.28, std('#f4f2ee'), 0, 0.2, -0.32); b2.rotation.x = -0.6;
+  }
+  if (level >= 7) { box(g, 1, FLOOR * 0.7, 1, white, w / 2 - 0.7, 0, pz + 0.1); box(g, 1.2, 0.06, 1.2, accent, w / 2 - 0.7, FLOOR * 0.7, pz + 0.1); } // pool-house
+  if (level >= 9) { // toit-terrasse : garde-corps en verre et parasol
+    const ty = level >= 5 ? H + 0.1 + FLOOR * 0.95 + 0.1 : H + 0.1;
+    const gl = mat('railGlass', () => new THREE.MeshStandardMaterial({ color: '#cfe8ff', roughness: 0.05, transparent: true, opacity: 0.3, depthWrite: false }));
+    plane(g, mw * 0.8, 0.35, gl, mx + 0.2, ty + 0.18, back + md + 0.4);
+    cyl(g, 0.02, 0.8, std('#ddd'), mx + 0.6, ty, back + md / 2 + 0.3); shape(g, G.cone, std(pal[1], { side: THREE.DoubleSide }), mx + 0.6, ty + 0.85, back + md / 2 + 0.3, 1, 0.2, 1);
+  }
+  if (level >= 10) volume(mx - mw / 2 + 0.6, back + md / 2 - 0.2, 1, md * 0.9, H + 0.1, FLOOR * 0.9, white, 'B'); // seconde aile en hauteur
+  // jardin : chemin éclairé jusqu'à la porte, palmiers, haies sur les côtés
+  const doorX = mx - mw * 0.25;
+  plane(g, 0.75, 0.95, std('#2a2a2e'), doorX, 0.5, front + 0.02);
+  for (let z = front + 0.4; z < D / 2 - 0.2; z += 0.45) box(g, 0.5, 0.03, 0.3, std('#d8d4ca'), doorX, 0.03, z);
+  for (const z of [front + 0.6, D / 2 - 0.4]) { cyl(g, 0.04, 0.3, frame, doorX + 0.45, 0, z); cyl(g, 0.045, 0.04, glowMat('gardenLight', '#fff1d6', null, 0.3, 3, 0), doorX + 0.45, 0.28, z); info.glows.push({ x: doorX + 0.45, y: 0.3, z, color: '#fff1d6', pool: true, r: 0.6 }); }
+  for (let i = 0; i < 1 + Math.floor(level / 3); i++) { const p = new THREE.Group(); palm(p, 0.75 + (i % 2) * 0.2); p.position.set(-w / 2 + 0.6 + (i % 2) * 0.9, 0, D / 2 - 0.5 - Math.floor(i / 2) * 1.2); g.add(p); }
+  for (const k of [-1, 1]) box(g, 0.35, 0.45, D - 0.4, leaf('#3f6a35'), k * (w / 2 - 0.18), 0, 0);
+  info.door = { x: doorX, z: D / 2 }; info.doorIn = { x: doorX, z: front + 0.1 }; info.front = front;
+  info.light = { x: mx, y: 1, z: front + 0.4, color: '#ffc27a' };
+  info.glows.push({ x: doorX, y: 0.6, z: front + 0.3, color: '#ffc27a', pool: true });
+}
+const hashN = s => hash(s);
+
+function buildThemed(type, level, depth = 4.2, w = 4.3) {
   const g = new THREE.Group(), rng = seeded(type.length * 977 + level * 31);
   const info = { seats: [], staff: [], steam: [], glows: [], light: null, screens: [] };
   info.door = { x: 0, z: depth / 2 }; info.front = -depth / 2 + 3;
+  if (DISTRICT === 'moderne' && LOOK[type].style === 'home' && w > 6) { bigVilla(g, type, level, w, depth, info); return { group: g, info }; }
   box(g, 4.3, 0.04, depth, textured('slabfloor', TEX.slab()), 0, 0, 0);
   if (LOOK[type].style === 'home') home(g, type, level, depth, info, rng);
   else shop(g, type, level, depth, info, rng);
@@ -242,7 +299,7 @@ function buildThemed(type, level, depth = 4.2) {
 
 // ---------- Végétation et décorations ----------
 const leaf = c => std(c, { roughness: 0.9, flatShading: true });
-function palm(g, s = 1) {
+export function palm(g, s = 1) {
   const trunk = std('#8a6a48', { roughness: 0.95 });
   let x = 0, y = 0;
   for (let i = 0; i < 7; i++) { cyl(g, (0.065 - i * 0.004) * s, 0.24 * s, trunk, x, y, 0); x += 0.03 * s; y += 0.22 * s; }
@@ -265,7 +322,7 @@ function column(g) { const w = std('#f2efe6', { roughness: 0.6 }); box(g, 0.34, 
 function amphora(g) { const pts = [[0.02, 0], [0.09, 0.05], [0.16, 0.2], [0.15, 0.35], [0.08, 0.48], [0.06, 0.56], [0.09, 0.6]].map(([x, y]) => new THREE.Vector2(x, y)); const a = new THREE.Mesh(new THREE.LatheGeometry(pts, 14), std('#b8673a', { roughness: 0.8 })); g.add(a); for (const k of [-1, 1]) { const h = new THREE.Mesh(new THREE.TorusGeometry(0.05, 0.012, 5, 10, Math.PI), std('#b8673a')); h.position.set(k * 0.1, 0.5, 0); h.rotation.z = k * -1.2; g.add(h); } }
 function arch(g, color, glowC) { const m = glowC ? glowMat('archG' + glowC, glowC, null, 0.8, 3, 0) : std(color, { roughness: 0.6 }); for (const s of [-1, 1]) box(g, 0.16, 1.3, 0.16, m, s * 0.7, 0, 0); const t = new THREE.Mesh(new THREE.TorusGeometry(0.7, 0.08, 6, 18, Math.PI), m); t.position.y = 1.3; g.add(t); }
 function pergola(g, vine) { const w = std('#7a5a3a'); for (const [x, z] of [[-0.6, -0.5], [0.6, -0.5], [-0.6, 0.5], [0.6, 0.5]]) box(g, 0.07, 1.2, 0.07, w, x, 0, z); for (let i = 0; i < 6; i++) box(g, 1.4, 0.05, 0.06, w, 0, 1.2, -0.55 + i * 0.22); if (vine) { for (let i = 0; i < 7; i++) shape(g, G.ico, leaf('#4f7a35'), -0.5 + (i % 4) * 0.33, 1.28, -0.4 + Math.floor(i / 4) * 0.6, 0.35, 0.12, 0.35); for (let i = 0; i < 5; i++) ball(g, 0.05, std('#6a2a5a'), -0.4 + i * 0.2, 1.15, 0); } box(g, 0.9, 0.05, 0.4, PALEWOOD(), 0, 0.4, 0); }
-function boatModel(g, hull = '#f4f1ea', sail = true, s = 1) {
+export function boatModel(g, hull = '#f4f1ea', sail = true, s = 1) {
   const pts = [[-0.7, 0], [-0.55, -0.12], [0.55, -0.12], [0.8, 0.02]].map(([x, y]) => new THREE.Vector2(x * s, y * s));
   const sh = new THREE.Shape(pts); const geo = new THREE.ExtrudeGeometry(sh, { depth: 0.36 * s, bevelEnabled: false }); geo.translate(0, 0.08 * s, -0.18 * s);
   g.add(new THREE.Mesh(geo, std(hull, { roughness: 0.5 })));

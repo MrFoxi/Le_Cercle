@@ -117,7 +117,9 @@ export const TEX = {
       x.font = `800 ${size}px ${FONT.sign || KANJI}`;
       chars.forEach((c, i) => x.fillText(c, w / 2, h / 2 + (i - (chars.length - 1) / 2) * size * 1.02));
     } else {
-      x.font = `800 ${Math.min(90, 1100 / [...text].length)}px ${FONT.sign || KANJI}`;
+      let size = Math.min(90, 1100 / [...text].length);
+      x.font = `800 ${size}px ${FONT.sign || KANJI}`;
+      while (size > 18 && x.measureText(text).width > w - 50) x.font = `800 ${(size -= 3)}px ${FONT.sign || KANJI}`; // le texte tient toujours dans l'enseigne
       x.fillText(text, w / 2, h / 2 + 4);
     }
   }),
@@ -392,8 +394,8 @@ export const LOOK = {
 
 // Construit le modèle d'un bâtiment. Retourne aussi les places assises, le personnel, la porte, la vapeur…
 export const HOOKS = { building: null, decor: null }; // autres quartiers : leurs propres bâtiments et décorations
-export function buildBuilding(type, level, depth = 4.2) {
-  if (HOOKS.building) return HOOKS.building(type, level, depth);
+export function buildBuilding(type, level, depth = 4.2, w = 4.3) {
+  if (HOOKS.building) return HOOKS.building(type, level, depth, w);
   const L = LOOK[type], g = new THREE.Group(), rng = seeded(type.length * 977 + level * 31);
   const info = { seats: [], staff: [], steam: [], glows: [], light: null, screens: [] };
   const W = 4, back = -depth / 2, front = back + 3, D = 3, cz = back + D / 2;
