@@ -2,6 +2,8 @@
 import * as THREE from 'three';
 import { makePerson, seeded, std } from './models.js';
 import { makeCat, animateCat } from './animals.js';
+import { T } from './theme.js';
+const SEA = !!T.sea, HOVER = !!T.futur; // plage au lieu de la rive d'en face · habitants qui lévitent
 import { PLOTS, BUILDINGS } from './sim.js';
 
 const Y = 0.06, IN_Y = 0.16, HY = 1.66; // trottoir, plancher des commerces, haut de la colline
@@ -14,7 +16,7 @@ const XS = [-12.6, -9.3, -6.8, -4.3, 0, 4.3, 6.8, 9.3, 12.6];
 const nodes = [], index = new Map(), adj = [];
 const node = (x, z, y = Y) => { const k = `${x},${z}`; if (!index.has(k)) { index.set(k, nodes.length); nodes.push({ x, z, y, edge: Math.abs(x) > 12 }); adj.push([]); } return index.get(k); };
 const link = (a, b) => { const d = Math.hypot(nodes[a].x - nodes[b].x, nodes[a].z - nodes[b].z, nodes[a].y - nodes[b].y); adj[a].push([b, d]); adj[b].push([a, d]); };
-for (const z of [-20.2, -14.3, -7.4, -2, 2, 7.4]) for (let i = 1; i < XS.length; i++) link(node(XS[i - 1], z), node(XS[i], z));
+for (const z of SEA ? [-14.3, -7.4, -2, 2, 7.4] : [-20.2, -14.3, -7.4, -2, 2, 7.4]) for (let i = 1; i < XS.length; i++) link(node(XS[i - 1], z), node(XS[i], z));
 const ZS = [-14.3, -12.6, -10.15, -7.4, -4.8, -2, 2, 4.8, 7.4, 10.15, 12.6];
 for (let i = 1; i < ZS.length; i++) link(node(0, ZS[i - 1]), node(0, ZS[i]));
 for (const x of [-9.3, 9.3]) link(node(x, -2), node(x, 2));
@@ -22,7 +24,8 @@ const chain = pts => pts.reduce((a, [x, z, y]) => { const b = node(x, z, y); if 
 chain([[0, 12.6], [0, 14.95, HY], [0, 16.5, HY], [0, 17.3, HY]]); // escalier puis sanctuaire
 const HXS = [-10.5, -5.5, 0, 5.5, 10.5];
 for (let i = 1; i < HXS.length; i++) link(node(HXS[i - 1], 16.5, HY), node(HXS[i], 16.5, HY));
-chain([[0, -14.3], [0, -15.4, 0.14], [0, -17.05, 0.66], [0, -18.7, 0.14], [0, -20.2]]); // pont
+if (SEA) chain([[0, -14.3], [0, -15.6, 0.12], [0, -20.2, 0.12]]); // ponton
+else chain([[0, -14.3], [0, -15.4, 0.14], [0, -17.05, 0.66], [0, -18.7, 0.14], [0, -20.2]]); // pont
 const SHRINE = index.get('0,17.3');
 export const NAV = { nodes, adj, index };
 const EDGES = nodes.map((n, i) => (n.edge ? i : -1)).filter(i => i >= 0);
@@ -143,7 +146,8 @@ export function createPeople({ scene, plots, low, emitCoin, onFlash }) {
       return walkTo(p, spot, SHRINE, () => { p.state = 'look'; p.anim = 'bow'; p.t = 4 + rng() * 3; p.face = 0; p.exitPts = []; });
     }
     if (r < 0.84) { // regarder l'eau du canal, d'une rive ou de l'autre
-      const far = rng() < 0.4, z = far ? -20.2 : -14.3, nx = pick(XS.slice(1, -1));
+      if (SEA && rng() < 0.4) return walkTo(p, { x: (rng() - 0.5) * 0.6, z: -20.3, y: 0.12 }, index.get('0,-20.2'), () => { p.state = 'look'; p.t = 5 + rng() * 6; p.face = Math.PI; p.exitPts = []; }); // regarder la mer au bout du ponton
+      const far = !SEA && rng() < 0.4, z = far ? -20.2 : -14.3, nx = pick(XS.slice(1, -1));
       return walkTo(p, { x: nx + (rng() - 0.5) * 1.5, z: far ? -19.15 : -15, y: Y }, index.get(`${nx},${z}`), () => { p.state = 'look'; p.t = 5 + rng() * 6; p.face = far ? 0 : Math.PI; p.exitPts = []; });
     }
     if (p.tour) return leave(p);
@@ -215,14 +219,15 @@ export function createPeople({ scene, plots, low, emitCoin, onFlash }) {
     p.ph += dt * (moving ? p.speed * 13 : 3);
     const s = Math.sin(p.ph);
     const sitting = p.sitH > 0;
-    m.legL.rotation.x = sitting ? -1.45 : moving ? s * 0.55 : 0;
-    m.legR.rotation.x = sitting ? -1.45 : moving ? -s * 0.55 : 0;
-    m.body.position.y = sitting ? p.sitH - 0.29 : moving ? Math.abs(s) * 0.018 : 0;
+    const hover = HOVER && !sitting && !p.def; // le personnel reste au sol derrière son comptoir
+    m.legL.rotation.x = sitting ? -1.45 : hover ? 0.25 : moving ? s * 0.55 : 0;
+    m.legR.rotation.x = sitting ? -1.45 : hover ? 0.2 : moving ? -s * 0.55 : 0;
+    m.body.position.y = sitting ? p.sitH - 0.29 : hover ? 0.22 + Math.sin(p.ph * 0.35) * 0.03 : moving ? Math.abs(s) * 0.018 : 0;
     m.armL.rotation.x = moving ? -s * 0.4 : 0;
     m.armR.rotation.x = moving ? s * 0.4 : 0;
     m.armR.rotation.z = m.armL.rotation.z = 0;
     m.head.rotation.set(0, 0, 0);
-    m.body.rotation.z = 0; m.body.rotation.x = 0;
+    m.body.rotation.z = 0; m.body.rotation.x = hover && moving ? 0.18 : 0; // en lévitation, on se penche dans le sens du vol
     if (p.dog) animateCat(p.dog, dt, moving ? 'walk' : 'sit');
     const a = p.anim || (p.state === 'chat' ? 'chat' : p.state === 'look' ? 'look' : null);
     if (a === 'eat') { m.armR.rotation.x = -1.3 + Math.sin(p.ph * 1.6) * 0.3; m.armL.rotation.x = -0.9; m.head.rotation.x = 0.15 + Math.sin(p.ph * 1.6) * 0.08; }

@@ -14,6 +14,9 @@ import { PLOTS, SECTORS, BUILDINGS } from './sim.js';
 import { createPeople } from './people.js';
 import { buildTerrain, groundY, BASE } from './terrain.js';
 import { createLife } from './life.js';
+import { DISTRICT, T } from './theme.js';
+import { streetLamp, GROUND } from './styles.js';
+const JP = DISTRICT === 'japon';
 import { GTAOPass } from 'three/addons/postprocessing/GTAOPass.js';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 
@@ -100,17 +103,17 @@ export function createWorld(canvas, { low }) {
 
   // ---------- Plateau de maquette ----------
   const groundMats = [];
-  const groundMat = (key, tex, rep) => { const t = tex.clone(); t.needsUpdate = true; t.repeat.set(...rep); const m = new THREE.MeshStandardMaterial({ map: t, roughness: 0.9 }); m.userData.base = new THREE.Color('#ffffff'); groundMats.push(m); return m; };
+  const groundMat = (key, tex, rep, tint) => { const t = tex.clone(); t.needsUpdate = true; t.repeat.set(...rep); const m = new THREE.MeshStandardMaterial({ map: t, roughness: 0.9 }); if (tint) m.userData.tint = new THREE.Color(tint).multiplyScalar(key === 'road' ? 1 : GROUND.gain || 1); groundMats.push(m); return m; };
   const flat = (w, d, m, x, y, z) => { const o = new THREE.Mesh(new THREE.PlaneGeometry(w, d), m); o.rotation.x = -Math.PI / 2; o.position.set(x, y, z); o.receiveShadow = true; scene.add(o); return o; };
-  flat(26.6, 2.8, groundMat('road', TEX.asphalt(), [7, 0.8]), 0, ROAD_Y, 0); // au-dessus du socle, jamais à la même hauteur
+  flat(26.6, 2.8, GROUND.roadPave ? groundMat('road', TEX.pave(), [9, 0.9], GROUND.road) : groundMat('road', TEX.asphalt(), [7, 0.8], GROUND.road), 0, ROAD_Y, 0); // au-dessus du socle, jamais à la même hauteur
   for (const s of [-1, 1]) {
-    flat(26.6, 1.26, groundMat('walk', TEX.slab(), [26, 1.26]), 0, GROUND_Y, s * 2.07); // commence après la bordure
-    flat(26.6, 10.6, groundMat('pave', TEX.pave(), [9, 3.6]), 0, GROUND_Y, s * 8);
+    flat(26.6, 1.26, groundMat('walk', TEX.slab(), [26, 1.26], GROUND.pave), 0, GROUND_Y, s * 2.07); // commence après la bordure
+    flat(26.6, 10.6, groundMat('pave', TEX.pave(), [9, 3.6], GROUND.pave), 0, GROUND_Y, s * 8);
     const curb = box(scene, 26.6, GROUND_Y + 0.02, 0.1, std('#8f8b84'), 0, 0, s * 1.39); curb.receiveShadow = true; // un peu plus haute que le trottoir : pas de surfaces confondues
   }
   // Marquages : ligne médiane, passages piétons
   const paint = std('#bdb8ac', { roughness: 0.8 }); // pas trop blanc : sinon ça brille comme un néon au soleil
-  for (let x = -12; x <= 12; x += 1.6) if (Math.abs(x) > 1.6 && Math.abs(Math.abs(x) - 9.3) > 1) box(scene, 0.8, 0.006, 0.07, paint, x, ROAD_Y, 0);
+  for (let x = -12; x <= 12; x += 1.6) if (!GROUND.roadPave && Math.abs(x) > 1.6 && Math.abs(Math.abs(x) - 9.3) > 1) box(scene, 0.8, 0.006, 0.07, paint, x, ROAD_Y, 0);
   for (const cx of [0, -9.3, 9.3]) for (let z = -1.1; z <= 1.1; z += 0.44) box(scene, 1.3, 0.006, 0.22, paint, cx, ROAD_Y, z);
   for (const [x, z] of [[-3, 0.5], [6, -0.6], [-8, -0.4]]) { const m = new THREE.Mesh(new THREE.CylinderGeometry(0.28, 0.28, 0.01, 18), std('#3a3a3c', { metalness: 0.6, roughness: 0.5 })); m.position.set(x, ROAD_Y + 0.006, z); scene.add(m); }
   // Relief : colline du sanctuaire, canal, rive d'en face ; socle en bois ; table sombre et brillante dessous
@@ -119,6 +122,7 @@ export function createWorld(canvas, { low }) {
   const tableTop = new THREE.Mesh(new THREE.PlaneGeometry(160, 160), new THREE.MeshStandardMaterial({ color: '#0d0f14', roughness: 0.32, metalness: 0.3 }));
   tableTop.rotation.x = -Math.PI / 2; tableTop.position.y = -1.69; tableTop.receiveShadow = true; scene.add(tableTop);
 
+  if (T.futur) for (const s of [-1, 1]) box(scene, 26.6, 0.012, 0.05, glowMat('roadNeon', s < 0 ? '#ff4fd8' : '#3ff0ff', null, 1, 3, 0), 0, ROAD_Y, s * 1.25);
   // Touffes d'herbe dans les recoins : bordures de trottoir, pied du mur de la colline, bord du canal (couleur de saison)
   {
     const lines = [[1.47, 0.06], [-1.47, 0.06], [14.68, 0.06], [-15.18, 0.06], [-18.95, 0.06], [12.5, 0.06], [-13.35, 0.06]];
@@ -154,7 +158,15 @@ export function createWorld(canvas, { low }) {
   const poles = [-11.8, -6.8, -1.9, 1.9, 6.8, 11.8];
   for (const s of [-1, 1]) {
     poles.forEach(x => {
-      const z = s * 2.5, p = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.08, 3.6, 8), poleMat);
+      const z = s * 2.5;
+      if (!JP) {
+        streetLamp(scenery, x, z, s);
+        const bulb = new THREE.Mesh(new THREE.SphereGeometry(0.07, 10, 8), glowMat('streetbulb', DISTRICT === 'futur' ? '#bff8ff' : '#ffe1b0', null, 0.1, 4, 0));
+        bulb.position.set(x, 2.55, z - s * (DISTRICT === 'futur' ? 0 : 0.42)); scenery.add(bulb);
+        glows.push(lightPool(scenery, x, z - s * 0.5, 1.15, DISTRICT === 'futur' ? '#9ff0ff' : '#ffcf96', 0.55), streak(scenery, x, z - s * 0.6, 0.35, '#ffcf96', 0.8));
+        return;
+      }
+      const p = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.08, 3.6, 8), poleMat);
       p.position.set(x, 1.8, z); p.castShadow = true; scenery.add(p);
       box(scenery, 0.9, 0.05, 0.05, poleMat, x, 3.25, z);
       if (Math.round(x) % 2) { const t = new THREE.Mesh(new THREE.CylinderGeometry(0.13, 0.13, 0.4, 10), std('#7a7d80', { metalness: 0.5 })); t.position.set(x, 2.7, z - s * 0.15); scenery.add(t); }
@@ -164,7 +176,7 @@ export function createWorld(canvas, { low }) {
       bulb.position.set(x, 2.55, z - s * 0.42); scenery.add(bulb);
       glows.push(lightPool(scenery, x, z - s * 0.5, 1.15, '#ffcf96', 0.55), streak(scenery, x, z - s * 0.6, 0.35, '#ffcf96', 0.8));
     });
-    for (let i = 0; i < poles.length - 1; i++) for (const dy of [0, 0.22]) {
+    if (JP) for (let i = 0; i < poles.length - 1; i++) for (const dy of [0, 0.22]) {
       const a = new THREE.Vector3(poles[i] + 0.4, 3.24 - dy, s * 2.5), b = new THREE.Vector3(poles[i + 1] - 0.4, 3.24 - dy, s * 2.5);
       const mid = a.clone().lerp(b, 0.5); mid.y -= 0.35;
       const tube = new THREE.Mesh(new THREE.TubeGeometry(new THREE.QuadraticBezierCurve3(a, mid, b), 16, 0.012, 4), wireMat);
@@ -230,11 +242,11 @@ export function createWorld(canvas, { low }) {
       for (let i = 0; i < 9; i++) box(g, 0.06, 0.4, 0.06, fence, -2 + i * 0.5, 0, depth / 2 - 0.1);
       box(g, 4.1, 0.05, 0.04, fence, 0, 0.3, depth / 2 - 0.1);
       box(g, 0.05, 0.75, 0.05, fence, 1.2, 0, depth / 2 - 0.4);
-      const sign = new THREE.Mesh(new THREE.PlaneGeometry(0.55, 0.36), textured('forsale', TEX.sign('売地', '#f4efe4', '#b8321f')));
+      const sign = new THREE.Mesh(new THREE.PlaneGeometry(0.55, 0.36), textured('forsale', TEX.sign(JP ? '売地' : 'À VENDRE', '#f4efe4', '#b8321f')));
       sign.position.set(1.2, 0.72, depth / 2 - 0.37); g.add(sign);
     } else {
       box(g, 0.04, 0.5, 0.04, std('#7a5a3a'), -1.6, 0, depth / 2 - 0.3);
-      const s = new THREE.Mesh(new THREE.PlaneGeometry(0.4, 0.26), textured('akichi', TEX.sign('空き地', '#f4efe4', '#3a3a3a'))); s.position.set(-1.6, 0.5, depth / 2 - 0.27); g.add(s);
+      const s = new THREE.Mesh(new THREE.PlaneGeometry(0.4, 0.26), textured('akichi', TEX.sign(JP ? '空き地' : 'LIBRE', '#f4efe4', '#3a3a3a'))); s.position.set(-1.6, 0.5, depth / 2 - 0.27); g.add(s);
     }
     g.traverse(o => { if (o.isMesh) o.castShadow = true; });
     return g;
@@ -433,12 +445,13 @@ export function createWorld(canvas, { low }) {
   // ---------- Ambiance (heure, météo, saison) ----------
   const amb = { wet: 0, snowCover: 0, rain: 0, snowfall: 0, fog: 0, cloud: 0, flash: 0, nextFlash: 8, season: '', night: 0, bolt: null };
   const roofBase = new Map();
+  let festivalOn = false;
   function setSeason(season) {
     if (season === amb.season) return;
     amb.season = season;
     for (const m of MATS.values()) if (m.userData.leaf) m.color.set(SEASON_LEAVES[season][m.userData.leaf]);
-    festoon.ete.visible = season === 'ete';
-    festoon.hiver.visible = season === 'hiver';
+    festoon.ete.visible = JP && (season === 'ete' || festivalOn);
+    festoon.hiver.visible = season === 'hiver' || (!JP && (season === 'ete' || festivalOn));
     petals.m.uniforms.uColor.value.set(season === 'automne' ? '#e0782f' : '#f6b8cc');
   }
 
@@ -502,7 +515,7 @@ export function createWorld(canvas, { low }) {
     // Sol mouillé : plus sombre et brillant ; neige : blanc
     const snowC = new THREE.Color('#e8edf3');
     for (const m of groundMats) {
-      m.color.setScalar(1 - amb.wet * 0.45).lerp(snowC, amb.snowCover * 0.85);
+      (m.userData.tint ? m.color.copy(m.userData.tint) : m.color.setScalar(1)).multiplyScalar(1 - amb.wet * 0.45).lerp(snowC, amb.snowCover * 0.85);
       m.roughness = lerp(lerp(0.92, 0.16, amb.wet), 0.85, amb.snowCover);
     }
     for (const m of MATS.values()) if (m.userData.roof) {
@@ -682,7 +695,7 @@ export function createWorld(canvas, { low }) {
     syncPlot, syncDecor, pick, groundAt, highlight, setGhost, focus, resize,
     sync(state) { PLOTS.forEach((_, i) => syncPlot(i, state)); syncDecor(state); },
     setTilt(on) { tiltOn = on; },
-    setFestival(on) { festoon.ete.visible = on || amb.season === 'ete'; },
+    setFestival(on) { festivalOn = on; const s = amb.season; amb.season = ''; setSeason(s); },
     life, terrain, cam: null,
     update(dt, { hour, weather, season, state, festival = false, crowd = 1 }) {
       if (api.cam) { // plan de cinéma
@@ -691,7 +704,7 @@ export function createWorld(canvas, { low }) {
         tiltH.uniforms.h.value = k / canvas.clientWidth; tiltV.uniforms.v.value = k / canvas.clientHeight;
         controls.target.copy(api.cam.look);
       } else updateCamera(dt);
-      terrain.update(dt);
+      terrain.update(dt, amb.night);
       life.update(dt, { night: amb.night, season, rain: amb.rain > 0.3 || amb.snowfall > 0.3, festival, hour });
       updateAmbience(dt, hour, weather, season);
       updateParticles(dt, hour);

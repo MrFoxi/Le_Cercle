@@ -7,6 +7,11 @@ export const HILL = { z0: 14.8, z1: 20.5, y: 1.6 };
 export const CANAL = { z0: -18.8, z1: -15.3, water: -0.42 };
 export const BASE = { x: 13.3, z0: -21.5, z1: 20.5 };
 const GY = 0.06;
+import { DISTRICT, T } from './theme.js';
+import { themeScenery, GROUND, WATER } from './styles.js';
+const JP = DISTRICT === 'japon';
+export const SEA = !!T.sea; // côte et village blanc : plage puis mer à la place du canal
+export const BEACH = { z0: CANAL.z1 - 2.4, y: -0.22 };
 
 const STONE = () => canvasTex('stonewall', 256, 128, (x, w, h) => {
   const r = seeded(31);
@@ -58,7 +63,7 @@ function willow(p, x, z, s = 1) {
 }
 // Petit pont rouge en arc (taikobashi)
 function bridge(p) {
-  const g = sub(p, 0, 0, 0), red = std('#c0392b', { roughness: 0.55 }), wood = textured('bridgewood', TEX.wood('#6b4a32'));
+  const g = sub(p, 0, 0, 0), red = DISTRICT === 'futur' ? glowMat('lightBridge', '#3ff0ff', null, 0.8, 3, 0) : std({ japon: '#c0392b', moderne: '#f4f2ee', europe: '#7a766e' }[DISTRICT] || '#c0392b', { roughness: 0.55 }), wood = DISTRICT === 'futur' ? std('#e6eaf0', { roughness: 0.2 }) : DISTRICT === 'europe' ? std('#8d8a83', { roughness: 0.95 }) : textured('bridgewood', TEX.wood('#6b4a32'));
   const n = 14, z0 = CANAL.z1 + 0.3, z1 = CANAL.z0 - 0.3, arc = t => GY + Math.sin(Math.PI * t) * 0.55;
   for (let i = 0; i < n; i++) {
     const t0 = i / n, t1 = (i + 1) / n, za = z0 + (z1 - z0) * t0, zb = z0 + (z1 - z0) * t1, ya = arc(t0), yb = arc(t1);
@@ -75,6 +80,16 @@ function bridge(p) {
   for (const z of [z0 + 0.6, z1 - 0.6]) for (const sx of [-0.5, 0.5]) cyl(g, 0.06, 0.9, red, sx, CANAL.water - 0.4, z);
   return { path: arc, z0, z1 };
 }
+// Ponton en bois au-dessus de la plage et de la mer
+function pier(p) {
+  const g = sub(p, 0, 0, 0), wood = textured('pierwood', TEX.wood('#8a6a48'));
+  box(g, 1.4, 0.08, CANAL.z1 - (-20.9), wood, 0, 0.06, (CANAL.z1 - 20.9) / 2);
+  for (let z = CANAL.z1 - 0.5; z > -20.9; z -= 1.1) for (const sx of [-0.62, 0.62]) cyl(g, 0.06, 1, std('#5a4232'), sx, -0.9, z);
+  for (const sx of [-0.68, 0.68]) box(g, 0.05, 0.05, CANAL.z1 + 20.9, std('#f4f1ea'), sx, 0.42, (CANAL.z1 - 20.9) / 2);
+  for (let z = CANAL.z1 - 0.5; z > -20.9; z -= 1.1) for (const sx of [-0.68, 0.68]) box(g, 0.04, 0.36, 0.04, std('#f4f1ea'), sx, 0.1, z);
+  return null;
+}
+
 // Sanctuaire shintō sur la colline
 function shrine(p, glows) {
   const g = sub(p, 0, HILL.y, 18.7), red = std('#b8321f', { roughness: 0.6 }), dark = textured('shrinewood', TEX.wood('#3a281d'));
@@ -113,8 +128,14 @@ export function buildTerrain(scene, low) {
   };
   // ordre des faces : +x, -x, +y, -y, +z, -z
   block(CANAL.z1, HILL.z0, -1.4, 0, [strata, strata, top, top, strata, stone]);
-  block(CANAL.z0, CANAL.z1, -1.4, CANAL.water - 0.18, [strata, strata, std('#1f2a22'), top, strata, strata]);
-  block(BASE.z0, CANAL.z0, -1.4, 0, [strata, strata, top, top, stone, strata]);
+  const sand = std('#e8d6a8', { roughness: 1 });
+  if (SEA) {
+    block(BEACH.z0, CANAL.z1, -1.4, BEACH.y, [strata, strata, sand, top, strata, strata]);
+    block(BASE.z0, BEACH.z0, -1.4, CANAL.water - 0.3, [strata, strata, std('#c9b489'), top, strata, strata]);
+  } else {
+    block(CANAL.z0, CANAL.z1, -1.4, CANAL.water - 0.18, [strata, strata, std('#1f2a22'), top, strata, strata]);
+    block(BASE.z0, CANAL.z0, -1.4, 0, [strata, strata, top, top, stone, strata]);
+  }
   block(HILL.z0, BASE.z1, -1.4, HILL.y, [strata, strata, top, top, strata, stone]);
   // Socle en bois sous toute la maquette
   const rim = std('#2a1c14', { roughness: 0.45 });
@@ -124,18 +145,19 @@ export function buildTerrain(scene, low) {
   }
 
   // Sols
-  const grassMat = n => { const t = GRASS().clone(); t.needsUpdate = true; t.repeat.set(...n); return new THREE.MeshStandardMaterial({ map: t, roughness: 0.95 }); };
+  const grassMat = n => { const t = GRASS().clone(); t.needsUpdate = true; t.repeat.set(...n); const m = new THREE.MeshStandardMaterial({ map: t, roughness: 0.95 }); if (GROUND.grass) m.color.set(GROUND.grass); return m; };
   const flat = (w, d, m, x, y, z) => { const o = new THREE.Mesh(new THREE.PlaneGeometry(w, d), m); o.rotation.x = -Math.PI / 2; o.position.set(x, y, z); o.receiveShadow = true; scene.add(o); return o; };
   const paveT = TEX.pave().clone(); paveT.needsUpdate = true; paveT.repeat.set(9, 0.6);
   const paveM = new THREE.MeshStandardMaterial({ map: paveT, roughness: 0.9 });
+  if (GROUND.pave) paveM.userData.tint = new THREE.Color(GROUND.pave).multiplyScalar(GROUND.gain || 1);
   flat(BASE.x * 2, HILL.z0 - 13.3, paveM, 0, GY, (13.3 + HILL.z0) / 2);
   flat(BASE.x * 2, -13.3 - CANAL.z1, paveM, 0, GY, (-13.3 + CANAL.z1) / 2);
-  flat(BASE.x * 2, CANAL.z0 - BASE.z0, grassMat([8, 1]), 0, GY, (BASE.z0 + CANAL.z0) / 2);
+  if (!SEA) flat(BASE.x * 2, CANAL.z0 - BASE.z0, grassMat([8, 1]), 0, GY, (BASE.z0 + CANAL.z0) / 2);
   flat(BASE.x * 2, BASE.z1 - HILL.z0, grassMat([8, 2]), 0, HILL.y + 0.03, (HILL.z0 + BASE.z1) / 2);
   const gravel = textured('gravel', TEX.dirt());
   flat(1.5, 3.4, gravel, 0, HILL.y + 0.06, HILL.z0 + 1.7);
   flat(BASE.x * 2 - 2, 1, gravel, 0, HILL.y + 0.055, 16.5);
-  flat(BASE.x * 2, 0.9, gravel, 0, GY + 0.025, -20.2);
+  if (!SEA) flat(BASE.x * 2, 0.9, gravel, 0, GY + 0.025, -20.2);
   const groundMats = [paveM];
 
   // Escalier vers la colline
@@ -149,6 +171,8 @@ export function buildTerrain(scene, low) {
     box(root, 12, 0.05, 0.05, fence, s * 7.1, HILL.y + 0.38, HILL.z0 + 0.12);
   }
   const deco = (id, x, y, z, sc = 1, r = 0) => { const d = makeDecor(id); d.position.set(x, y, z); d.scale.setScalar(sc); d.rotation.y = r; root.add(d); (d.userData.glows || []).forEach(gl => glowsDef.push({ ...gl, x: x + gl.x * sc, z: z + gl.z * sc, yb: y })); return d; };
+  let themeAnim = null;
+  if (JP) {
   deco('torii', 0, HILL.y, HILL.z0 + 0.7, 1.25);
   shrine(root, glowsDef);
   for (const s of [-1, 1]) {
@@ -159,6 +183,7 @@ export function buildTerrain(scene, low) {
     deco('banc', s * 3.5, HILL.y, 15.6, 1, Math.PI);
     deco('toro', s * 1.3, GY, 12.7);
   }
+  } else themeAnim = themeScenery({ deco, root, scene, glowsDef, HILL, CANAL, GY, BEACH_Y: BEACH.y });
   for (let i = 0; i < 9; i++) { const r = seeded(50 + i); const rock = shape(root, new THREE.DodecahedronGeometry(0.5, 0), std('#6f6c66', { flatShading: true }), (r() - 0.5) * 24, HILL.y + 0.1, 19 + r() * 1.3, 0.4 + r() * 0.5, 0.3 + r() * 0.3, 0.4 + r() * 0.5); rock.rotation.y = r() * 6; }
 
   // Canal : promenade avec garde-corps, pont, bateau, rive d'en face
@@ -167,27 +192,27 @@ export function buildTerrain(scene, low) {
     for (let x = 1; x <= 13; x += 1) box(root, 0.05, 0.4, 0.05, rail, s * x, GY, CANAL.z1 + 0.1);
     box(root, 12, 0.04, 0.04, rail, s * 7, GY + 0.36, CANAL.z1 + 0.1);
   }
-  const br = bridge(root);
+  const br = SEA ? pier(root) : bridge(root);
   for (const s of [-1, 1]) {
     for (const x of [5, 11]) deco('lampe', s * x, GY, -13.6, 1, Math.PI / 2);
     deco('banc', s * 3, GY, -14.9, 1, Math.PI);
-    for (const x of [3.2, 8.5]) willow(root, s * x, -19.4, 1.15);
-    deco('toro', s * 6, GY, -20.9); deco('toro', s * 11.5, GY, -20.9);
+    if (JP) { for (const x of [3.2, 8.5]) willow(root, s * x, -19.4, 1.15); deco('toro', s * 6, GY, -20.9); deco('toro', s * 11.5, GY, -20.9); }
     deco('cerisier', s * 12.4, GY, -14.4, 1.1, s);
   }
   // Pêcheur assis au bord de l'eau
   const fisher = makePerson(seeded(77));
-  fisher.root.position.set(-6.5, GY, CANAL.z0 - 0.25); fisher.root.rotation.y = 0; // face au canal (vers +z)
+  const FX = SEA ? 0.4 : -6.5, FY = SEA ? 0.13 : GY, FZ = SEA ? -20.25 : CANAL.z0 - 0.25, FR = SEA ? Math.PI : 0, FD = SEA ? -1 : 1;
+  fisher.root.position.set(FX, FY, FZ); fisher.root.rotation.y = FR; // face à l'eau
   fisher.legL.rotation.x = fisher.legR.rotation.x = -1.45; fisher.body.position.y = -0.24;
   fisher.armR.rotation.x = fisher.armL.rotation.x = -1.1;
   // canne tenue dans les mains, inclinée au-dessus de l'eau, et son fil
-  const butt = new THREE.Vector3(-6.5, GY + 0.2, CANAL.z0 - 0.05), dir = new THREE.Vector3(0, 0.5, 0.866);
+  const butt = new THREE.Vector3(FX, FY + 0.2, FZ + FD * 0.2), dir = new THREE.Vector3(0, 0.5, 0.866 * FD);
   const rod = new THREE.Mesh(new THREE.CylinderGeometry(0.006, 0.012, 1.4, 4), std('#3a2a1a'));
-  rod.position.copy(butt).addScaledVector(dir, 0.7); rod.rotation.x = Math.atan2(dir.z, dir.y); scene.add(rod);
+  rod.position.copy(butt).addScaledVector(dir, 0.7); rod.rotation.x = Math.atan2(dir.z, dir.y); scene.add(rod); if (DISTRICT === 'futur') rod.visible = false;
   const tip = butt.clone().addScaledVector(dir, 1.4);
   scene.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints([tip, new THREE.Vector3(tip.x, CANAL.water, tip.z)]), new THREE.LineBasicMaterial({ color: '#d8d8d8', transparent: true, opacity: 0.6 })));
   const float = new THREE.Mesh(new THREE.SphereGeometry(0.03, 8, 6), std('#e8432e')); float.position.set(tip.x, CANAL.water + 0.01, tip.z); scene.add(float); // flotteur
-  scene.add(fisher.root);
+  if (DISTRICT !== 'futur') scene.add(fisher.root);
   // Bateau amarré (yakatabune) avec fenêtres éclairées
   const boat = new THREE.Group();
   box(boat, 2.4, 0.25, 0.8, textured('hull', TEX.wood('#5a3e2a')), 0, -0.1, 0);
@@ -196,15 +221,16 @@ export function buildTerrain(scene, low) {
   gableRoof(sub(boat, 0, 0, 0), 1.6, 0.7, 0.6, '#2d3440', 0.4);
   boat.position.set(7, CANAL.water, -17.6);
   boat.traverse(o => { if (o.isMesh) o.castShadow = true; });
-  scene.add(boat);
-  glowsDef.push({ x: 7, y: 0.4, z: -17.2, color: '#ffc27a', pool: false, yb: CANAL.water });
+  if (JP) { scene.add(boat); glowsDef.push({ x: 7, y: 0.4, z: -17.2, color: '#ffc27a', pool: false, yb: CANAL.water }); }
 
   // Eau : vaguelettes qui défilent, légèrement transparente pour voir les carpes
   const nTex = WATER_N().clone(); nTex.needsUpdate = true; nTex.wrapS = nTex.wrapT = THREE.RepeatWrapping; nTex.repeat.set(10, 1.4);
-  const water = new THREE.Mesh(new THREE.PlaneGeometry(BASE.x * 2, CANAL.z1 - CANAL.z0), new THREE.MeshStandardMaterial({ color: '#1d4a52', roughness: 0.06, metalness: 0.15, normalMap: nTex, normalScale: new THREE.Vector2(0.35, 0.35), transparent: true, opacity: 0.78, envMapIntensity: 1.6 }));
-  water.rotation.x = -Math.PI / 2; water.position.set(0, CANAL.water, (CANAL.z0 + CANAL.z1) / 2); water.receiveShadow = true; water.renderOrder = 1;
+  const wz0 = SEA ? BASE.z0 : CANAL.z0, wz1 = SEA ? BEACH.z0 + 0.4 : CANAL.z1;
+  if (SEA) nTex.repeat.set(10, 3);
+  const water = new THREE.Mesh(new THREE.PlaneGeometry(BASE.x * 2, wz1 - wz0), new THREE.MeshStandardMaterial({ color: WATER[0], roughness: 0.06, metalness: 0.15, normalMap: nTex, normalScale: new THREE.Vector2(0.35, 0.35), transparent: true, opacity: WATER[1], envMapIntensity: 1.6, emissive: WATER[2] || '#000000', emissiveIntensity: WATER[2] ? 0.6 : 0 }));
+  water.rotation.x = -Math.PI / 2; water.position.set(0, CANAL.water, (wz0 + wz1) / 2); water.receiveShadow = true; water.renderOrder = 1;
   scene.add(water);
-  for (let i = 0; i < 9; i++) { const r = seeded(90 + i); const pad = new THREE.Mesh(new THREE.CircleGeometry(0.16 + r() * 0.1, 10, 0.3, 5.9), std('#3f6a35')); pad.rotation.x = -Math.PI / 2; pad.position.set((r() - 0.5) * 24, CANAL.water + 0.01, CANAL.z0 + 0.3 + r() * 0.6 + (i % 2) * 2.4); scene.add(pad); }
+  if (JP) for (let i = 0; i < 9; i++) { const r = seeded(90 + i); const pad = new THREE.Mesh(new THREE.CircleGeometry(0.16 + r() * 0.1, 10, 0.3, 5.9), std('#3f6a35')); pad.rotation.x = -Math.PI / 2; pad.position.set((r() - 0.5) * 24, CANAL.water + 0.01, CANAL.z0 + 0.3 + r() * 0.6 + (i % 2) * 2.4); scene.add(pad); }
 
   const baked = bake(root);
   scene.add(baked);
@@ -221,9 +247,10 @@ export function buildTerrain(scene, low) {
   let t = 0;
   return {
     glows: glowMeshes, water, boat, groundMats, bridgeArc: br,
-    update(dt) {
+    update(dt, night = 0) {
       t += dt;
       nTex.offset.set(t * 0.012, t * 0.02);
+      themeAnim?.(dt, t, night);
       boat.position.y = CANAL.water + Math.sin(t * 0.9) * 0.025; boat.rotation.z = Math.sin(t * 0.7) * 0.02;
       fisher.armR.rotation.x = -1.1 + Math.sin(t * 0.5) * 0.05;
     },
@@ -233,6 +260,7 @@ export function buildTerrain(scene, low) {
 // Hauteur du sol à un endroit (pluie, éclaboussures, neige)
 export function groundY(x, z) {
   if (z > HILL.z0) return HILL.y + 0.01;
+  if (SEA && z < CANAL.z1) return Math.abs(x) < 0.75 ? null : z > BEACH.z0 ? BEACH.y + 0.01 : CANAL.water + 0.01;
   if (z < CANAL.z1 && z > CANAL.z0) return Math.abs(x) < 0.65 ? null : CANAL.water + 0.01;
   return Math.abs(z) < 1.4 ? 0.022 : GY + 0.01;
 }

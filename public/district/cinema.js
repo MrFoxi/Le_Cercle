@@ -3,6 +3,7 @@
 import * as THREE from 'three';
 import { PLOTS, BUILDINGS } from './sim.js';
 import { HILL, CANAL } from './terrain.js';
+import { T } from './theme.js';
 
 const V = (x, y, z) => new THREE.Vector3(x, y, z);
 const lerp = (a, b, t) => a + (b - a) * t;
@@ -28,10 +29,10 @@ export function createCinema(world, { fade, label }) {
       // hauteur des bâtiments de la rangée du fond, de chaque côté de la ruelle : on passe du côté le plus bas, au-dessus du plus haut
       const top = side => Math.max(0, ...world.plots.map((P, i) => (P.model && PLOTS[i].z > 8 && Math.sign(PLOTS[i].x) === side ? new THREE.Box3().setFromObject(P.model).max.y : 0)));
       const s = top(1) < top(-1) ? 1 : top(1) > top(-1) ? -1 : sign(), y = Math.max(HILL.y + 6.5, top(s) + 3);
-      return { name: 'Vue du sanctuaire', dur: 16, at: t => ({ pos: V(s * lerp(3.4, 1.2, t), y, 20.3), look: V(s * lerp(0.8, -0.6, t), 0, 1), blur: 0.8 }) };
+      return { name: T.hillView, dur: 16, at: t => ({ pos: V(s * lerp(3.4, 1.2, t), y, 20.3), look: V(s * lerp(0.8, -0.6, t), 0, 1), blur: 0.8 }) };
     },
-    sanctuaire: () => { const s = sign(); return { name: 'Le sanctuaire', dur: 14, at: t => { const a = s * lerp(0.9, 0.3, t); return { pos: V(Math.sin(a) * 6, HILL.y + 2.4, 18.7 - Math.cos(a) * 6), look: V(0, HILL.y + 1.2, 18.6), blur: 0.7 }; } }; },
-    canal: () => { const d = sign(); return { name: 'Le canal', dur: 16, at: t => { const x = lerp(-12 * d, -2.5 * d, t); return { pos: V(x, CANAL.water + 0.75, (CANAL.z0 + CANAL.z1) / 2), look: V(x + d * 6, CANAL.water + 0.35, (CANAL.z0 + CANAL.z1) / 2), blur: 1.5 }; } }; },
+    sanctuaire: () => { const s = sign(); return { name: T.hill, dur: 14, at: t => { const a = s * lerp(0.9, 0.3, t); return { pos: V(Math.sin(a) * 6, HILL.y + 2.4, 18.7 - Math.cos(a) * 6), look: V(0, HILL.y + 1.2, 18.6), blur: 0.7 }; } }; },
+    canal: () => { const d = sign(); return { name: T.south, dur: 16, at: t => { const x = lerp(-12 * d, -2.5 * d, t); return { pos: V(x, CANAL.water + 0.75, (CANAL.z0 + CANAL.z1) / 2), look: V(x + d * 6, CANAL.water + 0.35, (CANAL.z0 + CANAL.z1) / 2), blur: 1.5 }; } }; },
     dessus: () => { const a0 = rnd(0, 6.28); return { name: 'Vu du ciel', dur: 14, at: t => ({ pos: V(Math.sin(a0 + t * 0.3) * 4, 48, -0.5 + Math.cos(a0 + t * 0.3) * 4), look: V(0, 0, -0.5), blur: 0.4 }) }; },
     suivre: () => {
       const p = world.people.sample(), c = world.life.followables();

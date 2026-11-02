@@ -3,6 +3,7 @@
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 
+export const FONT = { sign: null }; // police des enseignes (quartier en cours), sinon KANJI
 export const KANJI = '"Shippori Mincho", "Yu Mincho", "Hiragino Mincho ProN", "Noto Serif JP", "MS Mincho", serif';
 export const FLOOR = 1.45; // hauteur d'un étage
 
@@ -113,10 +114,10 @@ export const TEX = {
     x.fillStyle = fg; x.textAlign = 'center'; x.textBaseline = 'middle';
     if (vertical) {
       const chars = [...text], size = Math.min(100, 440 / chars.length);
-      x.font = `800 ${size}px ${KANJI}`;
+      x.font = `800 ${size}px ${FONT.sign || KANJI}`;
       chars.forEach((c, i) => x.fillText(c, w / 2, h / 2 + (i - (chars.length - 1) / 2) * size * 1.02));
     } else {
-      x.font = `800 ${Math.min(90, 900 / [...text].length)}px ${KANJI}`;
+      x.font = `800 ${Math.min(90, 1100 / [...text].length)}px ${FONT.sign || KANJI}`;
       x.fillText(text, w / 2, h / 2 + 4);
     }
   }),
@@ -197,7 +198,7 @@ export const SEASON_LEAVES = {
 };
 
 // ---------- Petits outils de construction ----------
-const G = {
+export const G = {
   box: new THREE.BoxGeometry(1, 1, 1),
   cyl: new THREE.CylinderGeometry(0.5, 0.5, 1, 14),
   cyl6: new THREE.CylinderGeometry(0.5, 0.5, 1, 6),
@@ -221,7 +222,7 @@ export function shape(parent, geo, material, x, y, z, sx, sy, sz) {
 export const cyl = (p, r, h, m, x, y, z, seg) => shape(p, seg === 6 ? G.cyl6 : G.cyl, m, x, y + h / 2, z, r * 2, h, r * 2);
 export const ball = (p, r, m, x, y, z, sy = 1) => shape(p, G.sphere, m, x, y, z, r * 2, r * 2 * sy, r * 2);
 export const sub = (parent, x = 0, y = 0, z = 0, ry = 0) => { const o = new THREE.Group(); o.position.set(x, y, z); o.rotation.y = ry; parent.add(o); return o; };
-function plane(parent, w, h, material, x, y, z, rx = 0, ry = 0) {
+export function plane(parent, w, h, material, x, y, z, rx = 0, ry = 0) {
   const m = new THREE.Mesh(G.plane, material);
   m.scale.set(w, h, 1); m.position.set(x, y, z); m.rotation.set(rx, ry, 0);
   parent.add(m);
@@ -272,10 +273,10 @@ export function streak(parent, x, z, w, color, k = 1) {
 }
 
 // ---------- Éléments de façade ----------
-const WOOD = () => textured('wood', TEX.wood('#5e3f2a'));
-const DARKWOOD = () => textured('darkwood', TEX.wood('#3a281d'));
-const PALEWOOD = () => textured('palewood', TEX.wood('#a37a52'));
-const roofMat = c => { const m = textured('roof' + c, TEX.roof(c), { roughness: 0.55, metalness: 0.15 }); m.userData.roof = true; return m; };
+export const WOOD = () => textured('wood', TEX.wood('#5e3f2a'));
+export const DARKWOOD = () => textured('darkwood', TEX.wood('#3a281d'));
+export const PALEWOOD = () => textured('palewood', TEX.wood('#a37a52'));
+export const roofMat = c => { const m = textured('roof' + c, TEX.roof(c), { roughness: 0.55, metalness: 0.15 }); m.userData.roof = true; return m; };
 
 // Toit japonais à deux pans, avec faîtage et pignons.
 export function gableRoof(p, w, d, y, color, pitch = 0.5) {
@@ -299,16 +300,16 @@ export function gableRoof(p, w, d, y, color, pitch = 0.5) {
   return rise;
 }
 // Auvent de tuiles au-dessus de l'entrée (hisashi)
-function hisashi(p, w, y, z, color) {
+export function hisashi(p, w, y, z, color) {
   const s = box(p, w, 0.06, 0.5, roofMat(color), 0, 0, 0); // auvent peu profond : on voit encore le comptoir d’en haut
   s.position.set(0, y + 0.16, z + 0.2); s.rotation.x = 0.42;
   box(p, w + 0.04, 0.07, 0.07, std('#1c1d22'), 0, y + 0.04, z + 0.43);
 }
-function awning(p, w, y, z, a, b) {
+export function awning(p, w, y, z, a, b) {
   const s = box(p, w, 0.03, 0.8, textured(`awn${a}${b}`, TEX.stripes(a, b)), 0, 0, 0);
   s.position.set(0, y, z + 0.36); s.rotation.x = 0.45;
 }
-function flatRoof(p, w, d, y, color = '#8a8d92') {
+export function flatRoof(p, w, d, y, color = '#8a8d92') {
   box(p, w + 0.1, 0.12, d + 0.1, std(color), 0, y, 0);
   for (const s of [-1, 1]) { box(p, w + 0.1, 0.18, 0.08, std(color), 0, y + 0.12, s * (d / 2)); box(p, 0.08, 0.18, d, std(color), s * (w / 2), y + 0.12, 0); }
 }
@@ -320,17 +321,17 @@ export function lantern(p, x, y, z, color = '#d8342c', char = '', s = 1, glows) 
   if (glows) glows.push({ x, y, z, color });
   return l;
 }
-function sign(p, text, bg, fg, w, h, x, y, z, vertical = false, night = 1.6) {
+export function sign(p, text, bg, fg, w, h, x, y, z, vertical = false, night = 1.6) {
   const map = TEX.sign(text, bg, fg, vertical);
   const m = glowMat(`sign${text}${bg}${fg}${vertical}`, '#ffffff', map, 0.3, night * 0.55, 1);
   box(p, w + 0.06, h + 0.06, 0.06, DARKWOOD(), x, y - 0.03, z - 0.02);
   plane(p, w, h, m, x, y + h / 2, z + 0.015);
 }
-function noren(p, text, color, w, y, z) {
+export function noren(p, text, color, w, y, z) {
   const m = mat(`noren${text}${color}`, () => new THREE.MeshStandardMaterial({ map: TEX.noren(text, color), roughness: 0.95, side: THREE.DoubleSide }));
   plane(p, w, 0.26, m, 0, y - 0.13, z); // court : vu d'en haut, il ne doit pas cacher le cuisinier
 }
-function windowRow(p, w, y, z, n, schedKey = 'A', shoji = false) {
+export function windowRow(p, w, y, z, n, schedKey = 'A', shoji = false) {
   const m = glowMat(`win${shoji}${schedKey}`, '#ffffff', shoji ? TEX.shoji() : TEX.window(), 0.02, 0.75, schedKey);
   for (let i = 0; i < n; i++) {
     const x = -w / 2 + (w / n) * (i + 0.5);
@@ -341,26 +342,26 @@ function windowRow(p, w, y, z, n, schedKey = 'A', shoji = false) {
     for (const k of [-1, 1]) box(p, 0.03, 0.62, 0.05, DARKWOOD(), x + k * (ww / 2 + 0.015), y - 0.31, z);
   }
 }
-function plant(p, x, z, s = 1, kind = 'green') {
+export function plant(p, x, z, s = 1, kind = 'green') {
   cyl(p, 0.12 * s, 0.18 * s, std('#6b5b4f'), x, 0, z);
   shape(p, G.ico, foliage(kind), x, 0.3 * s, z, 0.32 * s);
 }
-function stool(p, x, z) {
+export function stool(p, x, z) {
   cyl(p, 0.09, 0.2, DARKWOOD(), x, 0, z);
   cyl(p, 0.12, 0.03, std('#7a2a22'), x, 0.2, z);
 }
-function table(p, x, z, r = 0.22) {
+export function table(p, x, z, r = 0.22) {
   cyl(p, 0.03, 0.3, std('#222'), x, 0, z);
   cyl(p, r, 0.04, PALEWOOD(), x, 0.3, z);
 }
-function chair(p, x, z, ry) {
+export function chair(p, x, z, ry) {
   box(p, 0.2, 0.04, 0.2, PALEWOOD(), x, 0.18, z, ry);
   const b = box(p, 0.2, 0.25, 0.03, PALEWOOD(), x, 0.2, z, ry);
   b.position.x -= Math.sin(ry) * 0.1; b.position.z -= Math.cos(ry) * 0.1;
   for (const [dx, dz] of [[-0.08, -0.08], [0.08, -0.08], [-0.08, 0.08], [0.08, 0.08]]) box(p, 0.025, 0.18, 0.025, std('#333'), x + dx, 0, z + dz);
 }
 function bowl(p, x, y, z) { ball(p, 0.06, std('#f1ece2', { roughness: 0.3 }), x, y + 0.03, z, 0.5); }
-function acUnit(p, x, y, z, ry = 0) {
+export function acUnit(p, x, y, z, ry = 0) {
   const g = box(p, 0.42, 0.3, 0.2, std('#d6d8d5', { roughness: 0.5 }), x, y, z, ry);
   const f = cyl(p, 0.1, 0.02, std('#555'), x + Math.sin(ry) * 0.11, y + 0.15, z + Math.cos(ry) * 0.11);
   f.rotation.x = Math.PI / 2; f.rotation.z = ry;
@@ -390,7 +391,9 @@ export const LOOK = {
 };
 
 // Construit le modèle d'un bâtiment. Retourne aussi les places assises, le personnel, la porte, la vapeur…
+export const HOOKS = { building: null, decor: null }; // autres quartiers : leurs propres bâtiments et décorations
 export function buildBuilding(type, level, depth = 4.2) {
+  if (HOOKS.building) return HOOKS.building(type, level, depth);
   const L = LOOK[type], g = new THREE.Group(), rng = seeded(type.length * 977 + level * 31);
   const info = { seats: [], staff: [], steam: [], glows: [], light: null, screens: [] };
   const W = 4, back = -depth / 2, front = back + 3, D = 3, cz = back + D / 2;
@@ -495,7 +498,7 @@ export function buildBuilding(type, level, depth = 4.2) {
 
 // Petits détails qui donnent du volume : soubassement, poteaux d'angle, bandeaux, porte de service, compteur, gouttière
 const STONE = () => std('#5b5853', { roughness: 0.95 });
-function details(g, W, D, back, front, cz, H, floors, wood, home = false) {
+export function details(g, W, D, back, front, cz, H, floors, wood, home = false) {
   box(g, W + 0.06, 0.13, 0.06, STONE(), 0, 0, back - 0.01);
   for (const s of [-1, 1]) box(g, 0.06, 0.13, D + (home ? 0.04 : 0), STONE(), s * (W / 2 + 0.01), 0, cz);
   if (home) box(g, W + 0.06, 0.13, 0.06, STONE(), 0, 0, front + 0.01);
@@ -512,7 +515,7 @@ function details(g, W, D, back, front, cz, H, floors, wood, home = false) {
   if (!home) box(g, W + 0.2, 0.05, 0.08, std('#6d6f72', { metalness: 0.5 }), 0, H - 0.04, back - 0.08); // gouttière
 }
 
-function interior(g, L, level, { W, back, front, cz }, info, rng) {
+export function interior(g, L, level, { W, back, front, cz }, info, rng) {
   if (L.style === 'counter') {
     // Comptoir sur la rue (façon yatai) : clients assis dehors, cuisinier juste derrière, bien visibles
     const cZ = front - 0.25;
@@ -670,6 +673,8 @@ function buildHome(g, L, level, depth, info, rng) {
 
 // ---------- Décorations ----------
 export function makeDecor(id) {
+  const themed = HOOKS.decor?.(id);
+  if (themed) return themed;
   const g = new THREE.Group(), glows = [];
   switch (id) {
     case 'plante': plant(g, 0, 0, 1.2); break;

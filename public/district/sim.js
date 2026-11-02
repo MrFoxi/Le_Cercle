@@ -1,4 +1,5 @@
 // Little District : logique pure (économie, parcelles, décorations, objectifs, hors ligne). Aucun Three.js ici.
+import { T, DISTRICT, saveKey } from './theme.js';
 export const MAX_LEVEL = 10;
 export const CATS = { food: 'Restauration', shop: 'Commerces', fun: 'Loisirs', home: 'Logements' };
 
@@ -22,7 +23,7 @@ export const BUILDINGS = {
   hotel:    { name: 'Petit hôtel',           cat: 'home', cost: 40000000, base: 600,  home: 5,    desc: 'Un ryokan accueillant pour les voyageurs.' },
   ryotei:   { name: 'Restaurant traditionnel', cat: 'food', cost: 120000000, base: 2000, ticket: 80, desc: 'Le ryōtei : salons privés, jardin et service en kimono.' },
 };
-for (const [id, b] of Object.entries(BUILDINGS)) { b.id = id; b.need = Math.round(b.cost * 0.7); }
+for (const [id, b] of Object.entries(BUILDINGS)) { b.id = id; b.need = Math.round(b.cost * 0.7); if (T.b[id]) [b.name, b.desc] = T.b[id]; } // noms du quartier en cours
 
 // Ce que le joueur voit changer au niveau suivant (affiché sur le bouton d'amélioration).
 export const LEVEL_TEXT = {
@@ -74,7 +75,10 @@ export const DECOR = {
   fontaine: { name: 'Fontaine',           cost: 0, rare: true },
 };
 
-export const SAVE_KEY = 'district-save-v1';
+for (const [id, d] of Object.entries(DECOR)) if (T.d[id]) d.name = T.d[id][0];
+if (T.levels) Object.assign(LEVEL_TEXT, T.levels);
+SECTORS.forEach((s, k) => (s.name = T.sectors[k]));
+export const SAVE_KEY = saveKey(DISTRICT); // une sauvegarde par quartier
 
 export function newState(now = Date.now()) {
   const plots = PLOTS.map(() => null);
@@ -187,7 +191,7 @@ export function removeDecor(s, k) {
 const lvl = (s, type) => Math.max(0, ...s.plots.filter(p => p?.type === type).map(p => p.level));
 const shops = s => built(s).filter(p => BUILDINGS[p.type].cat !== 'home').length;
 export const OBJECTIVES = [
-  { id: 'up2',      text: 'Améliorer le restaurant de ramen',          goal: 2,     get: s => lvl(s, 'ramen'),                    reward: { money: 100 } },
+  { id: 'up2',      text: `Améliorer : ${BUILDINGS.ramen.name}`,          goal: 2,     get: s => lvl(s, 'ramen'),                    reward: { money: 100 } },
   { id: 'c50',      text: 'Accueillir 50 clients',                     goal: 50,    get: s => s.clients,                          reward: { money: 150 } },
   { id: 'shop2',    text: 'Ouvrir un deuxième commerce',               goal: 2,     get: shops,                                   reward: { money: 200 } },
   { id: 'deco3',    text: 'Installer 3 décorations',                   goal: 3,     get: s => s.decor.length,                     reward: { money: 120, decor: 'puits' } },
@@ -197,7 +201,7 @@ export const OBJECTIVES = [
   { id: 'inc600',   text: 'Gagner 600 ¥ par minute',                   goal: 600,   get: s => totalIncome(s) * 60,                reward: { money: 900 } },
   { id: 'deco10',   text: 'Installer dix décorations',                 goal: 10,    get: s => s.decor.length,                     reward: { decor: 'neko' } },
   { id: 'c500',     text: 'Accueillir 500 clients',                    goal: 500,   get: s => s.clients,                          reward: { money: 2500 } },
-  { id: 'ramen5',   text: 'Ramen au niveau 5',                         goal: 5,     get: s => lvl(s, 'ramen'),                    reward: { decor: 'sakura' } },
+  { id: 'ramen5',   text: `${BUILDINGS.ramen.name} au niveau 5`,                         goal: 5,     get: s => lvl(s, 'ramen'),                    reward: { decor: 'sakura' } },
   { id: 'hab20',    text: 'Accueillir 20 habitants',                   goal: 20,    get: s => s.residents,                        reward: { decor: 'jizo' } },
   { id: 'rue1',     text: 'Développer entièrement la grand-rue',       goal: 8,     get: s => s.plots.filter((p, i) => p && PLOTS[i].depth < 4.4).length, reward: { money: 20000 } },
   { id: 'cats',     text: 'Un bâtiment de chaque catégorie',           goal: 4,     get: s => new Set(built(s).map(p => BUILDINGS[p.type].cat)).size, reward: { decor: 'kiosque' } },

@@ -42,6 +42,7 @@ export function startAudio() {
   amb.roof = loop([['bandpass', 2400, 1.5]]);
   amb.street = loop([['bandpass', 380, 0.9]]);
   amb.wind = loop([['lowpass', 320]]);
+  amb.sea = loop([['lowpass', 600], ['highpass', 120]]); // ressac (quartiers au bord de l'eau)
   scheduleMusic();
   setInterval(sprinkle, 400);
 }
@@ -62,6 +63,7 @@ export function setAmbience(s) {
   amb.roof.gain.setTargetAtTime(state.rain * 0.05, t, 1);
   amb.street.gain.setTargetAtTime(0.012 + state.crowd * 0.05 * (1 - state.night * 0.6), t, 1.5);
   amb.wind.gain.setTargetAtTime(state.wind * 0.12, t, 2);
+  amb.sea.gain.setTargetAtTime((state.sea || 0) * (0.05 + 0.04 * Math.sin(t * 0.7)), t, 1.2); // vagues qui vont et viennent
 }
 
 function tone(type, f, t, dur, g, dest = sfx, attack = 0.005) {

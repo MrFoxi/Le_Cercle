@@ -5,7 +5,16 @@ import { isOpen } from './people.js';
 import { KANJI } from './models.js';
 import { startAudio, setVolumes, setAmbience, sound, thunder } from './audio.js';
 import { createCinema } from './cinema.js';
+import { DISTRICT, DISTRICT_IDS, THEMES, T, saveKey, UNLOCK_EARNED, previousOf } from './theme.js';
+import './styles.js'; // installe les bâtiments et décorations du quartier en cours
 
+// Un quartier s'ouvre quand le précédent a gagné assez (ou s'il a déjà été commencé).
+const savedEarned = id => { try { return JSON.parse(localStorage.getItem(saveKey(id)))?.earned || 0; } catch { return 0; } };
+const hasSave = id => { try { return !!localStorage.getItem(saveKey(id)); } catch { return false; } };
+let liveEarned = null; // gains en direct du quartier en cours (la sauvegarde n'a lieu que toutes les 10 s)
+const earnedIn = id => (id === DISTRICT && liveEarned ? liveEarned() : savedEarned(id));
+const isUnlocked = id => id === 'japon' || hasSave(id) || earnedIn(previousOf(id)) >= UNLOCK_EARNED;
+if (!isUnlocked(DISTRICT) && !/[?&]debug/.test(location.search)) { location.replace(location.pathname); throw new Error('Quartier encore verrouillé'); } // avant toute sauvegarde
 const { BUILDINGS, DECOR, PLOTS, SECTORS, OBJECTIVES, CATS, LEVEL_TEXT, MAX_LEVEL, money } = S;
 const $ = id => document.getElementById(id);
 const esc = t => String(t).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
@@ -16,13 +25,20 @@ const WEATHER = { soleil: '☀️ Soleil', nuages: '☁️ Nuageux', pluie: '�
 const SEASONS = { printemps: '🌸 Printemps', ete: '🎐 Été', automne: '🍁 Automne', hiver: '⛄ Hiver' };
 const TIMES = { auto: 'Cycle naturel', matin: 'Matin', aprem: 'Après-midi', soir: 'Soirée', nuit: 'Nuit' };
 const TIME_HOUR = { matin: 8.5, aprem: 14, soir: 19.3, nuit: 23 };
-const DISTRICTS = [['Quartier japonais', true], ['Quartier moderne', false], ['Village côtier', false], ['Vieille ville européenne', false], ['Quartier futuriste', false], ['Quartier méditerranéen', false]];
+for (const [k, v] of Object.entries(T.b)) ICON[k] = v[2];
+for (const [k, v] of Object.entries(T.d)) DICON[k] = v[1];
+const SALE = DISTRICT === 'japon' ? '売地' : 'À vendre';
+document.title = T.title;
+document.querySelector('#intro .jp').textContent = T.jp;
+document.querySelector('#intro h1').textContent = T.title;
+document.querySelector('#intro .pitch').textContent = T.pitch;
 const DAY_LENGTH = 1200; // une journée du quartier = 20 minutes
 
 // ---------- Sauvegarde ----------
 let state = (() => { try { return S.load(localStorage.getItem(S.SAVE_KEY)); } catch { return null; } })();
 const fresh = !state;
 state ||= S.newState();
+liveEarned = () => state.earned;
 let away = fresh ? null : S.offline(state);
 function save() {
   state.savedAt = Date.now();
@@ -76,6 +92,7 @@ const autoSeason = () => ['hiver', 'hiver', 'printemps', 'printemps', 'printemps
 const season = () => (state.settings.season === 'auto' ? autoSeason() : state.settings.season);
 function nextWeather() {
   const w = { printemps: { soleil: 4, nuages: 3, pluie: 3, brouillard: 1 }, ete: { soleil: 6, nuages: 2, pluie: 2, orage: 1.5 }, automne: { soleil: 3, nuages: 3, pluie: 4, brouillard: 2, orage: 0.5 }, hiver: { soleil: 3, nuages: 3, neige: 4, brouillard: 1.5 } }[season()];
+  for (const k of Object.keys(w)) w[k] *= T.weather?.[k] ?? 1; // le village blanc est ensoleillé, la côte plus brumeuse…
   let r = Math.random() * Object.values(w).reduce((a, b) => a + b, 0);
   for (const [k, v] of Object.entries(w)) if ((r -= v) < 0) return k;
   return 'soleil';
@@ -166,7 +183,7 @@ function lot(i) {
 }
 function sale(i) {
   const k = PLOTS[i].sector, sec = SECTORS[k], n = PLOTS.filter(p => p.sector === k).length;
-  return `<h2>売地 · ${esc(sec.name)}</h2><p class="sub">${n} parcelles à vendre. Agrandis ton quartier.</p>
+  return `<h2>${SALE} · ${esc(sec.name)}</h2><p class="sub">${n} parcelles à vendre. Agrandis ton quartier.</p>
     <div class="actions"><button class="primary" data-act="sector" data-k="${k}" ${state.money < sec.cost ? 'disabled' : ''}>Acheter · ${cost(sec.cost)}</button></div>
     ${state.money < sec.cost ? `<p class="hint">Encore ${cost(sec.cost - state.money)} à réunir. Ton quartier gagne ${money(S.totalIncome(state) * 60)} ¥ par minute, même quand tu n’es pas là.</p>` : ''}`;
 }
@@ -224,12 +241,17 @@ function settings() {
     <div class="row">Effet maquette (flou) <input type="checkbox" data-tilt ${state.settings.tilt !== false ? 'checked' : ''}></div>
     <div class="row">Qualité ${sel('quality', { auto: 'Automatique', low: 'Économie (téléphone)' })}</div>
     <h3>Quartiers</h3>
-    <div class="districts">${DISTRICTS.map(([n, on]) => `<div class="${on ? 'on' : ''}">${n}<small>${on ? 'Ton quartier' : 'Bientôt'}</small></div>`).join('')}</div>
+    <div class="districts">${DISTRICT_IDS.map(id => {
+      const open = isUnlocked(id), here = id === DISTRICT, prev = THEMES[previousOf(id)];
+      const note = here ? 'Tu es ici' : open ? 'Y aller →' : `🔒 ${money(Math.max(0, UNLOCK_EARNED - earnedIn(previousOf(id))))} ¥ à gagner · ${prev.name}`;
+      return `<button class="${here ? 'on' : ''}" data-district="${id}" ${open && !here ? '' : 'disabled'}>${THEMES[id].name}<small>${note}</small></button>`;
+    }).join('')}</div>
+    <p class="hint">Chaque quartier a ses bâtiments, son décor et sa propre partie. Ton argent reste dans chaque quartier, et tous continuent de gagner quand tu n’y es pas.</p>
     <h3>Comment jouer</h3>
     <ul class="rules">
       <li>🍜 Tes commerces gagnent des ¥ <b>tout seuls</b>, même quand le jeu est fermé.</li>
       <li>⬆️ Touche un bâtiment pour l’<b>améliorer</b> : il rapporte plus et change d’apparence.</li>
-      <li>🏗 Plus tu gagnes, plus de <b>bâtiments</b> se débloquent. Achète des parcelles 売地 pour agrandir le quartier.</li>
+      <li>🏗 Plus tu gagnes, plus de <b>bâtiments</b> se débloquent. Achète des parcelles « ${SALE} » pour agrandir le quartier.</li>
       <li>🏠 Chaque <b>habitant</b> (logements) et chaque <b>décoration</b> augmentent les revenus de tout le quartier.</li>
       <li>📜 Les <b>objectifs</b> donnent des récompenses et des décorations rares. Rien n’est obligatoire.</li>
       <li>✨ Des <b>événements</b> arrivent parfois : festival, chat doré, marchand… Touche-les pour un bonus.</li>
@@ -258,6 +280,7 @@ function wire() {
     if (s.dataset.set === 'quality') { save(); location.reload(); }
     if (s.dataset.set === 'season') weather = nextWeather();
   }));
+  panelEl.querySelectorAll('[data-district]').forEach(b => (b.onclick = () => { save(); location.search = b.dataset.district === 'japon' ? '' : `?quartier=${b.dataset.district}`; }));
   panelEl.querySelectorAll('[data-tilt]').forEach(c => (c.onchange = () => { state.settings.tilt = c.checked; world.setTilt(c.checked); }));
   panelEl.querySelectorAll('[data-act]').forEach(b => (b.onclick = () => act(b.dataset.act, b.dataset)));
 }
@@ -369,10 +392,10 @@ const ctx = () => ({ state, festival: event?.id === 'festival', night: nightOf(h
 // ---------- Événements du quartier (jamais obligatoires) ----------
 let event = null, eventT = 100;
 const EVENTS = {
-  festival: { when: h => h > 16.5 && h < 21.5, dur: 300, boost: 1.5, crowd: 1.6, icon: '🏮', name: 'Festival', text: '🏮 Festival ce soir ! Lanternes, feux d’artifice et clients en plus (revenus ×1,5)' },
+  festival: { when: h => h > 16.5 && h < 21.5, dur: 300, boost: 1.5, crowd: 1.6, icon: T.festival.split(' ')[0], name: T.festivalName, text: T.festival },
   tourists: { when: h => h > 8 && h < 18.5, dur: 150, boost: 1.25, crowd: 1.1, icon: '📸', name: 'Touristes', text: '📸 Un groupe de touristes visite le quartier (revenus ×1,25)', start: () => world.people.tourists() },
   golden: { when: () => true, dur: 70, icon: '✨', name: 'Chat doré', text: '✨ Un chat doré se promène… trouve-le et touche-le !', start: () => world.life.spawnGolden(), end: () => world.life.removeGolden() },
-  vendor: { when: h => h > 9 && h < 22, dur: 80, icon: '🍠', name: 'Marchand', text: '🍠 Le marchand de patates douces passe dans la rue. Touche sa charrette !', start: () => world.life.spawnVendor(), end: () => world.life.removeVendor() },
+  vendor: { when: h => h > 9 && h < 22, dur: 80, icon: T.vendor[0], name: T.vendor[1], text: `${T.vendor[0]} ${T.vendor[2]}`, start: () => world.life.spawnVendor(), end: () => world.life.removeVendor() },
 };
 function startEvent() {
   const ok = Object.entries(EVENTS).filter(([, e]) => e.when(hour));
@@ -396,7 +419,7 @@ function collect(kind) {
   if (kind === 'golden') world.life.removeGolden(); else world.life.removeVendor();
   if (event?.id === kind) endEvent();
   sound('golden');
-  toast(kind === 'golden' ? `✨ Le chat doré te porte chance : +${money(gain)} ¥` : `🍠 Patates douces brûlantes pour tout le monde : +${money(gain)} ¥`);
+  toast(kind === 'golden' ? `✨ Le chat doré te porte chance : +${money(gain)} ¥` : `${T.vendor[0]} ${T.vendor[3]} : +${money(gain)} ¥`);
   afterChange();
 }
 addEventListener('keydown', e => {
@@ -446,13 +469,13 @@ enter.textContent = fresh ? 'Ouvrir le restaurant' : 'Revenir dans le quartier';
 const TOUCH = matchMedia('(pointer: coarse)').matches;
 const ramenAt = () => state.plots.findIndex(p => p?.type === 'ramen');
 const TUTO = [
-  { text: '<b>Bienvenue à Little District</b> 🏮<br>Ici, pas de chrono ni de pression : ton quartier gagne de l’argent <b>tout seul</b>, même quand tu fermes le jeu. Ton but : le faire grandir et le rendre beau, à ton rythme.' },
+  { text: `<b>Bienvenue à ${T.title}</b> 🏮<br>Ici, pas de chrono ni de pression : ton quartier gagne de l’argent <b>tout seul</b>, même quand tu fermes le jeu. Ton but : le faire grandir et le rendre beau, à ton rythme.` },
   { text: TOUCH ? '<b>Regarder la maquette</b><br>Glisse un doigt pour tourner autour, pince pour zoomer, glisse à deux doigts pour te déplacer.' : '<b>Regarder la maquette</b><br>Clic gauche et glisser pour tourner autour, molette pour zoomer, clic droit et glisser pour te déplacer.' },
-  { text: '<b>Ton premier commerce</b><br>Touche ton <b>restaurant de ramen</b> 🍜 (il clignote).', wait: () => panel?.kind === 'building' && state.plots[panel.arg]?.type === 'ramen', enter: () => { const i = ramenAt(); if (i >= 0) { world.focus(PLOTS[i].x, PLOTS[i].z + PLOTS[i].face, 14); sel = i; refreshRings(); } } },
+  { text: `<b>Ton premier commerce</b><br>Touche ton <b>${esc(BUILDINGS.ramen.name)}</b> ${ICON.ramen} (il clignote).`, wait: () => panel?.kind === 'building' && state.plots[panel.arg]?.type === 'ramen', enter: () => { const i = ramenAt(); if (i >= 0) { world.focus(PLOTS[i].x, PLOTS[i].z + PLOTS[i].face, 14); sel = i; refreshRings(); } } },
   { text: '<b>Améliore-le</b><br>Appuie sur <b>Améliorer</b> : il rapportera plus, et tu le verras changer (lanternes, étage, terrasse…).', wait: () => (state.plots[ramenAt()]?.level || 0) >= 2, glow: '[data-act=upgrade]', enter: () => { if (state.money < S.upgradeCost('ramen', 1)) state.money = S.upgradeCost('ramen', 1); } },
   { text: '<b>Gagner et construire</b><br>Tes gains s’affichent en haut (¥ et ¥/min). Plus tu gagnes, plus de bâtiments se débloquent dans <b>Construire</b> : restaurants, boutiques, loisirs, logements.', glow: '#buildBtn', enter: () => close() },
   { text: '<b>Habitants et décoration</b><br>Les logements 🏠 attirent des habitants : chacun augmente les revenus du quartier. Les décorations 🌸 aussi, et elles rendent les rues plus belles.', glow: '#decoBtn' },
-  { text: '<b>Agrandir le quartier</b><br>Les vieilles maisons au panneau <b>売地</b> sont à vendre : achète-les pour avoir de nouvelles parcelles.' },
+  { text: `<b>Agrandir le quartier</b><br>Les vieilles maisons au panneau <b>${SALE}</b> sont à vendre : achète-les pour avoir de nouvelles parcelles.` },
   { text: '<b>Objectifs</b> 📜<br>Des idées de choses à faire, avec des récompenses et des décorations rares. Aucun n’est obligatoire.', glow: '#goalsBtn' },
   { text: '<b>Petites surprises</b> ✨<br>De temps en temps, il se passe quelque chose : festival, chat doré, marchand de patates douces… Touche-les pour un bonus. Les chats, eux, adorent les caresses.' },
   { text: '<b>Prends ton temps</b> 📷<br>Quand tu reviens, tu récupères ce que ton quartier a gagné pendant ton absence. <b>Contempler</b> lance un petit film du quartier. Bonne balade !', glow: '#photoBtn', last: true },
@@ -485,7 +508,8 @@ enter.onclick = () => {
   intro.classList.add('out');
   setTimeout(() => intro.remove(), 900);
   world.focus(start.x, start.z + 1.2, 14);
-  if (fresh) setTimeout(() => startTutorial(), 1600);
+  if (fresh && !DISTRICT_IDS.some(id => id !== DISTRICT && hasSave(id))) setTimeout(() => startTutorial(), 1600);
+  else if (fresh) setTimeout(() => toast(`Bienvenue : ${T.name} ! Commence par ${BUILDINGS.ramen.name}.`), 1200);
   save();
 };
 if (/[?&]debug/.test(location.search)) window.__district = { state, world, S, setHour: h => (hour = h), setWeather: w => (state.settings.weather = w), cinema, startEvent: id => { if (event) endEvent(); const e = EVENTS[id]; event = { id, t: e.dur }; state.boost = e.boost || 1; e.start?.(); if (id === 'festival') world.setFestival(true); } };
@@ -512,7 +536,7 @@ function frame(now) {
   cinema.update(dt, ctx());
   // le son suit l'ambiance
   const dist = world.camera.position.distanceTo(world.controls.target);
-  setAmbience({ rain: Math.min(1, world.amb.rain), crowd: Math.min(1, world.people.count / 24), night: world.amb.night, cricket: ['ete', 'automne'].includes(season()), wind: w === 'neige' || w === 'brouillard' ? 1 : w === 'orage' ? 0.6 : 0, kitchen: Math.max(0.2, 1 - dist / 40) });
+  setAmbience({ sea: T.sea ? 1 : DISTRICT === 'europe' ? 0.4 : 0, rain: Math.min(1, world.amb.rain), crowd: Math.min(1, world.people.count / 24), night: world.amb.night, cricket: ['ete', 'automne'].includes(season()), wind: w === 'neige' || w === 'brouillard' ? 1 : w === 'orage' ? 0.6 : 0, kitchen: Math.max(0.2, 1 - dist / 40) });
   // fantôme de décoration au doigt (téléphone) : au centre de l'écran
   if (mode === 'decor' && matchMedia('(pointer: coarse)').matches) {
     const g = world.groundAt(innerWidth / 2, innerHeight / 2);

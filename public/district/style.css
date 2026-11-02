@@ -94,9 +94,12 @@ button.ghost { background: transparent; box-shadow: inset 0 0 0 1px var(--line);
 .row select { font: 600 .84rem var(--sans); color: var(--ink); background: rgba(255, 255, 255, .08); border: 0; border-radius: 10px; padding: 7px 10px; }
 .row select option { background: #1a1822; }
 .districts { display: grid; gap: 6px; }
-.districts div { display: flex; justify-content: space-between; padding: 8px 10px; border-radius: 10px; background: rgba(255, 255, 255, .04); font-size: .84rem; }
-.districts div small { color: var(--muted); }
-.districts div.on small { color: var(--ok); }
+.districts button { display: flex; justify-content: space-between; align-items: center; gap: 8px; width: 100%; padding: 9px 11px; border-radius: 10px; background: rgba(255, 255, 255, .04); font-size: .84rem; text-align: left; }
+.districts button:not(:disabled):hover { background: rgba(255, 181, 107, .15); }
+.districts button:disabled { opacity: 1; cursor: default; }
+.districts button small { color: var(--muted); text-align: right; }
+.districts button.on small { color: var(--ok); }
+.districts button:not(:disabled) small { color: var(--warm); font-weight: 800; }
 .hint { color: var(--muted); font-size: .8rem; margin: 8px 0 0; line-height: 1.45; }
 
 /* Tutoriel */

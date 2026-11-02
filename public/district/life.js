@@ -4,7 +4,9 @@ import * as THREE from 'three';
 import { TEX, std, glowMat, box, cyl, ball, lantern, makePerson, canvasTex, seeded } from './models.js';
 import { makeCat, animateCat, CAT_COLORS, makePigeon, makeBird, flap, makeKoi } from './animals.js';
 import { NAV } from './people.js';
-import { CANAL, HILL } from './terrain.js';
+import { CANAL, HILL, SEA, BEACH } from './terrain.js';
+import { T } from './theme.js';
+import { makeHoverCar } from './styles.js';
 
 const Y = 0.06;
 const rnd = (a, b) => a + Math.random() * (b - a);
@@ -65,6 +67,15 @@ export function createLife({ scene, people, low, camera, target, onSound }) {
   const nodes = NAV.nodes.map((n, i) => ({ ...n, i })).filter(n => !n.edge);
   const neighbors = i => NAV.adj[i].map(([j]) => j).filter(j => !NAV.nodes[j].edge);
 
+  // ---------- Voitures volantes (néo-cité) ----------
+  const cars = !T.futur ? [] : Array.from({ length: low ? 5 : 9 }, (_, i) => {
+    const g = makeHoverCar(['#e6eaf0', '#ff4fd8', '#3ff0ff', '#1c2130', '#ffb03a', '#8aff5a'][i % 6]);
+    const dir = i % 2 ? 1 : -1, y = 0.6 + (i % 3) * 0.55;
+    g.position.set(rnd(-14, 14), y, dir * (0.55 + (i % 3) * 0.05)); g.rotation.y = dir > 0 ? 0 : Math.PI;
+    root.add(g);
+    return { g, v: dir * rnd(2.2, 3.8), y, ph: rnd(0, 6) };
+  });
+
   // ---------- Chats du quartier ----------
   const cats = [0, 1, 2, 3].map(k => {
     const c = makeCat(CAT_COLORS[k % CAT_COLORS.length]);
@@ -99,10 +110,11 @@ export function createLife({ scene, people, low, camera, target, onSound }) {
   }
 
   // ---------- Pigeons : picorent en groupe, s'envolent quand on s'approche ----------
-  const SPOTS = [[0, 16.2, 1.66], [4.5, -14.8, Y], [-5, -14.8, Y], [-7, 2.2, Y], [8, -7.4, Y], [-3.2, -20.5, Y], [6, 16.6, 1.66]];
+  const SPOTS = [[0, 16.2, 1.66], [4.5, -14.8, Y], [-5, -14.8, Y], [-7, 2.2, Y], [8, -7.4, Y], SEA ? [5, -16.2, BEACH.y] : [-3.2, -20.5, Y], [6, 16.6, 1.66]];
   const flock = { spot: 0, t: rnd(30, 60), birds: [] };
   for (let i = 0; i < 7; i++) {
     const b = makePigeon(); root.add(b.root);
+    if (SEA) b.root.traverse(o => { if (o.isMesh && o.material.color.getHexString() !== 'd8a23a') o.material = std(b.wings.includes(o) ? '#a8aeb6' : '#f6f6f3'); }); // des mouettes au bord de la mer
     const [sx, sz, sy] = SPOTS[0];
     Object.assign(b, { x: sx + rnd(-0.6, 0.6), z: sz + rnd(-0.5, 0.5), y: sy, dir: rnd(0, 6), fly: null, peck: rnd(0, 3) });
     flock.birds.push(b);
@@ -160,7 +172,7 @@ export function createLife({ scene, people, low, camera, target, onSound }) {
   }
 
   // ---------- Carpes koï ----------
-  const kois = Array.from({ length: low ? 4 : 8 }, (_, i) => {
+  const kois = SEA || T.futur ? [] : Array.from({ length: low ? 4 : 8 }, (_, i) => {
     const k = makeKoi(i); root.add(k.root);
     return Object.assign(k, { cx: rnd(-10, 10), cz: (CANAL.z0 + CANAL.z1) / 2 + rnd(-0.6, 0.6), ax: rnd(1.5, 4), az: rnd(0.4, 1), w: rnd(0.08, 0.18) * (Math.random() < 0.5 ? -1 : 1), ph: rnd(0, 6) });
   });
@@ -275,7 +287,7 @@ export function createLife({ scene, people, low, camera, target, onSound }) {
     for (const s of [-1, 1]) { const w = cyl(g, 0.17, 0.04, std('#2a2420'), 0.15, 0.17, s * 0.28); w.rotation.x = Math.PI / 2; }
     cyl(g, 0.04, 0.5, std('#555', { metalness: 0.6 }), 0.3, 0.6, 0); // cheminée
     box(g, 0.5, 0.18, 0.3, glowMat('imoStove', '#ff7a2a', null, 0.6, 2.2, 0), -0.15, 0.57, 0);
-    const lan = new THREE.Group(); lantern(lan, 0, 0, 0, '#d8342c', '芋', 1.1); lan.position.set(-0.4, 1.05, 0); g.add(lan);
+    const lan = new THREE.Group(); lantern(lan, 0, 0, 0, T.vendor[4] ? '#d8342c' : '#f2c14e', T.vendor[4], 1.1); lan.position.set(-0.4, 1.05, 0); g.add(lan);
     cyl(g, 0.012, 0.5, std('#333'), -0.4, 0.6, 0);
     for (const s of [-1, 1]) box(g, 0.5, 0.03, 0.03, wood, -0.65, 0.45, s * 0.2);
     const man = makePerson(seeded(Math.floor(Math.random() * 1e6)), '#5a6a8a');
@@ -302,6 +314,12 @@ export function createLife({ scene, people, low, camera, target, onSound }) {
     followables() { return [...cats.filter(c => c.mode === 'walk').map(c => ({ obj: c.root, h: 0.3 })), ...(vendor ? [{ obj: vendor.g, h: 0.8 }] : [])]; },
     update(dt, { night, season, rain, festival, hour }) {
       cats.forEach(c => stepCat(c, dt));
+      for (const c of cars) { // voitures volantes au-dessus de la route
+        c.g.position.x += c.v * dt;
+        if (Math.abs(c.g.position.x) > 15) c.g.position.x = -Math.sign(c.v) * 15;
+        c.g.position.y = c.y + Math.sin(performance.now() / 600 + c.ph) * 0.05;
+        c.g.rotation.z = Math.sin(performance.now() / 900 + c.ph) * 0.04;
+      }
       stepPigeons(dt);
       stepBirds(dt, night > 0.5 || rain);
       stepKoi(dt);
