@@ -31,10 +31,11 @@ export function stepCar(car, input, t, dt, time) {
   car.surface = absLat < half ? 'asphalt' : absLat < half + KERB ? 'kerb' : t.def.runoffKind ?? 'grass';
   const [gripMul, drag] = SURF[car.surface];
   // Vitesse de pointe : dégâts, aspiration, DRS
-  const vmax = CAR.vmax * (1 - car.damage * 0.0012) * (1 + car.slipstream * 0.06 + (car.drsOpen ? 0.075 : 0));
+  const perf = car.perf ?? 1;
+  const vmax = CAR.vmax * perf * (1 - car.damage * 0.0012) * (1 + car.slipstream * 0.06 + (car.drsOpen ? 0.075 : 0));
   let acc = 0;
   const thr = Math.max(0, Math.min(1, input.throttle || 0)), brk = Math.max(0, Math.min(1, input.brake || 0));
-  if (thr && vf > -1) acc += CAR.accel * thr * Math.max(0, 1 - (vf / vmax) ** 2) * (vf < 0 ? 1.5 : 1);
+  if (thr && vf > -1) acc += CAR.accel * perf * thr * Math.max(0, 1 - (vf / vmax) ** 2) * (vf < 0 ? 1.5 : 1);
   if (brk) {
     if (vf > 0.5) acc -= CAR.brake * brk * (0.55 + 0.45 * gripMul);
     else acc -= vf > -CAR.reverse ? 7 * brk : 0; // marche arrière
@@ -58,7 +59,7 @@ export function stepCar(car, input, t, dt, time) {
   // Adhérence : on efface la vitesse latérale, dans la limite du grip (moins de grip en freinant fort, ou frein à main).
   const nfx = Math.cos(car.a), nfy = Math.sin(car.a), lx = nfy, ly = -nfx;
   let along = car.vx * nfx + car.vy * nfy, side = car.vx * lx + car.vy * ly;
-  const grip = CAR.grip * gripMul * (input.handbrake ? 0.5 : 1) * (1 - 0.3 * brk * (along > 15 ? 1 : 0)) * (1 - car.damage * 0.001);
+  const grip = CAR.grip * Math.sqrt(perf) * gripMul * (input.handbrake ? 0.5 : 1) * (1 - 0.3 * brk * (along > 15 ? 1 : 0)) * (1 - car.damage * 0.001);
   const corr = Math.max(-grip * dt, Math.min(grip * dt, side));
   side -= corr;
   car.skid = Math.abs(side) + (brk > 0.8 && along > 25 ? 1.5 : 0);

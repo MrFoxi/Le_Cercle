@@ -3,18 +3,19 @@
 import { CAR, steerMax } from './physics.js';
 
 export const LEVELS = [
-  { id: 'debutant', name: 'Débutant', pace: 0.8, mistake: 0.12 },
-  { id: 'facile', name: 'Facile', pace: 0.86, mistake: 0.08 },
-  { id: 'moyen', name: 'Moyen', pace: 0.915, mistake: 0.05 },
-  { id: 'difficile', name: 'Difficile', pace: 0.955, mistake: 0.03 },
-  { id: 'expert', name: 'Expert', pace: 0.99, mistake: 0.015 },
+// pace : part de l'allure maximale du circuit ; perf : petit avantage mécanique (moteur, adhérence) des meilleurs robots.
+  { id: 'debutant', name: 'Débutant', pace: 0.74, mistake: 0.1, perf: 1 },
+  { id: 'facile', name: 'Facile', pace: 0.86, mistake: 0.06, perf: 1 },
+  { id: 'moyen', name: 'Moyen', pace: 0.95, mistake: 0.03, perf: 1 },
+  { id: 'difficile', name: 'Difficile', pace: 0.985, mistake: 0.012, perf: 1.02 },
+  { id: 'expert', name: 'Expert', pace: 1, mistake: 0.004, perf: 1.045 },
 ];
 
 // Vitesse de passage à chaque point : limitée par l'adhérence dans les virages, puis par la distance de freinage.
 const profiles = new Map();
 export function speedProfile(t) {
   if (profiles.has(t.def.id)) return profiles.get(t.def.id);
-  const v = new Float32Array(t.N), G = CAR.grip * 0.9, B = CAR.brake * 0.75;
+  const v = new Float32Array(t.N), G = CAR.grip * 1.0, B = CAR.brake * 0.92;
   for (let i = 0; i < t.N; i++) v[i] = Math.min(CAR.vmax, Math.sqrt(G / Math.max(1e-4, t.lineCurv[i])));
   for (let pass = 0; pass < 2; pass++) for (let i = t.N - 1; i >= 0; i--) v[i] = Math.min(v[i], Math.sqrt(v[(i + 1) % t.N] ** 2 + 2 * B * t.ds));
   profiles.set(t.def.id, v);
@@ -22,7 +23,7 @@ export function speedProfile(t) {
 }
 
 export function createBrain(level, rng = Math.random) {
-  return { pace: level.pace * (0.985 + rng() * 0.03), mistake: level.mistake, aggr: rng(), off: 0, mistakeUntil: -1, lastCorner: -1, rng, stuck: 0 };
+  return { pace: level.pace * (0.99 + rng() * 0.02), mistake: level.mistake, aggr: rng(), off: 0, mistakeUntil: -1, lastCorner: -1, rng, stuck: 0 };
 }
 
 export function drive(car, brain, t, cars, dt) {
@@ -68,7 +69,7 @@ export function drive(car, brain, t, cars, dt) {
   steer = Math.max(-1, Math.min(1, steer * 1.1));
   // Vitesse : on vise le profil (un peu plus vite si on se trompe, moins vite derrière une voiture lente).
   const k = t.wrap(car.i + Math.round((2 + v * 0.12) / t.ds));
-  let target = Math.min(prof[k], prof[t.wrap(k + 3)]) * (car.finished != null ? 0.7 : brain.pace) * (erring ? 1.12 : 1); // tour de décélération après l'arrivée
+  let target = Math.min(prof[k], prof[t.wrap(k + 3)]) * (car.finished != null ? 0.7 : brain.pace * (t.def.aiPace ?? 1)) * (erring ? 1.12 : 1); // tour de décélération après l'arrivée
   if (follow < target) target = Math.max(follow, target * 0.8);
   if (car.surface === 'grass' || car.surface === 'sand') target = Math.min(target, 30);
   let throttle = 0, brake = 0;

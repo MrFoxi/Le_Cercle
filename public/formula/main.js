@@ -265,7 +265,7 @@ function startRace(cfg) {
     const level = LEVELS[cfg.mode === 'demo' ? 3 : cfg.level];
     for (let k = 0, r = 0; k < n; k++) {
       if (k === mySlot) player = add(k, { id: 'me', name: pseudo || 'Toi', look: profile.look, brain: createBrain(LEVELS[2]), me: true });
-      else { const R = rivals[r++ % rivals.length]; add(k, { id: 'bot' + k, name: R.name, look: { color: R.color, accent: R.accent, helmet: R.accent, motif: ['stripe', 'arrow', 'split', 'plain'][k % 4], number: R.number }, brain: createBrain(level) }); }
+      else { const R = rivals[r++ % rivals.length]; add(k, { id: 'bot' + k, name: R.name, look: { color: R.color, accent: R.accent, helmet: R.accent, motif: ['stripe', 'arrow', 'split', 'plain'][k % 4], number: R.number }, brain: createBrain(level), perf: level.perf }); }
     }
   }
   if (cfg.mode === 'tt') {
