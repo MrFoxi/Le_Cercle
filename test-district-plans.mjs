@@ -30,9 +30,11 @@ for (const o of S.OBJECTIVES) if (o.id === 'rue1' || o.id === 'types12') assert(
 const st = S.newState(0);
 assert(st.plots[S.START_PLOT]?.type === 'ramen' && S.allowed('ramen', S.START_PLOT), 'le premier commerce est bien placé');
 // chaque parcelle est sur son terrain, et aucune déco possible sur la route
-for (const p of S.PLOTS) for (const [dx, dz] of [[0, 0], [-0.45, -0.45], [0.45, 0.45]]) assert.strictEqual(LAYOUT.height(p.x + dx * p.w, p.z + dz * p.depth), p.y, 'parcelle à plat sur son terrain');
+// coin d'une parcelle (fx, fz entre -0,5 et 0,5) dans le monde, parcelle tournée de ry
+const corner = (p, fx, fz) => { const lx = fx * p.w, lz = fz * p.depth, c = Math.cos(p.ry), s = Math.sin(p.ry); return [p.x + lx * c + lz * s, p.z - lx * s + lz * c]; };
+for (const p of S.PLOTS) for (const [fx, fz] of [[0, 0], [-0.45, -0.45], [0.45, 0.45], [-0.45, 0.45], [0.45, -0.45]]) assert.strictEqual(LAYOUT.height(...corner(p, fx, fz)), p.y, `parcelle à plat sur son terrain (${p.x}, ${p.z})`);
 // les parcelles ne se chevauchent pas
-for (const a of S.PLOTS) for (const b of S.PLOTS) if (a !== b) assert(Math.abs(a.x - b.x) >= (a.w + b.w) / 2 - 0.01 || Math.abs(a.z - b.z) >= (a.depth + b.depth) / 2 - 0.01, 'parcelles séparées');
+for (const a of S.PLOTS) for (const b of S.PLOTS) if (a !== b) for (const [fx, fz] of [[-0.5, -0.5], [0.5, -0.5], [-0.5, 0.5], [0.5, 0.5], [0, 0]]) { const [x, z] = corner(a, fx * 0.98, fz * 0.98); assert(!S.inPlot({ x, z }, S.PLOTS.indexOf(b)), 'parcelles séparées'); }
 // chaque chemin passe sur la terre ferme (pas dans la mer)
 for (const path of LAYOUT.paths) for (const [x, z, y] of path) assert(y != null || LAYOUT.height(x, z) > -0.3, `chemin dans l'eau en ${x},${z}`);
 // chemins : un seul réseau relié (de n'importe quel point, on atteint tous les autres)

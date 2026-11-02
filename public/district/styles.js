@@ -22,7 +22,7 @@ const ST = {
 }[DISTRICT];
 
 // ---------- Textures propres aux quartiers ----------
-const GRANITE = () => canvasTex('granite', 256, 256, (x, w, h) => {
+export const GRANITE = () => canvasTex('granite', 256, 256, (x, w, h) => {
   const r = seeded(61);
   x.fillStyle = '#5c5852'; x.fillRect(0, 0, w, h);
   for (let y = 0; y < h; y += 26) for (let px = -(r() * 40); px < w;) {

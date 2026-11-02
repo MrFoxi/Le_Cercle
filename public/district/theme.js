@@ -58,9 +58,9 @@ export const THEMES = {
     d: { plante: ['Hortensias', '🪴'], caisses: ['Casiers à homards', '🦞'], banc: ['Banc', '🪑'], velo: ['Vélo', '🚲'], lampe: ['Réverbère', '💡'], bambou: ['Oyats', '🌾'], toro: ['Bouée', '🛟'], panneau: ['Panneau', '🪧'], bonsai: ['Filets de pêche', '🥅'], vending: ['Distributeur', '🥤'], cerisier: ['Pin parasol', '🌲'], erable: ['Tamaris', '🌳'], torii: ['Ancre géante', '⚓'], puits: ['Barque', '🛶'], neko: ['Phare miniature', '🗼'], sakura: ['Grand pin', '🌲'], jizo: ['Statue de marin', '🗿'], kiosque: ['Cabine de plage', '🏖️'], fontaine: ['Fontaine', '⛲'] },
   },
   europe: {
-    name: 'Vieille ville européenne', jp: 'INTRA-MUROS', title: 'La Vieille Ville', pitch: 'Une cité fortifiée au bord de la mer, ses remparts, ses ruelles pavées et son abbaye. On construit à l’intérieur des murs.',
-    sectors: ['La Grand’Rue', 'La rue des remparts', 'Le haut de la ville', 'Le pied de l’abbaye'],
-    hill: 'L’abbaye', hillView: 'Vue de l’abbaye', south: 'Les douves', festival: '🛡️ Fête médiévale ce soir ! Bannières, feux d’artifice et visiteurs en plus (revenus ×1,5)', festivalName: 'Fête médiévale',
+    name: 'Vieille ville européenne', jp: 'INTRA-MUROS', title: 'La Vieille Ville', pitch: 'Une île fortifiée au milieu des grèves : remparts, rues pavées qui montent en spirale jusqu’à l’abbaye, et la marée qui va et vient.',
+    sectors: ['Près de la porte', 'Le tour des remparts', 'La rue haute', 'Sous l’abbaye'],
+    hill: 'L’abbaye', hillView: 'Vue de l’abbaye', south: 'La chaussée', festival: '🛡️ Fête médiévale ce soir ! Bannières, feux d’artifice et visiteurs en plus (revenus ×1,5)', festivalName: 'Fête médiévale',
     vendor: ['🥨', 'Colporteur', 'Un colporteur traverse la ville avec sa charrette. Touche-la !', 'Galettes et cidre offerts à toute la ville', ''],
     font: 'Georgia, "Times New Roman", serif', levels: GENERIC_LEVELS, weather: { brouillard: 1.5, pluie: 1.3 },
     b: {

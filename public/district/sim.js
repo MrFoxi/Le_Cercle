@@ -168,7 +168,11 @@ export function buySector(s, k) {
 }
 
 const refund = d => Math.floor((DECOR[d.id]?.cost || 0) / 2);
-export const inPlot = (d, i) => Math.abs(d.x - PLOTS[i].x) < PLOTS[i].w / 2 && Math.abs(d.z - PLOTS[i].z) < PLOTS[i].depth / 2; // parcelles toutes alignées sur les axes
+// Un point est-il dans la parcelle ? (on le ramène dans le repère de la parcelle, qui peut être tournée)
+export const inPlot = (d, i) => {
+  const P = PLOTS[i], dx = d.x - P.x, dz = d.z - P.z, c = Math.cos(P.ry), s = Math.sin(P.ry);
+  return Math.abs(dx * c - dz * s) < P.w / 2 && Math.abs(dx * s + dz * c) < P.depth / 2;
+};
 
 // Où peut-on poser une décoration ? Pas sur la chaussée, ni sur un bâtiment ou une parcelle à vendre, ni sur une autre déco.
 export function canPlace(s, x, z, ignore = -1) {

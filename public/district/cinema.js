@@ -9,6 +9,7 @@ import { DISTRICT } from './theme.js';
 
 const V = (x, y, z) => new THREE.Vector3(x, y, z);
 const lerp = (a, b, t) => a + (b - a) * t;
+const deg2 = a => (a * Math.PI) / 180;
 const ease = t => t * t * (3 - 2 * t);
 const rnd = (a, b) => a + Math.random() * (b - a);
 const sign = () => (Math.random() < 0.5 ? -1 : 1);
@@ -69,6 +70,12 @@ export function createCinema(world, { fade, label }) {
         const P = PLOTS[best[1]], s = sign();
         return { name: BUILDINGS[best[0].type].name, dur: 15, at: t => ({ pos: V(P.x + s * lerp(P.w * 0.6, P.w * 0.25, t), P.y + lerp(3.4, 2.4, t), P.z + P.depth / 2 + 2.6), look: V(P.x, P.y + 1, P.z), blur: 1.1 }) };
       },
+    });
+    if (DISTRICT === 'europe') Object.assign(SHOTS, {
+      chaussee: () => ({ name: T.south, dur: 16, at: t => ({ pos: V(lerp(-1.5, 0.5, t), lerp(1.6, 2.4, t), lerp(31, 22, t)), look: V(0, 4, 0), blur: 0.8 }) }),
+      remparts: () => { const a0 = rnd(0, 6.28), d = sign(); return { name: 'Les remparts', dur: 18, at: t => { const a = a0 + d * t * 0.9; return { pos: V(Math.cos(a) * 25, 6.5, Math.sin(a) * 25), look: V(0, 2.4, 0), blur: 0.8 }; } }; },
+      grandrue: () => { const d = sign(); return { name: 'La Grand’Rue', dur: 16, at: t => { const a = deg2(lerp(110, 60, t) * d + (d < 0 ? 180 : 0)); return { pos: V(Math.cos(a) * 15, 1.5, Math.sin(a) * 15), look: V(Math.cos(a - d * 0.5) * 13.5, 1.2, Math.sin(a - d * 0.5) * 13.5), blur: 1.1 }; } }; },
+      abbaye: () => { const a0 = rnd(0, 6.28); return { name: T.hill, dur: 15, at: t => { const a = a0 + t * 0.8; return { pos: V(Math.cos(a) * 17, 14, Math.sin(a) * 17), look: V(1.5, 6.5, 0), blur: 0.6 }; } }; },
     });
     if (DISTRICT === 'cotier') Object.assign(SHOTS, {
       front: () => { const d = sign(); return { name: 'Le front de mer', dur: 18, at: t => { const x = lerp(-17 * d, 17 * d, t); return { pos: V(x, 1.5, 6.2), look: V(x + d * 6, 0.9, 1.2), blur: 1 }; } }; },

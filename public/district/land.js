@@ -1,9 +1,9 @@
-// Little District : relief des quartiers qui ont leur propre plan (quartier moderne, village côtier).
+// Little District : relief des quartiers qui ont leur propre plan (quartier moderne, village côtier, vieille ville).
 // Même interface que buildTerrain : { glows, groundMats, meshes, update }.
 import * as THREE from 'three';
 import { TEX, std, textured, glowMat, box, cyl, sub, makeDecor, lightPool, streak, bake, seeded } from './models.js';
 import { WATER_N, GRASS } from './terrain.js';
-import { streetLamp, boatModel, lighthouse, WATER } from './styles.js';
+import { streetLamp, boatModel, lighthouse, WATER, GRANITE as GRANITE_T } from './styles.js';
 import { DISTRICT } from './theme.js';
 import { LAYOUT } from './layouts.js';
 
@@ -212,4 +212,109 @@ function landCotier(scene, low) {
   };
 }
 
-export const buildLand = (scene, low) => (DISTRICT === 'cotier' ? landCotier : landModerne)(scene, low);
+
+
+// ---------- Vieille ville : l'île fortifiée, ses grèves et la marée ----------
+function landEurope(scene, low) {
+  const L = LAYOUT, E = L.E;
+  const root = new THREE.Group(), glowsDef = [], groundMats = [], meshes = [];
+  const granite = textured('graniteLand', GRANITE_T(), { roughness: 0.95 });
+  const sand = std('#cdb88a', { roughness: 1 }), top = std('#3d3a36'), slate = std('#3c424b', { roughness: 0.6 });
+  const cobT = TEX.pave().clone(); cobT.needsUpdate = true; cobT.wrapS = cobT.wrapT = THREE.RepeatWrapping; cobT.repeat.set(6, 6);
+  const cobble = new THREE.MeshStandardMaterial({ map: cobT, roughness: 0.9 }); cobble.userData.tint = new THREE.Color('#c8c4bc').multiplyScalar(1.25); groundMats.push(cobble);
+  const grassT = GRASS().clone(); grassT.needsUpdate = true; grassT.repeat.set(4, 4);
+  const grass = new THREE.MeshStandardMaterial({ map: grassT, roughness: 0.95, color: '#c0d0a8' });
+  const disc = (r, y0, y1, side, topMat) => {
+    const m = new THREE.Mesh(new THREE.CylinderGeometry(r, r, y1 - y0, 72, 1), [side, topMat, top]);
+    m.position.y = (y0 + y1) / 2; m.castShadow = m.receiveShadow = true; scene.add(m); meshes.push(m); return m;
+  };
+  const ringFlat = (r0, r1, y, mat) => { const m = new THREE.Mesh(new THREE.RingGeometry(r0, r1, 96, 1), mat); m.rotation.x = -Math.PI / 2; m.position.y = y; m.receiveShadow = true; scene.add(m); meshes.push(m); return m; };
+  // grèves, puis les trois étages de l'île (murs de granite)
+  disc(E.flats, -1.4, E.sand, std('#a89670'), sand);
+  disc(E.rampart[1] + 0.2, -1.4, E.y[0], granite, cobble);
+  disc(E.r[1], E.y[0], E.y[1], granite, cobble);
+  disc(E.r[2], E.y[1], E.y[2], granite, grass);
+  ringFlat(E.street[0] - 0.8, E.street[0] + 0.8, E.y[0] + 0.01, cobble);
+  ringFlat(E.street[1] - 0.8, E.street[1] + 0.8, E.y[1] + 0.01, cobble);
+  // escaliers est et ouest
+  const step = std('#8d8a83', { roughness: 0.95 });
+  for (let i = 0; i < 10; i++) { const r = 14.2 - (i + 0.5) * 0.34; box(scene, 0.34, E.y[0] + ((E.y[1] - E.y[0]) * (i + 1)) / 10, 1.6, step, r, 0, 0); }
+  for (let i = 0; i < 10; i++) { const r = 9 - (i + 0.5) * 0.35; box(scene, 0.35, E.y[1] + ((E.y[2] - E.y[1]) * (i + 1)) / 10, 1.6, step, -r, 0, 0); }
+  // les remparts : courtine crénelée, tours rondes, porte fortifiée au sud
+  const wallR = (E.rampart[0] + E.rampart[1]) / 2, gateA = Math.PI / 2;
+  for (let a = 0; a < 360; a += 3) {
+    const t = (a * Math.PI) / 180;
+    if (Math.abs(t - gateA) < 0.07) continue;
+    const seg = box(root, 0.6, 1.6, wallR * 0.054, granite, 0, 0, 0); seg.position.set(Math.cos(t) * wallR, E.y[0] + 0.8, Math.sin(t) * wallR); seg.rotation.y = -t;
+    if (a % 6 === 0) { const c = box(root, 0.6, 0.3, 0.3, granite, 0, 0, 0); c.position.set(Math.cos(t) * wallR, E.y[0] + 1.75, Math.sin(t) * wallR); c.rotation.y = -t; }
+  }
+  for (let a = 22.5; a < 360; a += 45) {
+    const t = (a * Math.PI) / 180, x = Math.cos(t) * wallR, z = Math.sin(t) * wallR;
+    cyl(root, 0.95, 2.6, granite, x, E.y[0], z); const roof = new THREE.Mesh(new THREE.ConeGeometry(1.15, 1.2, 12), slate); roof.position.set(x, E.y[0] + 3.2, z); root.add(roof);
+  }
+  for (const s of [-1, 1]) { cyl(root, 0.9, 3, granite, s * 1.5, E.y[0], wallR); const rf = new THREE.Mesh(new THREE.ConeGeometry(1.1, 1.3, 12), slate); rf.position.set(s * 1.5, E.y[0] + 3.65, wallR); root.add(rf); }
+  box(root, 2.2, 0.9, 0.8, granite, 0, E.y[0] + 1.9, wallR);
+  const arch = new THREE.Mesh(new THREE.TorusGeometry(0.62, 0.12, 6, 14, Math.PI), granite); arch.position.set(0, E.y[0] + 1.5, wallR + 0.35); root.add(arch);
+  // parapets des niveaux supérieurs (ouverts aux escaliers)
+  for (const [r, y, gap] of [[E.r[1] - 0.1, E.y[1], 0], [E.r[2] - 0.1, E.y[2], Math.PI]]) for (let a = 0; a < 360; a += 6) {
+    const t = (a * Math.PI) / 180, d = Math.abs(Math.atan2(Math.sin(t - gap), Math.cos(t - gap)));
+    if (d < 0.22) continue;
+    const p = box(root, 0.18, 0.45, r * 0.1, granite, 0, 0, 0); p.position.set(Math.cos(t) * r, y + 0.22, Math.sin(t) * r); p.rotation.y = -t;
+  }
+  // la chaussée vers la porte
+  box(scene, 2, 0.55, E.causeway - E.rampart[1], step, 0, -0.3, (E.rampart[1] + E.causeway) / 2);
+  meshes.push(scene.children.at(-1));
+  for (let z = E.rampart[1] + 1.5; z < E.causeway; z += 3) for (const s of [-1, 1]) box(root, 0.12, 0.35, 0.12, std('#5a5650'), s * 0.95, 0.25, z);
+  // l'abbaye au sommet : nef, transept, clocher et sa flèche dorée
+  const ab = sub(root, 0, E.y[2], 0); ab.scale.setScalar(1.3); // l'abbaye domine la ville
+  box(ab, 7, 2.4, 2.8, granite, 0, 0, 0);
+  const nave = sub(ab, 0, 0, 0); pitchedRoof(nave, 7, 2.8, 2.4, slate, granite, 0.85);
+  box(ab, 2.4, 2.2, 4.2, granite, 1.2, 0, 0);
+  for (let i = 0; i < 4; i++) for (const s of [-1, 1]) { const w = new THREE.Mesh(new THREE.PlaneGeometry(0.32, 0.9), glowMat('vitrail', '#ffd28a', null, 0.05, 1.4, 0)); w.position.set(-2.8 + i * 1.2, 1.3, s * 1.41); w.rotation.y = s > 0 ? 0 : Math.PI; ab.add(w); }
+  box(ab, 1.6, 4.4, 1.6, granite, 1.2, 0, 0);
+  const spire = new THREE.Mesh(new THREE.ConeGeometry(0.95, 4.2, 8), slate); spire.position.set(1.2, 6.5, 0); ab.add(spire);
+  const saint = new THREE.Mesh(new THREE.ConeGeometry(0.1, 0.5, 6), std('#e8c24a', { metalness: 0.9, roughness: 0.2, emissive: '#5a3a00' })); saint.position.set(1.2, 8.85, 0); ab.add(saint);
+  const door = new THREE.Mesh(new THREE.PlaneGeometry(0.8, 1.3), std('#3a2416')); door.position.set(-3.51, 0.65, 0); door.rotation.y = -Math.PI / 2; ab.add(door);
+  glowsDef.push({ x: -4.9, y: 0.6, z: 0, color: '#ffc27a', pool: true, yb: E.y[2], r: 1.4 });
+  // lanternes de fer le long des rues, arbres et jardins
+  const deco = (id, x, z, sc = 1, ry = 0) => { const y = L.height(x, z) + GY, d = makeDecor(id); d.position.set(x, y, z); d.scale.setScalar(sc); d.rotation.y = ry; root.add(d); (d.userData.glows || []).forEach(gl => glowsDef.push({ ...gl, x: x + gl.x * sc, z: z + gl.z * sc, yb: y })); return d; };
+  for (let a = 12.5; a < 360; a += 25) { const t = (a * Math.PI) / 180; if (Math.abs(Math.sin(t)) > 0.12 || Math.cos(t) < 0) deco('lampe', Math.cos(t) * 15.75, Math.sin(t) * 15.75, 0.9); }
+  for (const a of [5, 55, 105, 155, 205, 255, 305, 355]) { const t = (a * Math.PI) / 180; if (Math.abs(Math.sin(t)) > 0.15) deco('lampe', Math.cos(t) * 10.55, Math.sin(t) * 10.55, 0.85); }
+  for (const [x, z, id, sc] of [[-1.8, -3.6, 'erable', 1], [3.4, -3.3, 'cerisier', 0.9], [3.6, 3.2, 'cerisier', 0.9], [-0.5, 3.6, 'bambou', 1], [0.8, -4.3, 'banc', 1]]) deco(id, x, z, sc, id === 'banc' ? Math.PI : x);
+  // barques échouées sur les grèves, rochers
+  const boats = [];
+  for (const [x, z, c, ry] of [[-9, 21, '#5a3e2a', 0.4], [12, 19.5, '#2f4a6a', -0.8], [-19, -8, '#7a3a2a', 1.6], [17, -14, '#5a3e2a', 2.4]]) { const b = new THREE.Group(); boatModel(b, c, false, 1.3); b.position.set(x, E.sand, z); b.rotation.set(0, ry, 0.15); scene.add(b); boats.push(b); }
+  const r = seeded(29);
+  for (let i = 0; i < 18; i++) { const t = r() * 6.28, d = 18.5 + r() * 7, o = new THREE.Mesh(new THREE.DodecahedronGeometry(0.5, 0), std('#6f6a62', { flatShading: true })); const s = 0.3 + r() * 0.6; o.position.set(Math.cos(t) * d, E.sand, Math.sin(t) * d); o.scale.set(s, s * 0.5, s); root.add(o); }
+  scene.add(bake(root));
+  // la mer et la marée
+  const nTex = WATER_N().clone(); nTex.needsUpdate = true; nTex.wrapS = nTex.wrapT = THREE.RepeatWrapping; nTex.repeat.set(60, 60);
+  const water = new THREE.Mesh(new THREE.PlaneGeometry(400, 400), new THREE.MeshStandardMaterial({ color: WATER[0], roughness: 0.06, metalness: 0.15, normalMap: nTex, normalScale: new THREE.Vector2(0.35, 0.35), transparent: true, opacity: 0.88, envMapIntensity: 1.6 }));
+  water.rotation.x = -Math.PI / 2; water.position.y = E.sea; water.renderOrder = 1; scene.add(water);
+  const glows = [];
+  for (const gl of glowsDef) { const h = sub(scene, 0, gl.yb ?? GY, 0); if (gl.pool !== false) glows.push(lightPool(h, gl.x, gl.z, gl.r || 1, gl.color, 0.7)); glows.push(streak(h, gl.x, gl.z + 0.2, 0.4, gl.color, 1)); }
+
+  let t = 0;
+  return {
+    glows, groundMats, meshes, water,
+    update(dt) {
+      t += dt;
+      nTex.offset.set(t * 0.008, t * 0.012);
+      // marée : la mer monte jusqu'à couvrir les grèves, puis redescend (un cycle toutes les 8 minutes)
+      const tide = (Math.sin((t / 480) * Math.PI * 2) + 1) / 2;
+      water.position.y = lerp(E.sand - 0.25, E.sand + 0.2, tide);
+      boats.forEach((b, i) => { const floating = water.position.y > E.sand + 0.05; b.position.y = floating ? water.position.y + Math.sin(t + i) * 0.03 : E.sand; b.rotation.z = floating ? Math.sin(t * 0.7 + i) * 0.04 : 0.15; });
+    },
+  };
+}
+const lerp = (a, b, t) => a + (b - a) * Math.min(1, Math.max(0, t));
+// toit à deux pans (nef de l'abbaye)
+function pitchedRoof(p, w, d, y, m, gable, pitch) {
+  const half = d / 2 + 0.15, len = half / Math.cos(pitch), rise = Math.tan(pitch) * (d / 2);
+  for (const s of [-1, 1]) { const slab = box(p, w + 0.3, 0.08, len, m, 0, 0, 0); slab.position.set(0, y + rise / 2, s * half / 2); slab.rotation.x = s * pitch; }
+  const tri = new THREE.Shape([new THREE.Vector2(-d / 2, 0), new THREE.Vector2(d / 2, 0), new THREE.Vector2(0, rise)]);
+  const geo = new THREE.ExtrudeGeometry(tri, { depth: 0.1, bevelEnabled: false });
+  for (const s of [-1, 1]) { const g = new THREE.Mesh(geo, gable); g.rotation.y = Math.PI / 2; g.position.set(s * (w / 2) - 0.05, y, 0); p.add(g); }
+}
+
+export const buildLand = (scene, low) => ({ moderne: landModerne, cotier: landCotier, europe: landEurope })[DISTRICT](scene, low);

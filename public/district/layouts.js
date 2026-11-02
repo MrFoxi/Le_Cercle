@@ -93,7 +93,57 @@ const cotier = {
   lanterns: { x: [-18, 18], z: [-13, -11], y: 2 },
   decorOK: (x, z) => x > C.cliffX + 0.4 && x < 26.5 && z > -13.8 && z < C.beach[1] - 0.6 && !(x > C.portX && z > C.beach[0] - 0.2) && Math.abs(z - C.prom) > 0.7 && Math.abs(z - C.upSt) > 0.75 && !C.stairs.some(sx => Math.abs(x - sx) < 1.1 && z < 2 && z > -4.5),
 };
+// ---------- Vieille ville : « Intra-muros » (Mont-Saint-Michel) ----------
+// Une île ronde entourée de grèves. Remparts au bord, puis une rue en anneau (niveau 0), un escalier à l'est vers la
+// seconde rue en anneau (niveau 1), un escalier à l'ouest vers le sommet et l'abbaye : on monte en spirale.
+// Les maisons sont entre les deux rues, tournées vers l'extérieur (vers leur rue).
+const E = { y: [0.3, 2, 3.8], r: [16, 10.8, 5.5], street: [15, 9.8], houses: [12.4, 7.2], rampart: [16, 16.6], sand: -0.3, sea: -0.42, flats: 27, gateZ: 16.6, causeway: 30 };
+const deg = a => (a * Math.PI) / 180;
+function heightEurope(x, z) {
+  const r = Math.hypot(x, z);
+  if (Math.abs(z) < 0.9 && x > 0 && r >= 10.8 && r <= 14.2) return lerp(E.y[0], E.y[1], (14.2 - r) / 3.4); // escalier est
+  if (Math.abs(z) < 0.9 && x < 0 && r >= 5.5 && r <= 9) return lerp(E.y[1], E.y[2], (9 - r) / 3.5); // escalier ouest
+  if (Math.abs(x) < 1 && z >= E.r[0] && z <= E.causeway) return 0.25; // la chaussée
+  if (r < E.r[2]) return E.y[2];
+  if (r < E.r[1]) return E.y[1];
+  if (r < E.rampart[1]) return E.y[0];
+  return r < E.flats ? E.sand : E.sea;
+}
+const ring = (r, step, y) => { const pts = []; for (let a = 0; a <= 360; a += step) pts.push([+(r * Math.cos(deg(a))).toFixed(3), +(r * Math.sin(deg(a))).toFixed(3), y]); return pts; };
+const at = (r, a) => [+(r * Math.cos(deg(a))).toFixed(3), +(r * Math.sin(deg(a))).toFixed(3)];
+// face vers l'extérieur (vers sa rue) : le devant d'une parcelle regarde +z dans son repère
+const outward = a => Math.atan2(Math.cos(deg(a)), Math.sin(deg(a)));
+const europe = {
+  bounds: { x0: -18, x1: 18, z0: -18, z1: 20 },
+  view: { x: 0, z: 2, dist: 50 },
+  height: heightEurope, E, BOARD: { flats: E.flats },
+  plots: [
+    ...[25, 50, 75, 100, 125, 150, 175, 200, 225, 250, 275, 300, 325].map(a => ({ x: at(E.houses[0], a)[0], z: at(E.houses[0], a)[1], y: E.y[0], ry: outward(a), w: 4.3, depth: 3, sector: a >= 50 && a <= 125 ? 0 : 1, size: 1 })),
+    ...[30, 80, 130, 230, 280, 330].map(a => ({ x: at(E.houses[1], a)[0], z: at(E.houses[1], a)[1], y: E.y[1], ry: outward(a), w: 4.3, depth: 3, sector: a < 180 ? 2 : 3, size: 2 })),
+  ],
+  start: 3, // la crêperie, juste en face de la porte
+  paths: [
+    ring(E.street[0], 7.5), ring(E.street[1], 10),
+    [at(E.street[0], 0), [14.2, 0], [10.8, 0], at(E.street[1], 0)], // escalier est
+    [at(E.street[1], 180), [-9, 0], [-5.5, 0], [-4.95, 0], [-4.6, 2.6]], // escalier ouest, puis le parvis de l'abbaye
+    [at(E.street[0], 90), [0, 16.6], [0, 19, 0.25], [0, 23, 0.25], [0, 29.5, 0.25]], // la porte et la chaussée
+    [[-4.6, 2.6], [-1.5, 4.6], [2, 4.6]], // tour du parvis, vue sur la baie
+  ],
+  edges: [[0, 29.5]],
+  views: [[2, 4.6, 0.3], [-1.5, 4.6, 0], [0, 23, Math.PI], [0, 19, Math.PI]],
+  pigeons: [[1.5, 4.7], [0, 14.6], [-9.6, 2], [0, 21]],
+  vendor: { z: 21.5, y: E.sand + 0.06 }, // le colporteur traverse les grèves à marée basse
+  lanterns: { x: [-3, 3], z: [-3, 3], y: E.y[2] + 0.5 },
+  decorOK: (x, z) => {
+    const r = Math.hypot(x, z);
+    if (r > E.flats - 0.5 || (r > 15.9 && r < 16.8) || Math.abs(r - E.street[0]) < 0.85 || Math.abs(r - E.street[1]) < 0.85) return false;
+    if (Math.abs(z) < 1.1 && ((x > 0 && r > 10.5 && r < 14.5) || (x < 0 && r > 5.2 && r < 9.3))) return false; // escaliers
+    if (Math.abs(x) < 1.3 && z > 15.5) return false; // porte et chaussée
+    return !(Math.abs(x) < 4.9 && Math.abs(z) < 2.8); // l'abbaye
+  },
+};
+
 moderne.lanterns = { x: [-9, 9], z: [BAND[3][0] + 1, BAND[3][1] - 1], y: T[3] + 0.5 };
 
-export const LAYOUTS = { moderne, cotier };
+export const LAYOUTS = { moderne, cotier, europe };
 export const LAYOUT = LAYOUTS[DISTRICT] || null;
