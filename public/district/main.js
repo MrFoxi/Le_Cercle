@@ -401,6 +401,8 @@ const EVENTS = {
   festival: { when: h => h > 16.5 && h < 21.5, dur: 300, boost: 1.5, crowd: 1.6, icon: T.festival.split(' ')[0], name: T.festivalName, text: T.festival },
   tourists: { when: h => h > 8 && h < 18.5, dur: 150, boost: 1.25, crowd: 1.1, icon: '📸', name: 'Touristes', text: '📸 Un groupe de touristes visite le quartier (revenus ×1,25)', start: () => world.people.tourists() },
   golden: { when: () => true, dur: 70, icon: '✨', name: 'Chat doré', text: '✨ Un chat doré se promène… trouve-le et touche-le !', start: () => world.life.spawnGolden(), end: () => world.life.removeGolden() },
+  special: { when: { soir: h => h > 16 && h < 22.5, jour: h => h > 9 && h < 19, nuit: h => h > 19.5 || h < 4.5, toujours: () => true }[T.special[3]], dur: 160, boost: 1.3, crowd: 1.2, icon: T.special[0], name: T.special[1], text: T.special[2],
+    start: () => { world.life.startSpecial(); world.terrain.setSurge?.(true); }, end: () => { world.life.stopSpecial(); world.terrain.setSurge?.(false); } },
   vendor: { when: h => h > 9 && h < 22, dur: 80, icon: T.vendor[0], name: T.vendor[1], text: `${T.vendor[0]} ${T.vendor[2]}`, start: () => world.life.spawnVendor(), end: () => world.life.removeVendor() },
 };
 function startEvent() {

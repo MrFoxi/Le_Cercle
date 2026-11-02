@@ -1,12 +1,12 @@
 // Little District : tout ce qui vit autour des habitants. Chats, pigeons, oiseaux, carpes, lucioles,
 // et les événements : festival (feux d'artifice, lanternes célestes), chat doré, marchand ambulant, arc-en-ciel.
 import * as THREE from 'three';
-import { TEX, std, glowMat, box, cyl, ball, lantern, makePerson, canvasTex, seeded } from './models.js';
+import { TEX, std, textured, glowMat, box, cyl, ball, lantern, makePerson, canvasTex, seeded } from './models.js';
 import { makeCat, animateCat, CAT_COLORS, makePigeon, makeBird, flap, makeKoi } from './animals.js';
 import { NAV } from './people.js';
 import { CANAL, HILL, SEA, BEACH } from './terrain.js';
-import { T } from './theme.js';
-import { makeHoverCar } from './styles.js';
+import { T, DISTRICT } from './theme.js';
+import { makeHoverCar, boatModel } from './styles.js';
 import { LAYOUT } from './layouts.js';
 
 const Y = 0.06;
@@ -308,26 +308,159 @@ export function createLife({ scene, people, low, camera, target, onSound }) {
     return golden;
   }
   function removeGolden() { if (!golden) return; root.remove(golden.c.root); pickables.splice(pickables.indexOf(golden.c.root), 1); golden = null; }
+  // Le véhicule du marchand, propre à chaque quartier (l'avant regarde vers +x, le sens de la marche).
+  function vendorModel() {
+    const g = new THREE.Group(), D = DISTRICT, out = { g, man: null, smoke: false, float: false, seated: false, donkey: null };
+    const person = (uniform, x, z = 0) => { const m = makePerson(seeded(Math.floor(Math.random() * 1e6)), uniform); m.root.position.set(x, 0, z); m.root.rotation.y = Math.PI / 2; g.add(m.root); return m; };
+    const wheel = (x, z, r, m) => { const w = cyl(g, r, 0.05, m, x, r, z); w.rotation.x = Math.PI / 2; w.position.y = r; };
+    if (D === 'futur') { // robot livreur qui flotte
+      const shell = std('#e6eaf0', { roughness: 0.2, metalness: 0.4 });
+      const body = new THREE.Mesh(new THREE.CapsuleGeometry(0.22, 0.35, 4, 12), shell); body.position.y = 0.75; g.add(body);
+      ball(g, 0.19, shell, 0, 1.2, 0);
+      box(g, 0.06, 0.06, 0.28, glowMat('robotEye', '#3ff0ff', null, 0.6, 2.5, 0), 0.16, 1.17, 0);
+      for (const s of [-1, 1]) { const a = cyl(g, 0.03, 0.35, shell, 0.12, 0.72, s * 0.24); a.rotation.z = -1.2; }
+      box(g, 0.45, 0.03, 0.4, shell, 0.38, 0.88, 0); box(g, 0.3, 0.2, 0.25, std('#ff4fd8', { roughness: 0.3 }), 0.38, 0.91, 0);
+      const ring = new THREE.Mesh(new THREE.TorusGeometry(0.24, 0.04, 6, 24), glowMat('hoverRing', '#3ff0ff', null, 0.5, 2.2, 0)); ring.rotation.x = Math.PI / 2; ring.position.y = 0.3; g.add(ring);
+      out.float = true;
+    } else if (D === 'moderne') { // voiturette électrique du glacier
+      const white = std('#f4f2ee', { roughness: 0.4 }), dark = std('#26282c');
+      box(g, 1.1, 0.35, 0.62, white, 0, 0.16, 0);
+      box(g, 0.42, 0.32, 0.56, std('#5fc8e8', { roughness: 0.3 }), -0.32, 0.51, 0);
+      box(g, 0.3, 0.22, 0.52, dark, 0.22, 0.51, 0);
+      for (const [x, z] of [[-0.5, -0.28], [0.5, -0.28], [-0.5, 0.28], [0.5, 0.28]]) { cyl(g, 0.02, 0.85, white, x, 0.51, z); wheel(x * 0.8, z * 1.15, 0.12, dark); }
+      box(g, 1.2, 0.05, 0.72, white, 0, 1.36, 0);
+      for (let i = 0; i < 3; i++) ball(g, 0.06, std(['#f4b6c8', '#f2e2a8', '#8ad0a0'][i]), -0.42 + i * 0.1, 0.9, 0);
+      out.man = person('#f4f2ee', 0.22); out.seated = true;
+      out.man.legL.rotation.x = out.man.legR.rotation.x = -1.45; out.man.body.position.y = 0.44; out.man.armL.rotation.x = out.man.armR.rotation.x = -1;
+    } else if (D === 'cotier') { // triporteur à glaces
+      const red = std('#c8402e', { roughness: 0.4 }), dark = std('#26282c');
+      box(g, 0.6, 0.45, 0.58, textured('triStripes', TEX.stripes('#2f6fa8', '#f4f1ea')), 0.35, 0.28, 0);
+      for (const s of [-1, 1]) wheel(0.35, s * 0.31, 0.16, dark);
+      wheel(-0.45, 0, 0.18, dark);
+      box(g, 0.85, 0.04, 0.04, red, -0.05, 0.42, 0); box(g, 0.04, 0.4, 0.04, red, -0.42, 0.4, 0); box(g, 0.18, 0.04, 0.12, dark, -0.42, 0.8, 0);
+      cyl(g, 0.02, 0.95, std('#dddddd'), 0.35, 0.73, 0);
+      const umb = new THREE.Mesh(new THREE.ConeGeometry(0.55, 0.22, 10, 1, true), textured('parasol#2f6fa8', TEX.stripes('#2f6fa8', '#f4f1ea'), { side: THREE.DoubleSide })); umb.position.set(0.35, 1.7, 0); g.add(umb);
+      out.man = person('#f4f1ea', -0.55);
+    } else if (D === 'med') { // âne chargé, mené par son marchand
+      const d = makeCat(['#8a8078', '#d8d0c8'], { dog: true }); d.root.scale.setScalar(2.2); d.root.rotation.y = Math.PI / 2; g.add(d.root);
+      for (const s of [-1, 1]) { const bag = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.1, 0.06), std('#b8673a')); bag.position.set(0, 0.3, 0); bag.position.x = s * 0.1; d.body.add(bag); }
+      const basket = new THREE.Mesh(new THREE.CylinderGeometry(0.07, 0.05, 0.07, 10), std('#c8a26a')); basket.position.set(0, 0.36, -0.02); d.body.add(basket);
+      out.donkey = d; out.man = person('#f4f1ea', 0.15, 0.55);
+    } else { // charrette (patates douces au Japon, galettes dans la vieille ville)
+      const wood = std('#7a5434');
+      box(g, 0.9, 0.35, 0.5, wood, 0, 0.22, 0);
+      box(g, 0.95, 0.04, 0.55, std('#3a2a20'), 0, 0.57, 0);
+      for (const s of [-1, 1]) { const w = cyl(g, 0.17, 0.04, std('#2a2420'), 0.15, 0.17, s * 0.28); w.rotation.x = Math.PI / 2; }
+      cyl(g, 0.04, 0.5, std('#555555', { metalness: 0.6 }), 0.3, 0.6, 0); // cheminée
+      box(g, 0.5, 0.18, 0.3, glowMat('imoStove', '#ff7a2a', null, 0.6, 2.2, 0), -0.15, 0.57, 0);
+      const lan = new THREE.Group(); lantern(lan, 0, 0, 0, T.vendor[4] ? '#d8342c' : '#f2c14e', T.vendor[4], 1.1); lan.position.set(-0.4, 1.05, 0); g.add(lan);
+      cyl(g, 0.012, 0.5, std('#333333'), -0.4, 0.6, 0);
+      for (const s of [-1, 1]) box(g, 0.5, 0.03, 0.03, wood, -0.65, 0.45, s * 0.2);
+      out.man = person('#5a6a8a', -1.05); out.smoke = true;
+    }
+    return out;
+  }
   function spawnVendor() {
     if (vendor) return;
-    const g = new THREE.Group(), wood = std('#7a5434');
-    box(g, 0.9, 0.35, 0.5, wood, 0, 0.22, 0);
-    box(g, 0.95, 0.04, 0.55, std('#3a2a20'), 0, 0.57, 0);
-    for (const s of [-1, 1]) { const w = cyl(g, 0.17, 0.04, std('#2a2420'), 0.15, 0.17, s * 0.28); w.rotation.x = Math.PI / 2; }
-    cyl(g, 0.04, 0.5, std('#555', { metalness: 0.6 }), 0.3, 0.6, 0); // cheminée
-    box(g, 0.5, 0.18, 0.3, glowMat('imoStove', '#ff7a2a', null, 0.6, 2.2, 0), -0.15, 0.57, 0);
-    const lan = new THREE.Group(); lantern(lan, 0, 0, 0, T.vendor[4] ? '#d8342c' : '#f2c14e', T.vendor[4], 1.1); lan.position.set(-0.4, 1.05, 0); g.add(lan);
-    cyl(g, 0.012, 0.5, std('#333'), -0.4, 0.6, 0);
-    for (const s of [-1, 1]) box(g, 0.5, 0.03, 0.03, wood, -0.65, 0.45, s * 0.2);
-    const man = makePerson(seeded(Math.floor(Math.random() * 1e6)), '#5a6a8a');
-    man.root.position.set(-1.05, 0, 0); man.root.rotation.y = Math.PI / 2; g.add(man.root);
+    const v = vendorModel(), g = v.g;
     g.traverse(o => { if (o.isMesh) { o.castShadow = true; o.userData.vendor = true; } });
     const dir = Math.random() < 0.5 ? 1 : -1;
     g.rotation.y = dir > 0 ? 0 : Math.PI;
     if (LAYOUT) g.position.set(-16 * dir, LAYOUT.vendor.y, LAYOUT.vendor.z); else g.position.set(-14 * dir, Y, dir > 0 ? -1.0 : 1.0);
     root.add(g); pickables.push(g);
-    vendor = { g, man, dir, ph: 0, bell: 2 };
+    vendor = { ...v, dir, ph: 0, bell: 2, y0: g.position.y };
     return vendor;
+  }
+  // ---------- Événement propre au quartier ----------
+  // matsuri (Japon), méga-yacht (moderne), régate (côtier), météores (néo-cité), mariage (village blanc).
+  // La grande marée de la vieille ville est jouée par le relief (terrain.setSurge).
+  let special = null;
+  const groundH = (x, z) => (LAYOUT ? LAYOUT.height(x, z) : 0) + Y;
+  // un cortège qui suit une ligne de points ; chacun garde sa place (retard, décalage sur le côté)
+  function cortege(pts, members, speed, pingpong) {
+    const lens = pts.slice(1).map((p, i) => Math.hypot(p[0] - pts[i][0], p[1] - pts[i][1]));
+    return { pts, lens, total: lens.reduce((x, y) => x + y, 0), members, speed, pingpong, s: 0, dir: 1 };
+  }
+  function along(c, s) {
+    s = Math.min(c.total, Math.max(0, s));
+    let i = 0;
+    while (i < c.lens.length - 1 && s > c.lens[i]) s -= c.lens[i++];
+    const a = c.pts[i], b = c.pts[i + 1], k = c.lens[i] ? s / c.lens[i] : 0;
+    return { x: a[0] + (b[0] - a[0]) * k, z: a[1] + (b[1] - a[1]) * k, dir: Math.atan2(b[0] - a[0], b[1] - a[1]) };
+  }
+  function stepCortege(c, dt) {
+    c.s += c.dir * c.speed * dt;
+    if (c.pingpong && (c.s > c.total || c.s < 0)) c.dir *= -1;
+    const moving = c.s > 0 && c.s < c.total + 2;
+    for (const m of c.members) {
+      const p = along(c, c.s - c.dir * m.gap), facing = p.dir + (c.dir < 0 ? Math.PI : 0);
+      const x = p.x + Math.cos(p.dir) * m.side, z = p.z - Math.sin(p.dir) * m.side;
+      m.obj.position.set(x, groundH(x, z) + (m.lift || 0) + (m.bob ? Math.abs(Math.sin(performance.now() / 260)) * 0.06 : 0), z);
+      m.obj.rotation.y = facing;
+      if (m.p) { m.ph = (m.ph || 0) + dt * (moving ? 7 : 0); m.p.legL.rotation.x = Math.sin(m.ph) * 0.5; m.p.legR.rotation.x = -Math.sin(m.ph) * 0.5; if (m.carry) m.p.armL.rotation.x = m.p.armR.rotation.x = -2.6; }
+    }
+  }
+  const figure = (uniform, opts = {}) => { const p = makePerson(seeded(Math.floor(Math.random() * 1e6)), uniform); root.add(p.root); return { obj: p.root, p, ...opts }; };
+  function startSpecial() {
+    stopSpecial();
+    const D = DISTRICT, sp = { objs: [], t: 0 };
+    const add = o => { root.add(o); sp.objs.push(o); return o; };
+    if (D === 'japon') { // mikoshi porté dans la grand-rue, aller et retour
+      const shrine = new THREE.Group(), gold = std('#d8b24a', { metalness: 0.8, roughness: 0.3 }), lac = std('#2a1a14', { roughness: 0.4 });
+      box(shrine, 0.5, 0.35, 0.5, lac, 0, 0, 0); box(shrine, 0.56, 0.06, 0.56, gold, 0, 0.35, 0);
+      const roof = new THREE.Mesh(new THREE.ConeGeometry(0.5, 0.3, 4), lac); roof.rotation.y = Math.PI / 4; roof.position.y = 0.56; shrine.add(roof);
+      ball(shrine, 0.07, gold, 0, 0.75, 0);
+      for (const s of [-1, 1]) box(shrine, 0.05, 0.05, 1.8, std('#c8a26a'), s * 0.22, -0.05, 0);
+      add(shrine);
+      const members = [{ obj: shrine, gap: 0.6, side: 0, lift: 0.62, bob: true }];
+      for (let i = 0; i < 6; i++) { const f = figure('#2a4a8a', { gap: 0.2 + (i % 3) * 0.4, side: i < 3 ? -0.3 : 0.3, carry: true }); members.push(f); sp.objs.push(f.obj); }
+      for (let i = 0; i < 6; i++) { const f = figure(null, { gap: 2 + Math.floor(i / 2) * 0.5, side: (i % 2 ? 0.3 : -0.3) }); members.push(f); sp.objs.push(f.obj); }
+      sp.cortege = cortege([[-14.5, 0.1], [14.5, 0.1]], members, 0.45, true);
+    } else if (D === 'med') { // mariage : le cortège monte du port jusqu'à la chapelle
+      const members = [figure('#f8f6f0', { gap: 0, side: -0.2 }), figure('#26282c', { gap: 0, side: 0.2 })];
+      for (let i = 0; i < 8; i++) members.push(figure(null, { gap: 0.8 + Math.floor(i / 2) * 0.55, side: i % 2 ? 0.25 : -0.25 }));
+      members.forEach(m => sp.objs.push(m.obj));
+      sp.cortege = cortege([...LAYOUT.donkeys, [-13.5, -12.7], [-13.5, -14.7]], members, 0.42, false);
+      sp.petals = true;
+    } else if (D === 'moderne') { // un méga-yacht vient mouiller devant la marina
+      const y = add(new THREE.Group()), white = std('#f4f2ee', { roughness: 0.3 }), glass = std('#1a2230', { roughness: 0.05, metalness: 0.5 });
+      boatModel(y, '#f4f2ee', false, 4.5);
+      box(y, 3, 0.6, 1.8, white, -0.4, 1.1, 0); box(y, 3.02, 0.22, 1.82, glass, -0.4, 1.3, 0);
+      box(y, 1.8, 0.5, 1.4, white, -0.7, 1.7, 0); box(y, 1.82, 0.18, 1.42, glass, -0.7, 1.86, 0);
+      cyl(y, 0.04, 0.9, std('#c8ccd0', { metalness: 0.8 }), -0.9, 2.2, 0);
+      y.traverse(o => { if (o.isMesh) o.castShadow = true; });
+      y.rotation.y = Math.PI / 2; y.position.set(3, -0.4, 45);
+      sp.yacht = y;
+    } else if (D === 'cotier') { // régate : six voiliers font la course devant la plage
+      sp.boats = Array.from({ length: 6 }, (_, i) => {
+        const b = add(new THREE.Group()); boatModel(b, ['#c8402e', '#2f6fa8', '#f2c14e', '#3a8a6a', '#f4f1ea', '#1f3a5a'][i], true, 1.7);
+        b.position.set(-34 - i * 3, -0.42, 14 + (i % 3) * 2.6); b.traverse(o => { if (o.isMesh) o.castShadow = true; });
+        return { b, v: rnd(2.4, 3.4) };
+      });
+    } else if (D === 'futur') sp.meteors = []; // pluie de météores
+    special = sp;
+  }
+  function stopSpecial() { if (!special) return; special.objs.forEach(o => root.remove(o)); special = null; }
+  function stepSpecial(dt) {
+    const sp = special;
+    if (!sp) return;
+    sp.t += dt;
+    if (sp.cortege) stepCortege(sp.cortege, dt);
+    if (sp.petals && Math.random() < dt * 6) { const c = sp.cortege.members[0].obj.position; fx.emit(c.x + rnd(-0.6, 0.6), c.y + 1.4, c.z + rnd(-0.6, 0.6), { life: 1.8, vy: -0.3, vx: rnd(-0.2, 0.2), color: ['#ff9ab8', '#ffffff', '#ffd36a'][Math.floor(Math.random() * 3)], size: 0.1 }); }
+    if (sp.yacht) {
+      const k = Math.min(1, sp.t / 25), e = k * k * (3 - 2 * k);
+      sp.yacht.position.z = 45 - (45 - 22) * e; sp.yacht.position.y = -0.4 + Math.sin(sp.t * 0.8) * 0.04;
+      if (k >= 1 && Math.random() < dt * 3) fx.emit(rnd(-5, 7), 0.75, rnd(9.6, 10.6), { life: 0.15, color: '#ffffff', size: 0.6 }); // flashs des photographes sur le quai
+    }
+    if (sp.boats) for (const o of sp.boats) { o.b.position.x += o.v * dt; o.b.rotation.z = Math.sin(sp.t + o.v) * 0.06; if (o.b.position.x > 36) o.b.position.x = -36; }
+    if (sp.meteors) {
+      if (Math.random() < dt * 3) sp.meteors.push({ x: rnd(-60, 60), y: rnd(45, 65), z: rnd(-90, -20), vx: rnd(-14, 14), vy: -rnd(10, 16), vz: rnd(3, 8), life: 2.5 });
+      for (const m of sp.meteors) {
+        m.life -= dt; m.x += m.vx * dt; m.y += m.vy * dt; m.z += m.vz * dt;
+        fx.emit(m.x, m.y, m.z, { life: 0.7, color: Math.random() < 0.5 ? '#bff8ff' : '#ffd9a0', size: 0.9 });
+      }
+      sp.meteors = sp.meteors.filter(m => m.life > 0);
+    }
   }
   function removeVendor() { if (!vendor) return; root.remove(vendor.g); pickables.splice(pickables.indexOf(vendor.g), 1); vendor = null; }
 
@@ -335,7 +468,7 @@ export function createLife({ scene, people, low, camera, target, onSound }) {
     pickables, cats,
     setScale(v) { fx.m.uniforms.uScale.value = v; },
     get golden() { return golden; }, get vendor() { return vendor; },
-    spawnGolden, removeGolden, spawnVendor, removeVendor,
+    spawnGolden, removeGolden, spawnVendor, removeVendor, startSpecial, stopSpecial,
     rainbow() { rainbowT = 90; },
     hearts(p) { for (let i = 0; i < 6; i++) fx.emit(p.x + rnd(-0.1, 0.1), p.y + 0.35, p.z + rnd(-0.1, 0.1), { life: 1.4, vy: rnd(0.4, 0.7), vx: rnd(-0.15, 0.15), color: '#ff6a9a', size: 0.14 }); },
     sparkle(p, color = '#ffd36a', n = 30) { for (let i = 0; i < n; i++) { const a = rnd(0, 6.28); fx.emit(p.x, p.y + 0.3, p.z, { life: rnd(0.6, 1.2), vx: Math.cos(a) * rnd(0.5, 1.5), vy: rnd(0.5, 2), vz: Math.sin(a) * rnd(0.5, 1.5), g: 2, color, size: 0.12 }); } },
@@ -381,12 +514,14 @@ export function createLife({ scene, people, low, camera, target, onSound }) {
         vendor.g.position.x += vendor.dir * dt * 0.38;
         vendor.ph += dt * 5;
         const m = vendor.man;
-        m.legL.rotation.x = Math.sin(vendor.ph) * 0.5; m.legR.rotation.x = -Math.sin(vendor.ph) * 0.5;
-        m.armL.rotation.x = m.armR.rotation.x = -1.2;
-        if (Math.random() < dt * 4) { const v = new THREE.Vector3(0.3, 1.15, 0).applyMatrix4(vendor.g.matrixWorld); fx.emit(v.x, v.y, v.z, { life: 1.5, vy: 0.35, color: '#bbbbbb', size: 0.18 }); }
+        if (m && !vendor.seated) { m.legL.rotation.x = Math.sin(vendor.ph) * 0.5; m.legR.rotation.x = -Math.sin(vendor.ph) * 0.5; m.armL.rotation.x = m.armR.rotation.x = -1.2; }
+        if (vendor.donkey) animateCat(vendor.donkey, dt, 'walk');
+        if (vendor.float) vendor.g.position.y = vendor.y0 + 0.2 + Math.sin(vendor.ph * 0.5) * 0.08;
+        if (vendor.smoke && Math.random() < dt * 4) { const v = new THREE.Vector3(0.3, 1.15, 0).applyMatrix4(vendor.g.matrixWorld); fx.emit(v.x, v.y, v.z, { life: 1.5, vy: 0.35, color: '#bbbbbb', size: 0.18 }); }
         if ((vendor.bell -= dt) < 0) { vendor.bell = 7; onSound?.('vendor'); }
         if (Math.abs(vendor.g.position.x) > (LAYOUT ? 16.5 : 14.5)) removeVendor();
       }
+      stepSpecial(dt);
       fx.update(dt);
     },
   };

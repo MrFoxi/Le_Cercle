@@ -294,15 +294,17 @@ function landEurope(scene, low) {
   const glows = [];
   for (const gl of glowsDef) { const h = sub(scene, 0, gl.yb ?? GY, 0); if (gl.pool !== false) glows.push(lightPool(h, gl.x, gl.z, gl.r || 1, gl.color, 0.7)); glows.push(streak(h, gl.x, gl.z + 0.2, 0.4, gl.color, 1)); }
 
-  let t = 0;
+  let t = 0, surge = 0, surgeOn = false;
   return {
     glows, groundMats, meshes, water,
+    setSurge(on) { surgeOn = on; },
     update(dt) {
       t += dt;
       nTex.offset.set(t * 0.008, t * 0.012);
       // marée : la mer monte jusqu'à couvrir les grèves, puis redescend (un cycle toutes les 8 minutes)
       const tide = (Math.sin((t / 480) * Math.PI * 2) + 1) / 2;
-      water.position.y = lerp(E.sand - 0.25, E.sand + 0.2, tide);
+      surge += ((surgeOn ? 1 : 0) - surge) * Math.min(1, dt * 0.12);
+      water.position.y = lerp(lerp(E.sand - 0.25, E.sand + 0.2, tide), 0.27, surge); // grande marée : l'eau recouvre la chaussée, jusqu'au pied des remparts
       boats.forEach((b, i) => { const floating = water.position.y > E.sand + 0.05; b.position.y = floating ? water.position.y + Math.sin(t + i) * 0.03 : E.sand; b.rotation.z = floating ? Math.sin(t * 0.7 + i) * 0.04 : 0.15; });
     },
   };

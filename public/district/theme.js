@@ -14,6 +14,7 @@ const GENERIC_LEVELS = { 2: 'Éclairage en façade et une place de plus', 3: 'Pl
 // b : [nom, description, icône] pour chaque emplacement · d : [nom, icône] pour chaque décoration
 export const THEMES = {
   japon: {
+    special: ['⛩️', 'Matsuri', '⛩️ Matsuri ! Un mikoshi est porté en procession dans la grand-rue (revenus ×1,3)', 'soir'],
     name: 'Quartier japonais', jp: '小さな街', title: 'Little District', pitch: 'Un quartier japonais miniature qui vit tout seul. Construis, décore, et regarde-le grandir, à ton rythme.',
     sectors: ['La ruelle', 'Rue des lanternes', 'Le haut quartier', 'Les jardins'],
     hill: 'Le sanctuaire', hillView: 'Vue du sanctuaire', south: 'Le canal', festival: '🏮 Festival ce soir ! Lanternes, feux d’artifice et clients en plus (revenus ×1,5)', festivalName: 'Festival',
@@ -22,10 +23,11 @@ export const THEMES = {
     b: {}, d: {},
   },
   moderne: {
+    special: ['🛥️', 'Méga-yacht', '🛥️ Un méga-yacht vient mouiller devant la marina, les photographes sont sur le quai (revenus ×1,3)', 'jour'],
     name: 'Quartier moderne', jp: 'VILLAS', title: 'Les Villas', pitch: 'Une colline au-dessus de la marina, des villas d’architecte en terrasses et une route en lacets. Le quartier chic, version miniature.',
     sectors: ['La marina', 'Les premières villas', 'Les hauteurs', 'Le sommet'],
     hill: 'Le sommet', hillView: 'Le belvédère', south: 'La marina', festival: '🎉 Pool party ce soir ! Musique, feux d’artifice et invités en plus (revenus ×1,5)', festivalName: 'Pool party',
-    vendor: ['🍦', 'Glacier', 'Le glacier ambulant passe dans l’allée. Touche son triporteur !', 'Glaces offertes à tout le quartier', ''],
+    vendor: ['🍦', 'Glacier', 'La voiturette du glacier longe le quai. Touche-la !', 'Glaces offertes à tout le quartier', ''],
     font: '"Inter", system-ui, sans-serif', levels: GENERIC_LEVELS, weather: { neige: 0.2, brouillard: 0.5 },
     b: {
       ramen: ['Café de la marina', 'Le premier commerce du quai : brunchs et smoothies face aux yachts.', '🥂'], street: ['Food-truck', 'Un camion à tacos garé sous les palmiers.', '🌮'],
@@ -40,10 +42,11 @@ export const THEMES = {
     d: { plante: ['Pot design', '🪴'], caisses: ['Transat', '🏖️'], banc: ['Banc design', '🪑'], velo: ['Trottinette', '🛴'], lampe: ['Lampadaire moderne', '💡'], bambou: ['Haie taillée', '🌳'], toro: ['Borne lumineuse', '🔦'], panneau: ['Panneau', '🪧'], bonsai: ['Sculpture', '🗿'], vending: ['Distributeur', '🥤'], cerisier: ['Palmier', '🌴'], erable: ['Olivier', '🫒'], torii: ['Arche design', '⛩️'], puits: ['Jacuzzi', '🛁'], neko: ['Statue chromée', '🪩'], sakura: ['Grand palmier', '🌴'], jizo: ['Sculpture abstraite', '🗿'], kiosque: ['Pergola', '🛖'], fontaine: ['Fontaine', '⛲'] },
   },
   cotier: {
+    special: ['⛵', 'Régate', '⛵ Régate au large ! Les voiliers font la course devant la plage (revenus ×1,3)', 'jour'],
     name: 'Village côtier', jp: 'LA CÔTE', title: 'Le Village côtier', pitch: 'Une rangée de maisons colorées face à la mer, la plage, la promenade, le port et le phare. Ça sent les vacances.',
     sectors: ['Le cœur du front de mer', 'Toute la promenade', 'Le haut du village', 'Les hauteurs'],
     hill: 'Le phare', hillView: 'Vue du phare', south: 'La plage', festival: '⚓ Fête du port ce soir ! Musique, feux d’artifice et visiteurs en plus (revenus ×1,5)', festivalName: 'Fête du port',
-    vendor: ['🍦', 'Glacier', 'Le marchand de glaces longe le front de mer. Touche sa charrette !', 'Cornets de glace pour toute la plage', ''],
+    vendor: ['🍦', 'Glacier', 'Le glacier longe le front de mer en triporteur. Touche-le !', 'Cornets de glace pour toute la plage', ''],
     font: 'Georgia, "Times New Roman", serif', levels: GENERIC_LEVELS, sea: true, weather: { neige: 0.2, brouillard: 1.6, nuages: 1.3 },
     b: {
       ramen: ['Crêperie du port', 'Galettes et crêpes au caramel, face aux bateaux.', '🥞'], street: ['Kiosque à glaces', 'Trois boules, un cornet, du soleil.', '🍦'],
@@ -58,6 +61,7 @@ export const THEMES = {
     d: { plante: ['Hortensias', '🪴'], caisses: ['Casiers à homards', '🦞'], banc: ['Banc', '🪑'], velo: ['Vélo', '🚲'], lampe: ['Réverbère', '💡'], bambou: ['Oyats', '🌾'], toro: ['Bouée', '🛟'], panneau: ['Panneau', '🪧'], bonsai: ['Filets de pêche', '🥅'], vending: ['Distributeur', '🥤'], cerisier: ['Pin parasol', '🌲'], erable: ['Tamaris', '🌳'], torii: ['Ancre géante', '⚓'], puits: ['Barque', '🛶'], neko: ['Phare miniature', '🗼'], sakura: ['Grand pin', '🌲'], jizo: ['Statue de marin', '🗿'], kiosque: ['Cabine de plage', '🏖️'], fontaine: ['Fontaine', '⛲'] },
   },
   europe: {
+    special: ['🌊', 'Grande marée', '🌊 Grande marée ! La mer monte jusqu’au pied des remparts et recouvre la chaussée (revenus ×1,3)', 'toujours'],
     name: 'Vieille ville européenne', jp: 'INTRA-MUROS', title: 'La Vieille Ville', pitch: 'Une île fortifiée au milieu des grèves : remparts, rues pavées qui montent en spirale jusqu’à l’abbaye, et la marée qui va et vient.',
     sectors: ['Près de la porte', 'Le tour des remparts', 'La rue haute', 'Sous l’abbaye'],
     hill: 'L’abbaye', hillView: 'Vue de l’abbaye', south: 'La chaussée', festival: '🛡️ Fête médiévale ce soir ! Bannières, feux d’artifice et visiteurs en plus (revenus ×1,5)', festivalName: 'Fête médiévale',
@@ -76,6 +80,7 @@ export const THEMES = {
     d: { plante: ['Jardinière', '🪴'], caisses: ['Tonneaux', '🛢️'], banc: ['Banc de pierre', '🪑'], velo: ['Charrette', '🛒'], lampe: ['Lanterne en fer', '🏮'], bambou: ['Buisson', '🌳'], toro: ['Borne de pierre', '🪨'], panneau: ['Enseigne', '🪧'], bonsai: ['Pot de lavande', '🪻'], vending: ['Fontaine à eau', '🚰'], cerisier: ['Tilleul', '🌳'], erable: ['Platane', '🍁'], torii: ['Calvaire', '✝️'], puits: ['Puits', '🪣'], neko: ['Gargouille', '🗿'], sakura: ['Grand chêne', '🌳'], jizo: ['Statue de chevalier', '🛡️'], kiosque: ['Kiosque à musique', '🎺'], fontaine: ['Fontaine', '⛲'] },
   },
   futur: {
+    special: ['☄️', 'Pluie de météores', '☄️ Pluie de météores au-dessus de la cité (revenus ×1,3)', 'nuit'],
     name: 'Quartier futuriste', jp: 'NÉO-CITÉ', title: 'Néo-Cité', pitch: 'Des plateformes qui flottent au-dessus du vide, des tours géantes, des voitures volantes et des habitants qui lévitent. Bienvenue en 2150.',
     sectors: ['La place centrale', 'L’arrivée', 'Les tours est et ouest', 'Les tours du nord'],
     hill: 'Les tours', hillView: 'Le belvédère', south: 'L’abîme', festival: '✨ Festival de lumière ce soir ! Hologrammes, feux d’artifice et visiteurs en plus (revenus ×1,5)', festivalName: 'Festival de lumière',
@@ -94,10 +99,11 @@ export const THEMES = {
     d: { plante: ['Plante lumineuse', '🪴'], caisses: ['Conteneurs', '📦'], banc: ['Banc flottant', '🪑'], velo: ['Hoverboard', '🛹'], lampe: ['Lampadaire flottant', '💡'], bambou: ['Tiges lumineuses', '🎋'], toro: ['Borne holographique', '🔷'], panneau: ['Panneau holographique', '🪧'], bonsai: ['Drone de jardin', '🛸'], vending: ['Distributeur', '🥤'], cerisier: ['Arbre néon', '🌳'], erable: ['Arbre de cristal', '💎'], torii: ['Portail lumineux', '🌀'], puits: ['Borne de recharge', '🔋'], neko: ['Chat robot', '🤖'], sakura: ['Grand arbre néon', '🌳'], jizo: ['Hologramme', '👤'], kiosque: ['Station de téléportation', '🛸'], fontaine: ['Fontaine de lumière', '⛲'] },
   },
   med: {
+    special: ['💒', 'Mariage', '💒 Un mariage ! Le cortège monte les escaliers jusqu’à la chapelle (revenus ×1,3)', 'jour'],
     name: 'Quartier méditerranéen', jp: 'ΚΥΚΛΑΔΕΣ', title: 'Le Village blanc', pitch: 'Un village blanc accroché à la falaise au-dessus de la mer : escaliers en zigzag, ânes, coupoles bleues, moulins et couchers de soleil.',
     sectors: ['Le port', 'Les premières maisons', 'La mi-pente', 'Le haut de la falaise'],
     hill: 'Les moulins', hillView: 'Le belvédère', south: 'Le port', festival: '💃 Panigyri ce soir ! Musique, danses, feux d’artifice et visiteurs en plus (revenus ×1,5)', festivalName: 'Panigyri',
-    vendor: ['🍦', 'Glacier', 'Le marchand de glaces descend la ruelle. Touche son triporteur !', 'Glaces au yaourt et au miel pour tout le monde', ''],
+    vendor: ['🫏', 'Marchand', 'Un marchand et son âne chargé de glaces passent sur le port. Touche-les !', 'Glaces au yaourt et au miel pour tout le monde', ''],
     font: 'Georgia, "Times New Roman", serif', levels: GENERIC_LEVELS, sea: true, weather: { neige: 0, soleil: 2, pluie: 0.5, brouillard: 0.3 },
     b: {
       ramen: ['Taverne', 'Le premier commerce de la ruelle : grillades, salade grecque et nappes à carreaux.', '🫒'], street: ['Stand de gyros', 'Pita, tzatziki et frites dedans.', '🥙'],
