@@ -4,7 +4,7 @@
 const MAX_PLAYERS = 10;
 // Tour le plus rapide plausible par circuit (s) : sous ce temps, une arrivée est refusée. Vérifié contre tracks.js par les tests.
 const MIN_LAP = { riviera: 28, lago: 32, marina: 34 };
-const SETTINGS = { track: Object.keys(MIN_LAP), laps: [1, 2, 3, 5, 8, 10] };
+const SETTINGS = { track: Object.keys(MIN_LAP), laps: [1, 2, 3, 5, 8, 10], weather: ['dry', 'rain'], time: ['day', 'sunset'] };
 const LIGHTS_MS = 6000; // 5 feux + 1 s avant l'extinction (comme côté navigateur)
 const END_AFTER_FIRST_MS = 45000; // après la première arrivée, les autres ont 45 s pour finir
 const MAX_RACE_MS = 20 * 60 * 1000;
@@ -27,7 +27,7 @@ class Room {
     this.spectators = [];
     this.phase = 'lobby'; // lobby | race | results
     this.round = 0;
-    this.settings = { track: 'riviera', laps: 3 };
+    this.settings = { track: 'riviera', laps: 3, weather: 'dry', time: 'day' };
     this.wins = {};
     this.arrivals = {};
   }

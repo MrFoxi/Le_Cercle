@@ -1,7 +1,7 @@
 // Top Formula : menus, garage, modes de jeu (course rapide, contre-la-montre, multijoueur), boucle de course, HUD, résultats.
 import * as THREE from 'three';
 import { TRACKS, trackById, buildTrack, gridSlot } from './tracks.js';
-import { createCar, stepCar, collideCars, aero, KMH, CAR } from './physics.js';
+import { createCar, stepCar, collideCars, aero, KMH, CAR, env } from './physics.js';
 import { LEVELS, createBrain, drive } from './ai.js';
 import { createView, buildCar } from './render.js';
 import * as SND from './audio.js';
@@ -109,9 +109,24 @@ $('#qGo').onclick = () => {
   Object.assign(quick, { laps: Number($('#qLaps').value), opponents: Number($('#qOpp').value) });
   store.set('formula-quick', JSON.stringify(quick));
   SND.startAudio();
-  startRace({ mode: 'quick', track: sel.quick, ...quick });
+  startRace({ mode: 'quick', track: sel.quick, ...quick, ...cond });
 };
-$('#ttGo').onclick = () => { SND.startAudio(); startRace({ mode: 'tt', track: sel.tt }); };
+$('#ttGo').onclick = () => { SND.startAudio(); startRace({ mode: 'tt', track: sel.tt, ...cond }); };
+
+/* ---------------- Conditions : météo et moment de la journée ---------------- */
+const cond = Object.assign({ weather: 'dry', time: 'day' }, store.json('formula-cond') || {});
+const COND = [['weather', 'dry', '☀️ Sec'], ['weather', 'rain', '🌧️ Pluie'], ['time', 'day', '🕛 Jour'], ['time', 'sunset', '🌇 Coucher de soleil']];
+function renderCond() {
+  for (const box of $$('[data-cond]')) {
+    const isRoom = box.dataset.cond === 'room', src = isRoom ? room?.settings : cond, off = isRoom && room?.host !== room?.me;
+    box.innerHTML = COND.map(([k, v, l]) => `<button data-ck="${k}" data-cv="${v}" class="${src?.[k] === v ? 'on' : ''}" ${off ? 'disabled' : ''}>${l}</button>`).join('');
+  }
+}
+document.addEventListener('click', e => {
+  const b = e.target.closest('[data-ck]'); if (!b || b.disabled) return;
+  if (b.closest('[data-cond]').dataset.cond === 'room') return act('configure', b.dataset.ck, b.dataset.cv);
+  cond[b.dataset.ck] = b.dataset.cv; store.set('formula-cond', JSON.stringify(cond)); renderCond();
+});
 
 /* ---------------- Classement mondial du contre-la-montre ---------------- */
 async function loadBoard() {
@@ -243,9 +258,10 @@ function stopRace() {
   if (view) { view.dispose(); view = null; }
   race = null;
   SND.updateAudio(null, null, 0, { on: false });
+  SND.setRain(false);
 }
 function startDemo() {
-  startRace({ mode: 'demo', track: TRACKS[Math.floor(Math.random() * TRACKS.length)].id });
+  startRace({ mode: 'demo', track: TRACKS[Math.floor(Math.random() * TRACKS.length)].id, weather: Math.random() < 0.25 ? 'rain' : 'dry', time: Math.random() < 0.35 ? 'sunset' : 'day' });
 }
 
 function startRace(cfg) {
@@ -253,7 +269,9 @@ function startRace(cfg) {
   const def = trackById(cfg.track), t = buildTrack(def);
   // Nouveau canvas : un contexte WebGL neuf par course.
   const old = $('#view'), canvas = old.cloneNode(false); old.replaceWith(canvas);
-  view = createView(canvas, t, { quality: settings.quality });
+  env.wet = cfg.weather === 'rain'; // avant tout calcul des robots : ils freinent plus tôt sous la pluie
+  view = createView(canvas, t, { quality: settings.quality, weather: cfg.weather, time: cfg.time });
+  SND.setRain(env.wet && cfg.mode !== 'demo');
   view.resize();
   const cars = [];
   const laps = cfg.mode === 'tt' ? Infinity : cfg.laps ?? def.laps;
@@ -284,7 +302,7 @@ function startRace(cfg) {
     cfg, t, cars, player, laps, clock: 0, goAt: 5 + (cfg.mode === 'multi' ? 1 : 0.4 + Math.random() * 1.2), acc: 0, paused: false,
     overtakes: 0, lastPos: 0, rec: [], recAt: 0, lastSend: 0, done: false, results: null, follow: player, followSwitch: 0, msgUntil: 0, towerAt: 0, lastLap: 0,
   };
-  if (params.has('debug')) window.race = race; // pour les tests
+  if (params.has('debug')) Object.assign(window, { race, view }); // pour les tests
   if (cfg.mode === 'demo') race.clock = race.goAt + 0.01;
   if (cfg.mode === 'multi') race.clock = clockTarget();
   race.lastPos = player ? standings().indexOf(player) + 1 : 0;
@@ -374,8 +392,7 @@ function respawn(car) {
 function onEvent(car, e, time) {
   const near = race.follow && Math.hypot(car.x - race.follow.x, car.y - race.follow.y) < 90;
   if ((e.type === 'wall' || e.type === 'car') && near) {
-    if (e.power > 5) view.fx.sparks(e.x, e.y, e.power);
-    if (e.power > 8) view.fx.smoke(e.x, e.y, 1, 1, '#bbbbbb');
+    view.impact(e.x, e.y, e.power, car.look.color);
     if (car === race.player) { view.shake(Math.min(1.5, e.power * 0.06)); SND.bang(e.power); }
     else if (race.cfg.mode !== 'demo' && e.power > 6) SND.bang(e.power * 0.4);
   }
@@ -618,7 +635,7 @@ socket.on('state', s => {
   if (!s) return;
   serverOffset = s.now - Date.now();
   if (s.phase === 'race' && (race?.cfg.mode !== 'multi' || race.cfg.round !== s.round)) {
-    startRace({ mode: 'multi', track: s.settings.track, laps: s.settings.laps, round: s.round, grid: s.grid, players: s.players, me: s.me, spectator: s.spectator, startAt: s.startAt });
+    startRace({ mode: 'multi', track: s.settings.track, laps: s.settings.laps, weather: s.settings.weather, time: s.settings.time, round: s.round, grid: s.grid, players: s.players, me: s.me, spectator: s.spectator, startAt: s.startAt });
   } else if (s.phase === 'results' && race?.cfg.mode === 'multi' && !race.results) {
     race.results = s.results;
     netResults(s);
@@ -633,6 +650,7 @@ function renderRoom() {
   $('#roomPlayers').innerHTML = room.players.map(p => `<li class="${p.connected ? '' : 'off'}"><i class="dot" style="background:${p.look?.color ?? '#888'}"></i><span>${esc(p.name)}${p.name === room.host ? ' 👑' : ''}${p.wins ? ` · 🏆 ${p.wins}` : ''}</span>${p.name === room.host ? '' : p.ready ? '<b class="ok">PRÊT</b>' : '<em class="hint">en attente</em>'}</li>`).join('');
   $('#roomSpect').textContent = room.spectators.length ? `👁 Spectateurs : ${room.spectators.join(', ')}` : '';
   $('#rLaps').value = room.settings.laps; $('#rLaps').disabled = !host;
+  renderCond();
   $('#readyBtn').hidden = host || !meP; $('#readyBtn').textContent = meP?.ready ? '✓ Prêt (annuler)' : 'Je suis prêt';
   $('#readyBtn').classList.toggle('on', !!meP?.ready);
   $('#startBtn').hidden = !host;
@@ -684,6 +702,7 @@ function interpolateRemotes(now) {
 }
 
 /* ---------------- Démarrage ---------------- */
+renderCond();
 startDemo();
 show('menu');
 if (params.get('salon')) go('online');

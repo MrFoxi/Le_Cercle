@@ -57,6 +57,7 @@
       <label class="field">Tours <select id="qLaps"></select></label>
       <label class="field">Adversaires <output id="qOppOut">7</output><input type="range" id="qOpp" min="0" max="9" value="7"></label>
       <div class="field">Difficulté <div class="chips" id="qLevel"></div></div>
+      <div class="field">Conditions <div class="chips" data-cond="solo"></div><small class="hint">Pluie : moins d’adhérence, freinages plus longs. Marina se court toujours de nuit.</small></div>
     </div>
     <button class="primary big" id="qGo">Lancer la course</button>
   </section>
@@ -70,6 +71,7 @@
       <h3>Classement mondial · <span id="ttTrackName"></span></h3>
       <ol id="ttBoard"><li class="hint">Chargement…</li></ol>
       <p class="hint">Ton record : <b id="ttMine">—</b>. Tours illimités, ton meilleur tour devient ton fantôme.</p>
+      <div class="field">Conditions <div class="chips" data-cond="solo"></div></div>
     </div>
     <button class="primary big" id="ttGo">En piste</button>
   </section>
@@ -133,6 +135,7 @@
         <h3>Course</h3>
         <div class="tracks small" data-tracks="room"></div>
         <label class="field">Tours <select id="rLaps"></select></label>
+        <div class="field">Conditions <div class="chips" data-cond="room"></div></div>
         <p class="hint" id="roomHint"></p>
         <div class="row">
           <button class="ghost" id="readyBtn">Je suis prêt</button>

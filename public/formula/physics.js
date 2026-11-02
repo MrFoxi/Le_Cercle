@@ -5,6 +5,8 @@
 import { locate, KERB } from './tracks.js';
 
 export const KMH = 4.2;
+// Conditions de la course (pluie : moins d'adhérence et de freinage).
+export const env = { wet: false };
 export const CAR = { len: 5, wid: 2, base: 3.2, accel: 19, vmax: 76, brake: 40, grip: 27, reverse: 9 };
 const SURF = { asphalt: [1, 0], kerb: [0.92, 0], paved: [0.82, 0.15], grass: [0.5, 1.1], sand: [0.45, 2.2] }; // [adhérence, frein en plus]
 const R = 1.15, AXLE = 1.45; // deux cercles par voiture pour les contacts
@@ -37,10 +39,11 @@ export function stepCar(car, input, t, dt, time) {
   const thr = Math.max(0, Math.min(1, input.throttle || 0)), brk = Math.max(0, Math.min(1, input.brake || 0));
   if (thr && vf > -1) acc += CAR.accel * perf * thr * Math.max(0, 1 - (vf / vmax) ** 2) * (vf < 0 ? 1.5 : 1);
   if (brk) {
-    if (vf > 0.5) acc -= CAR.brake * brk * (0.55 + 0.45 * gripMul);
+    if (vf > 0.5) acc -= CAR.brake * brk * (0.55 + 0.45 * gripMul) * (env.wet ? 0.85 : 1);
     else acc -= vf > -CAR.reverse ? 7 * brk : 0; // marche arrière
   }
   if (input.handbrake && vf > 0) acc -= 9;
+  acc -= 9.81 * (t.slope?.[car.i] ?? 0) * (fx * t.tx[car.i] + fy * t.ty[car.i]); // ça freine en montée, ça pousse en descente
   acc -= vf * (0.012 + drag) + Math.sign(vf) * 0.25 * (!thr || vf < 0 ? 1 : 0);
   if (Math.abs(vf) > vmax * 1.02 && vf > 0) acc -= (vf - vmax) * 2; // au-delà de la vitesse de pointe (DRS refermé) : on ralentit doucement
   const vf2 = vf + acc * dt;
@@ -59,7 +62,7 @@ export function stepCar(car, input, t, dt, time) {
   // Adhérence : on efface la vitesse latérale, dans la limite du grip (moins de grip en freinant fort, ou frein à main).
   const nfx = Math.cos(car.a), nfy = Math.sin(car.a), lx = nfy, ly = -nfx;
   let along = car.vx * nfx + car.vy * nfy, side = car.vx * lx + car.vy * ly;
-  const grip = CAR.grip * Math.sqrt(perf) * gripMul * (input.handbrake ? 0.5 : 1) * (1 - 0.3 * brk * (along > 15 ? 1 : 0)) * (1 - car.damage * 0.001);
+  const grip = CAR.grip * Math.sqrt(perf) * gripMul * (env.wet ? 0.8 : 1) * (input.handbrake ? 0.5 : 1) * (1 - 0.3 * brk * (along > 15 ? 1 : 0)) * (1 - car.damage * 0.001);
   const corr = Math.max(-grip * dt, Math.min(grip * dt, side));
   side -= corr;
   car.skid = Math.abs(side) + (brk > 0.8 && along > 25 ? 1.5 : 0);

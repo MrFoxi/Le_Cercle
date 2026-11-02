@@ -7,6 +7,7 @@ export const KERB = 1.4; // largeur des vibreurs
 export const TRACKS = [
   {
     id: 'riviera', name: 'Riviera', laps: 3, theme: 'city', width: 12, runoff: 1.2, escape: 2, runoffKind: 'paved', water: 'south', aiPace: 1.14,
+    hills: [[50, -240, 210, 14]], // la montée vers le casino
     desc: 'Circuit urbain en bord de mer : murs tout proches, épingle serrée, aucune erreur permise.',
     corners: [
       [150, 0, 18], [160, -150, 70], [80, -250, 40], [-20, -255, 22], [-40, -200, 14], [-120, -200, 17],
@@ -15,6 +16,7 @@ export const TRACKS = [
   },
   {
     id: 'lago', name: 'Autodromo del Lago', laps: 3, theme: 'park', width: 14, runoff: 9, escape: 14, runoffKind: 'grass', water: 'lake', aiPace: 1.02,
+    hills: [[420, -250, 230, 11], [-380, -360, 170, 7], [950, -250, 420, 70], [-1000, -150, 420, 60], [0, -1050, 520, 80], [300, 650, 380, 45]],
     desc: 'Le temple de la vitesse : longues lignes droites, aspiration, DRS et freinages à la limite.',
     corners: [
       [260, 0, 12], [276, 12, 12], [300, 12, 12], [316, 0, 30], [470, -170, 160], [400, -420, 110], [120, -460, 12],
@@ -23,6 +25,7 @@ export const TRACKS = [
   },
   {
     id: 'marina', name: 'Marina by Night', laps: 3, theme: 'night', width: 13, runoff: 4, escape: 6, runoffKind: 'paved', water: 'south', aiPace: 1.14,
+    hills: [[250, -300, 150, 7]],
     desc: 'Grand prix de nuit sous les projecteurs : virages à angle droit, chicanes et longue ligne droite.',
     corners: [
       [200, 0, 14], [200, -120, 14], [300, -120, 16], [330, -260, 40], [200, -330, 12], [120, -330, 12], [120, -250, 10],
@@ -31,6 +34,13 @@ export const TRACKS = [
   },
 ];
 export const trackById = id => TRACKS.find(t => t.id === id) ?? TRACKS[0];
+
+// Relief : des collines en dôme (rayon fini, donc rien au-delà), hauteur en mètres.
+export function hillsAt(def, x, y) {
+  let h = 0;
+  for (const [cx, cy, r, hh] of def.hills ?? []) { const q = 1 - ((x - cx) ** 2 + (y - cy) ** 2) / (r * r); if (q > 0) h += hh * q * q; }
+  return h;
+}
 
 // Polygone aux coins arrondis -> polyligne fine.
 function filleted(corners) {
@@ -104,11 +114,13 @@ export function buildTrack(def) {
     kerb[i] = Math.abs(curvS[i]) > 0.006 ? 1 : 0;
   }
   // Murs lissés (sans à-coups), puis on garde la limite intérieure des virages serrés.
+  // À l'intérieur d'un virage, le mur ne dépasse jamais le rayon des virages voisins (sinon il fait une boucle dans les chicanes).
   const wl2 = smooth(wl, 8), wr2 = smooth(wr, 8);
+  const inner = sgn => Float32Array.from(curvS, (_, i) => { let r = 1e9; for (let k = -12; k <= 12; k++) { const c = curvS[wrap(i + k)] * sgn; if (c > 1e-4) r = Math.min(r, 1 / c); } return r; });
+  const rl = inner(1), rr = inner(-1);
   for (let i = 0; i < N; i++) {
-    const radius = Math.abs(curvS[i]) > 1e-4 ? 1 / Math.abs(curvS[i]) : 1e9;
-    wl[i] = Math.max(half + KERB + 0.6, curvS[i] > 0 ? Math.min(wl2[i], radius * 0.8) : wl2[i]);
-    wr[i] = Math.max(half + KERB + 0.6, curvS[i] < 0 ? Math.min(wr2[i], radius * 0.8) : wr2[i]);
+    wl[i] = Math.max(half + KERB + 0.6, Math.min(wl2[i], rl[i] * 0.8));
+    wr[i] = Math.max(half + KERB + 0.6, Math.min(wr2[i], rr[i] * 0.8));
   }
   // Les vibreurs débordent un peu avant et après les virages.
   const k2 = kerb.slice(); for (let i = 0; i < N; i++) if (kerb[i]) for (let k = -6; k <= 6; k++) k2[wrap(i + k)] = 1;
@@ -140,7 +152,10 @@ export function buildTrack(def) {
     if (run * ds > 220) drs.push({ detect: wrap(from - Math.round(60 / ds)), from: wrap(from + 10), to: wrap(from + run - Math.round(50 / ds)) });
     run = 0;
   }
-  const t = { def, N, ds, length, x, y, tx, ty, nx, ny, curv: curvS, wl, wr, kerb: k2, line, lineCurv: smooth(lineCurv, 3), drs, half, wrap };
+  // Altitude de la piste (collines lissées le long du tracé) et pente.
+  const h = smooth(smooth(Float32Array.from(x, (v, i) => hillsAt(def, v, y[i])), 20), 20), slope = new Float32Array(N);
+  for (let i = 0; i < N; i++) slope[i] = (h[wrap(i + 1)] - h[wrap(i - 1)]) / (2 * ds);
+  const t = { def, N, ds, length, x, y, tx, ty, nx, ny, curv: curvS, wl, wr, kerb: k2, line, lineCurv: smooth(lineCurv, 3), drs, half, wrap, h, slope };
   cache.set(def.id, t);
   return t;
 }

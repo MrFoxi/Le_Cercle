@@ -1,6 +1,6 @@
 // Pilotes robots : ils suivent la trajectoire idéale, freinent avant les virages, prennent l'aspiration,
 // tentent des dépassements, défendent leur place et font parfois une erreur (plus souvent quand ils sont débutants).
-import { CAR, steerMax } from './physics.js';
+import { CAR, steerMax, env } from './physics.js';
 
 export const LEVELS = [
 // pace : part de l'allure maximale du circuit ; perf : petit avantage mécanique (moteur, adhérence) des meilleurs robots.
@@ -14,11 +14,12 @@ export const LEVELS = [
 // Vitesse de passage à chaque point : limitée par l'adhérence dans les virages, puis par la distance de freinage.
 const profiles = new Map();
 export function speedProfile(t) {
-  if (profiles.has(t.def.id)) return profiles.get(t.def.id);
-  const v = new Float32Array(t.N), G = CAR.grip * 1.0, B = CAR.brake * 0.92;
+  const key = t.def.id + (env.wet ? '|pluie' : '');
+  if (profiles.has(key)) return profiles.get(key);
+  const v = new Float32Array(t.N), G = CAR.grip * (env.wet ? 0.78 : 1), B = CAR.brake * (env.wet ? 0.78 : 0.92);
   for (let i = 0; i < t.N; i++) v[i] = Math.min(CAR.vmax, Math.sqrt(G / Math.max(1e-4, t.lineCurv[i])));
   for (let pass = 0; pass < 2; pass++) for (let i = t.N - 1; i >= 0; i--) v[i] = Math.min(v[i], Math.sqrt(v[(i + 1) % t.N] ** 2 + 2 * B * t.ds));
-  profiles.set(t.def.id, v);
+  profiles.set(key, v);
   return v;
 }
 

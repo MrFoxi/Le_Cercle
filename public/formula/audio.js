@@ -1,6 +1,6 @@
 // Sons de Top Formula, tous synthétisés : moteur à régime variable (passages de rapports), moteurs voisins,
 // crissement des pneus, vibreurs, chocs, bips des feux de départ, ambiance de foule et petite fanfare de victoire.
-let ctx = null, master = null, engine = null, rival = null, skid = null, rumble = null, crowd = null;
+let ctx = null, master = null, engine = null, rival = null, skid = null, rumble = null, crowd = null, rain = null, rainOn = false;
 let volume = (() => { try { return Number(localStorage.getItem('formula-volume') ?? 0.7); } catch { return 0.7; } })();
 
 function noiseBuffer(ac, seconds = 2) {
@@ -37,7 +37,11 @@ export function startAudio() {
   skid = loopNoise(ctx, 1500, 2.5);
   rumble = loopNoise(ctx, 90, 1.2, 'lowpass');
   crowd = loopNoise(ctx, 700, 0.4);
+  rain = loopNoise(ctx, 4500, 0.3, 'highpass');
+  setRain(rainOn);
 }
+// Bruit de pluie continu pendant les courses sous la pluie.
+export function setRain(on) { rainOn = on; if (rain) rain.g.gain.setTargetAtTime(on ? 0.05 : 0, ctx.currentTime, 0.4); }
 export function setVolume(v) {
   volume = v;
   try { localStorage.setItem('formula-volume', v); } catch { /* stockage bloqué */ }
