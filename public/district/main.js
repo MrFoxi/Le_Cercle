@@ -13,9 +13,7 @@ const savedEarned = id => { try { return JSON.parse(localStorage.getItem(saveKey
 const hasSave = id => { try { return !!localStorage.getItem(saveKey(id)); } catch { return false; } };
 let liveEarned = null; // gains en direct du quartier en cours (la sauvegarde n'a lieu que toutes les 10 s)
 const earnedIn = id => (id === DISTRICT && liveEarned ? liveEarned() : savedEarned(id));
-// TEMPORAIRE : tous les quartiers ouverts pour les essais. Pour remettre le déblocage, rétablir la ligne commentée et supprimer celle d'après.
-// const isUnlocked = id => id === 'japon' || hasSave(id) || earnedIn(previousOf(id)) >= UNLOCK_EARNED;
-const isUnlocked = () => true;
+const isUnlocked = id => id === 'japon' || hasSave(id) || earnedIn(previousOf(id)) >= UNLOCK_EARNED;
 if (!isUnlocked(DISTRICT) && !/[?&]debug/.test(location.search)) { location.replace(location.pathname); throw new Error('Quartier encore verrouillé'); } // avant toute sauvegarde
 const { BUILDINGS, DECOR, PLOTS, SECTORS, OBJECTIVES, CATS, LEVEL_TEXT, MAX_LEVEL, money } = S;
 const $ = id => document.getElementById(id);
