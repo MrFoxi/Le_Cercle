@@ -1,10 +1,8 @@
 // Classement en ligne de Trouve le pays : un top 10 par combinaison de réglages (zone|chrono|erreurs).
-const fs = require('fs');
-const path = require('path');
 const express = require('express');
+const store = require('../lib/store');
 const activity = require('../lib/activity');
 
-const FILE = path.join(__dirname, '..', 'data', 'pays-board.json');
 const TOP = 10;
 const TIMES = [0, 60, 180, 300, 600], LIVES = [0, 1, 3, 5, 10];
 
@@ -16,10 +14,10 @@ for (const g of require('../public/pays/countries.json').objects.countries.geome
   COUNT[g.properties.c] = (COUNT[g.properties.c] || 0) + 1;
 }
 
-// shortcut: fichier JSON local, effacé à chaque redéploiement sur Render ; passer à une vraie base si le classement doit durer.
+// Classement durable (base en ligne, ou fichier en local) : il survit aux redéploiements.
 let boards = {};
-try { boards = JSON.parse(fs.readFileSync(FILE, 'utf8')); } catch { /* pas encore de fichier */ }
-const save = () => fs.mkdir(path.dirname(FILE), { recursive: true }, () => fs.writeFile(FILE, JSON.stringify(boards), () => {}));
+const ready = store.load('pays-board', {}).then(v => (boards = v));
+const save = () => store.save('pays-board', boards);
 
 const validKey = key => {
   const [scope, time, lives] = String(key).split('|');
@@ -43,6 +41,8 @@ const rank = (a, b) => b.points - a.points || a.seconds - b.seconds || a.at - b.
 
 const router = express.Router();
 router.use(express.json({ limit: '1kb' }));
+// Les requêtes attendent que le classement soit lu (au démarrage, depuis la base).
+router.use((req, res, next) => ready.then(() => next()));
 
 router.get('/board', (req, res) => {
   const key = String(req.query.key ?? '');

@@ -1,19 +1,17 @@
 // Classement mondial du flipper : un top 10 par table (même principe que le classement de Trouve le pays).
-const fs = require('fs');
-const path = require('path');
 const express = require('express');
+const store = require('../lib/store');
 const activity = require('../lib/activity');
 const TABLE_NAMES = { arcade: 'Arcade', space: 'Espace', casino: 'Casino', jungle: 'Jungle', volcan: 'Volcan' };
 
-const FILE = path.join(__dirname, '..', 'data', 'pinball-board.json');
 const TOP = 10;
 const TABLES = ['arcade', 'space', 'casino', 'jungle', 'volcan'];
 const MAX_PER_SECOND = 400000; // plafond de vraisemblance : bien au-dessus d'une partie réelle, même en multiball
 
-// shortcut: fichier JSON local, effacé à chaque redéploiement sur Render ; passer à une vraie base si le classement doit durer.
+// Classement durable (base en ligne, ou fichier en local) : il survit aux redéploiements.
 let boards = {};
-try { boards = JSON.parse(fs.readFileSync(FILE, 'utf8')); } catch { /* pas encore de fichier */ }
-const save = () => fs.mkdir(path.dirname(FILE), { recursive: true }, () => fs.writeFile(FILE, JSON.stringify(boards), () => {}));
+const ready = store.load('pinball-board', {}).then(v => (boards = v));
+const save = () => store.save('pinball-board', boards);
 
 // shortcut: le score vient du navigateur (jeu solo) ; on refuse seulement l'impossible.
 function check({ table, name, score, seconds }) {
@@ -27,6 +25,8 @@ const rank = (a, b) => b.score - a.score || a.at - b.at;
 
 const router = express.Router();
 router.use(express.json({ limit: '1kb' }));
+// Les requêtes attendent que le classement soit lu (au démarrage, depuis la base).
+router.use((req, res, next) => ready.then(() => next()));
 router.get('/board', (req, res) => {
   const table = String(req.query.table ?? '');
   if (!TABLES.includes(table)) return res.status(400).json({ error: 'Table inconnue' });

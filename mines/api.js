@@ -1,17 +1,15 @@
 // Classement mondial du Démineur Rogue : top 10 du niveau atteint (à égalité : le plus de pièces gagnées),
 // tous les temps, et un classement par partie du jour (même graine pour tout le monde).
-const fs = require('fs');
-const path = require('path');
 const express = require('express');
+const store = require('../lib/store');
 const activity = require('../lib/activity');
 
-const FILE = path.join(__dirname, '..', 'data', 'mines-board.json');
 const TOP = 10;
 
-// shortcut: fichier JSON local, effacé à chaque redéploiement sur Render ; passer à une vraie base si le classement doit durer.
+// Classement durable (base en ligne, ou fichier en local) : il survit aux redéploiements.
 let boards = { all: [], days: {} };
-try { boards = { all: [], days: {}, ...JSON.parse(fs.readFileSync(FILE, 'utf8')) }; } catch { /* pas encore de fichier */ }
-const save = () => fs.mkdir(path.dirname(FILE), { recursive: true }, () => fs.writeFile(FILE, JSON.stringify(boards), () => {}));
+const ready = store.load('mines-board', boards).then(v => (boards = { all: [], days: {}, ...v }));
+const save = () => store.save('mines-board', boards);
 
 // Partie du jour : aujourd'hui ou hier (fuseaux horaires), au format AAAA-MM-JJ.
 const dayOk = d => [0, 1].some(k => new Date(Date.now() - k * 86400000).toISOString().slice(0, 10) === d);
@@ -27,6 +25,8 @@ const rank = (a, b) => b.level - a.level || b.coins - a.coins || a.at - b.at;
 
 const router = express.Router();
 router.use(express.json({ limit: '1kb' }));
+// Les requêtes attendent que le classement soit lu (au démarrage, depuis la base).
+router.use((req, res, next) => ready.then(() => next()));
 router.get('/board', (req, res) => {
   const day = req.query.day;
   if (day !== undefined && !/^\d{4}-\d{2}-\d{2}$/.test(day)) return res.status(400).json({ error: 'Jour invalide' });
