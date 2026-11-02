@@ -58,14 +58,14 @@ function pitched(p, w, d, y, color, gable, pitch = 0.55, oh = 0.25) {
   for (const s of [-1, 1]) { const g = new THREE.Mesh(geo, gable); g.rotation.y = Math.PI / 2; g.position.set(s * (w / 2) - 0.04, y, 0); p.add(g); }
   return rise;
 }
-function dome(p, r, x, y, z, color = ST.dome) {
+export function dome(p, r, x, y, z, color = ST.dome) {
   const m = std(color, { roughness: 0.4 });
   const d = new THREE.Mesh(new THREE.SphereGeometry(r, 20, 10, 0, Math.PI * 2, 0, Math.PI / 2), m); d.position.set(x, y + 0.12, z); p.add(d);
   cyl(p, r * 1.02, 0.14, std('#f8f7f3'), x, y, z);
   cyl(p, 0.02, 0.3, std('#e8e2c8'), x, y + r + 0.1, z); box(p, 0.16, 0.025, 0.025, std('#e8e2c8'), x, y + r + 0.32, z); // petite croix
 }
 function chimney(p, x, y, z, h = 0.6) { box(p, 0.3, h, 0.3, wallMat('ch', DISTRICT === 'europe' ? 'stone' : '#a85a3a'), x, y, z); box(p, 0.36, 0.06, 0.36, std('#3a3a3a'), x, y + h, z); }
-function bougainvillea(p, x, y, z, s = 1) {
+export function bougainvillea(p, x, y, z, s = 1) {
   shape(p, G.ico, std('#3f7a35', { flatShading: true }), x, y, z, 0.5 * s, 0.4 * s, 0.25 * s);
   const r = seeded(Math.round(x * 97 + z * 13));
   for (let i = 0; i < 9; i++) ball(p, 0.06 * s, std('#e0408a'), x + (r() - 0.5) * 0.45 * s, y + (r() - 0.5) * 0.35 * s, z + 0.1 * s);

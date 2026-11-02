@@ -83,6 +83,27 @@ export function createLife({ scene, people, low, camera, target, onSound }) {
     return { g, v: dir * rnd(2.2, 3.8), y, ph: rnd(0, 6) };
   });
 
+  // ---------- Ânes du village blanc : ils montent et descendent les escaliers, du port au sommet ----------
+  const donkeys = (LAYOUT?.donkeys ? [0, 0.55] : []).map(start => {
+    const c = makeCat(['#8a8078', '#d8d0c8'], { dog: true });
+    c.root.scale.setScalar(1.9);
+    const bag = new THREE.Mesh(new THREE.BoxGeometry(0.34, 0.12, 0.16), std('#b8673a')); bag.position.set(0, 0.32, 0); c.body.add(bag); // sacoches
+    root.add(c.root);
+    const P = LAYOUT.donkeys, lens = P.slice(1).map((p, i) => Math.hypot(p[0] - P[i][0], p[1] - P[i][1])), total = lens.reduce((a, b) => a + b, 0);
+    return { c, P, lens, total, s: start * total, dir: 1, pause: 0 };
+  });
+  function stepDonkey(d, dt) {
+    if (d.pause > 0) { d.pause -= dt; animateCat(d.c, dt, 'sit'); return; }
+    d.s += d.dir * dt * 0.32;
+    if (d.s >= d.total || d.s <= 0) { d.s = Math.min(d.total, Math.max(0, d.s)); d.dir *= -1; d.pause = rnd(6, 12); }
+    let s = d.s, i = 0;
+    while (i < d.lens.length - 1 && s > d.lens[i]) s -= d.lens[i++];
+    const a = d.P[i], b = d.P[i + 1], k = d.lens[i] ? s / d.lens[i] : 0, x = a[0] + (b[0] - a[0]) * k, z = a[1] + (b[1] - a[1]) * k;
+    d.c.root.position.set(x, LAYOUT.height(x, z) + Y, z);
+    d.c.root.rotation.y = Math.atan2((b[0] - a[0]) * d.dir, (b[1] - a[1]) * d.dir);
+    animateCat(d.c, dt, 'walk');
+  }
+
   // ---------- Chats du quartier ----------
   const cats = [0, 1, 2, 3].map(k => {
     const c = makeCat(CAT_COLORS[k % CAT_COLORS.length]);
@@ -322,6 +343,7 @@ export function createLife({ scene, people, low, camera, target, onSound }) {
     followables() { return [...cats.filter(c => c.mode === 'walk').map(c => ({ obj: c.root, h: 0.3 })), ...(vendor ? [{ obj: vendor.g, h: 0.8 }] : [])]; },
     update(dt, { night, season, rain, festival, hour }) {
       cats.forEach(c => stepCat(c, dt));
+      donkeys.forEach(d => stepDonkey(d, dt));
       for (const c of laneCars) {
         c.a += c.ln.v * dt;
         const x = Math.cos(c.a) * c.ln.r, z = Math.sin(c.a) * c.ln.r, dx = -Math.sin(c.a) * Math.sign(c.ln.v), dz = Math.cos(c.a) * Math.sign(c.ln.v);

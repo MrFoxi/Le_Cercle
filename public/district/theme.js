@@ -94,9 +94,9 @@ export const THEMES = {
     d: { plante: ['Plante lumineuse', '🪴'], caisses: ['Conteneurs', '📦'], banc: ['Banc flottant', '🪑'], velo: ['Hoverboard', '🛹'], lampe: ['Lampadaire flottant', '💡'], bambou: ['Tiges lumineuses', '🎋'], toro: ['Borne holographique', '🔷'], panneau: ['Panneau holographique', '🪧'], bonsai: ['Drone de jardin', '🛸'], vending: ['Distributeur', '🥤'], cerisier: ['Arbre néon', '🌳'], erable: ['Arbre de cristal', '💎'], torii: ['Portail lumineux', '🌀'], puits: ['Borne de recharge', '🔋'], neko: ['Chat robot', '🤖'], sakura: ['Grand arbre néon', '🌳'], jizo: ['Hologramme', '👤'], kiosque: ['Station de téléportation', '🛸'], fontaine: ['Fontaine de lumière', '⛲'] },
   },
   med: {
-    name: 'Quartier méditerranéen', jp: 'ΚΥΚΛΑΔΕΣ', title: 'Le Village blanc', pitch: 'Des maisons blanches, des volets et des coupoles bleus, des bougainvilliers et la mer qui brille. Comme dans une île grecque.',
-    sectors: ['La ruelle blanche', 'La rue des coupoles', 'Le haut du village', 'La falaise'],
-    hill: 'La chapelle', hillView: 'Vue de la chapelle', south: 'Le port', festival: '💃 Panigyri ce soir ! Musique, danses, feux d’artifice et visiteurs en plus (revenus ×1,5)', festivalName: 'Panigyri',
+    name: 'Quartier méditerranéen', jp: 'ΚΥΚΛΑΔΕΣ', title: 'Le Village blanc', pitch: 'Un village blanc accroché à la falaise au-dessus de la mer : escaliers en zigzag, ânes, coupoles bleues, moulins et couchers de soleil.',
+    sectors: ['Le port', 'Les premières maisons', 'La mi-pente', 'Le haut de la falaise'],
+    hill: 'Les moulins', hillView: 'Le belvédère', south: 'Le port', festival: '💃 Panigyri ce soir ! Musique, danses, feux d’artifice et visiteurs en plus (revenus ×1,5)', festivalName: 'Panigyri',
     vendor: ['🍦', 'Glacier', 'Le marchand de glaces descend la ruelle. Touche son triporteur !', 'Glaces au yaourt et au miel pour tout le monde', ''],
     font: 'Georgia, "Times New Roman", serif', levels: GENERIC_LEVELS, sea: true, weather: { neige: 0, soleil: 2, pluie: 0.5, brouillard: 0.3 },
     b: {

@@ -83,6 +83,12 @@ export function createCinema(world, { fade, label }) {
       trafic: () => { const a0 = rnd(0, 6.28); return { name: 'Le trafic aérien', dur: 16, at: t => { const a = a0 + t * 1.4; return { pos: V(Math.cos(a) * 14.5, 8.8, Math.sin(a) * 14.5), look: V(Math.cos(a + 0.6) * 12, 7, Math.sin(a + 0.6) * 12), blur: 0.9 }; } }; },
       abime: () => ({ name: T.south, dur: 15, at: t => ({ pos: V(lerp(-3, 3, t), 4, 26), look: V(0, -40, lerp(-5, 5, t)), blur: 0.5 }) }),
     });
+    if (DISTRICT === 'med') Object.assign(SHOTS, {
+      port: () => { const d = sign(); return { name: T.south, dur: 16, at: t => ({ pos: V(lerp(-10 * d, 10 * d, t), 2.2, 22), look: V(lerp(-4 * d, 4 * d, t), 3.5, 0), blur: 0.7 }) }; },
+      escaliers: () => ({ name: 'Les escaliers', dur: 18, at: t => ({ pos: V(lerp(-4, 8, t), lerp(5, 17, t), lerp(20, 8, t)), look: V(lerp(-6, 8, t), lerp(2.5, 10, t), lerp(6, -12, t)), blur: 0.8 }) }),
+      moulins: () => { const a0 = rnd(-0.6, 0.6); return { name: T.hill, dur: 15, at: t => { const a = a0 + t * 0.6; return { pos: V(11.5 + Math.sin(a) * 9, LAYOUT.M.rows[4].y + 3.6, -18.5 + Math.cos(a) * 9), look: V(11.5, LAYOUT.M.rows[4].y + 2, -18.5), blur: 0.7 }; } }; },
+      coucher: () => ({ name: 'Le coucher de soleil', dur: 16, at: t => ({ pos: V(lerp(-16, -12, t), LAYOUT.M.rows[4].y + 2.2, -13), look: V(lerp(-4, 4, t), 0, 40), blur: 0.5 }) }),
+    });
     if (DISTRICT === 'cotier') Object.assign(SHOTS, {
       front: () => { const d = sign(); return { name: 'Le front de mer', dur: 18, at: t => { const x = lerp(-17 * d, 17 * d, t); return { pos: V(x, 1.5, 6.2), look: V(x + d * 6, 0.9, 1.2), blur: 1 }; } }; },
       mer: () => ({ name: 'Vu de la mer', dur: 18, at: t => ({ pos: V(lerp(-12, 12, t), 3.2, 19), look: V(lerp(-8, 8, t), 0.8, -1), blur: 0.7 }) }),

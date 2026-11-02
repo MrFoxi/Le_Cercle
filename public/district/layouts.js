@@ -200,7 +200,61 @@ const futur = {
   },
 };
 
+// ---------- Village blanc : « La Falaise » (Santorin) ----------
+// La mer en bas (vers +z), le port, puis des rangées de maisons accrochées à la falaise, chacune plus haute que la
+// précédente. Chaque rangée a son petit chemin côté mer ; des escaliers en zigzag relient les rangées.
+const M = {
+  rows: [ // hauteur, bande [zmin, zmax], chemin (z), maisons (z)
+    { y: 0.2, z: [6, 12], path: 11.3, house: 8.3 }, { y: 2.8, z: [0, 6], path: 5.3, house: 2.3 }, { y: 5.4, z: [-6, 0], path: -0.7, house: -3.7 },
+    { y: 8, z: [-12, -6], path: -6.7, house: -9.7 }, { y: 10.6, z: [-21, -12], path: -12.7, house: -15.7 }, // de vraies marches de falaise
+  ],
+  stairs: [-7, 6, -4, 9], // x de l'escalier qui monte de la rangée k à la rangée k + 1
+  x: 21, sea: -0.42, jettyX: 16,
+};
+function heightMed(x, z) {
+  for (let k = 0; k < M.stairs.length; k++) {
+    const lo = M.rows[k], hi = M.rows[k + 1];
+    if (Math.abs(x - M.stairs[k]) < 0.9 && z <= lo.z[1] - 1.4 && z >= lo.z[0]) return lerp(lo.y, hi.y, (lo.z[1] - 1.4 - z) / (lo.z[1] - 1.4 - lo.z[0]));
+  }
+  if (Math.abs(x) > M.x) return M.sea;
+  if (z > M.rows[0].z[1]) return Math.abs(x - M.jettyX) < 0.75 && z < 18 ? 0.3 : M.sea; // la mer, et la jetée
+  for (const r of M.rows) if (z >= r.z[0]) return r.y;
+  return M.rows.at(-1).y;
+}
+const rowPlots = (k, xs, sector, size) => xs.map(x => ({ x, z: M.rows[k].house, y: M.rows[k].y, ry: 0, w: 4.3, depth: 4.2, sector, size }));
+const ledge = k => { const pts = [-19.5, ...M.stairs.filter((_, j) => j === k || j === k - 1), ...[-16, -12, -8, -4, 0, 4, 8, 12, 16], 19.5].sort((a, b) => a - b); return [...new Set(pts)].map(x => [x, M.rows[k].path]); };
+const stairPath = k => { const x = M.stairs[k], lo = M.rows[k], hi = M.rows[k + 1]; return [[x, lo.path], [x, lo.z[1] - 1.4], [x, lo.z[0]], [x, hi.path]]; };
+const med = {
+  bounds: { x0: -19, x1: 19, z0: -18, z1: 14 },
+  view: { x: 0, z: -2, dist: 52 },
+  height: heightMed, M, BOARD: {},
+  plots: [
+    ...rowPlots(0, [-3.8, 0.6, 5, 9.4], 0, 1), // le port
+    ...rowPlots(1, [-15.8, -11.4, -2.6, 1.8, 10.2], 1, 1.3),
+    ...rowPlots(2, [-15, -10.6, -0.6, 3.8, 12.6], 2, 1.6),
+    ...rowPlots(3, [-14.2, -5.4, 3.4], 3, 2),
+    ...rowPlots(4, [-6.5, -1.5], 3, 3), // au sommet, la plus belle vue
+  ],
+  start: 1, // la taverne du port
+  paths: [ledge(0), ledge(1), ledge(2), ledge(3), ledge(4), stairPath(0), stairPath(1), stairPath(2), stairPath(3),
+    [[M.jettyX, M.rows[0].path], [M.jettyX, 12.6, 0.3], [M.jettyX, 17, 0.3]], // la jetée
+    [[-16, M.rows[4].path], [-17.5, -13.2]], // le belvédère près de la chapelle
+  ],
+  edges: [[-19.5, 11.3], [19.5, 11.3]],
+  views: [[-17.5, -13.2, 0], [0, -12.7, 0], [M.jettyX, 17, 0], [-12, -6.7, 0], [12, -0.7, 0]],
+  pigeons: [[-17, -13], [2, 11.4], [-12, 5.3], [8, -6.7]],
+  vendor: { z: 11.3, y: M.rows[0].y + 0.06 }, // le glacier longe le port
+  lanterns: { x: [-12, 12], z: [-20, -17], y: 11.1 },
+  // les ânes montent et descendent les escaliers, du port jusqu'au sommet
+  donkeys: [[-12, 11.3], ...stairPath(0), [6, 5.3], ...stairPath(1), [-4, -0.7], ...stairPath(2), [9, -6.7], ...stairPath(3), [2, -12.7]],
+  decorOK: (x, z) => {
+    if (Math.abs(x) > M.x - 0.5 || z > M.rows[0].z[1] - 0.2 || z < -20.6) return false;
+    if (M.rows.some(r => Math.abs(z - r.path) < 0.75)) return false; // les chemins
+    return !M.stairs.some((sx, k) => Math.abs(x - sx) < 1.1 && z <= M.rows[k].z[1] && z >= M.rows[k].z[0] - 0.2);
+  },
+};
+
 moderne.lanterns = { x: [-9, 9], z: [BAND[3][0] + 1, BAND[3][1] - 1], y: T[3] + 0.5 };
 
-export const LAYOUTS = { moderne, cotier, europe, futur };
+export const LAYOUTS = { moderne, cotier, europe, futur, med };
 export const LAYOUT = LAYOUTS[DISTRICT] || null;

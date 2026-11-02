@@ -1,9 +1,9 @@
-// Little District : relief des quartiers qui ont leur propre plan (quartier moderne, village côtier, vieille ville, néo-cité).
+// Little District : relief des quartiers qui ont leur propre plan (tous les quartiers sauf le japonais).
 // Même interface que buildTerrain : { glows, groundMats, meshes, update }.
 import * as THREE from 'three';
-import { TEX, std, textured, glowMat, box, cyl, sub, makeDecor, lightPool, streak, bake, seeded, canvasTex } from './models.js';
+import { TEX, std, textured, glowMat, box, cyl, ball, sub, makeDecor, lightPool, streak, bake, seeded, canvasTex } from './models.js';
 import { WATER_N, GRASS } from './terrain.js';
-import { streetLamp, boatModel, lighthouse, WATER, GRANITE as GRANITE_T } from './styles.js';
+import { streetLamp, boatModel, lighthouse, dome, bougainvillea, WATER, GRANITE as GRANITE_T } from './styles.js';
 import { DISTRICT } from './theme.js';
 import { LAYOUT } from './layouts.js';
 
@@ -380,4 +380,81 @@ function landFutur(scene, low) {
   };
 }
 
-export const buildLand = (scene, low) => ({ moderne: landModerne, cotier: landCotier, europe: landEurope, futur: landFutur })[DISTRICT](scene, low);
+// ---------- Village blanc : la falaise en gradins, le port, la chapelle et les moulins ----------
+function landMed(scene, low) {
+  const L = LAYOUT, M = L.M, X = M.x;
+  const root = new THREE.Group(), glowsDef = [], groundMats = [], meshes = [];
+  const rock = std('#8a5a44', { roughness: 1, flatShading: true }), rockDark = std('#6a4434', { roughness: 1 }), top = std('#3d3a36');
+  const whiteT = TEX.slab().clone(); whiteT.needsUpdate = true; whiteT.wrapS = whiteT.wrapT = THREE.RepeatWrapping; whiteT.repeat.set(20, 3);
+  const white = new THREE.MeshStandardMaterial({ map: whiteT, roughness: 0.85 }); white.userData.tint = new THREE.Color('#f2eee6').multiplyScalar(2.5); groundMats.push(white); // dallage passé à la chaux
+  const wall = std('#ece9e2', { roughness: 0.9 }), blue = std('#2b5fa8', { roughness: 0.5 });
+  const block = (z0, z1, y1, front) => {
+    const m = new THREE.Mesh(new THREE.BoxGeometry(X * 2, y1 + 1.4, z1 - z0), [rockDark, rockDark, top, top, front, rockDark]);
+    m.position.set(0, (y1 - 1.4) / 2, (z0 + z1) / 2); m.castShadow = m.receiveShadow = true; scene.add(m); return m;
+  };
+  const flat = (z0, z1, y) => { const o = new THREE.Mesh(new THREE.PlaneGeometry(X * 2, z1 - z0), white); o.rotation.x = -Math.PI / 2; o.position.set(0, y, (z0 + z1) / 2); o.receiveShadow = true; scene.add(o); meshes.push(o); };
+  // la falaise : chaque rangée est une marche de roche volcanique, dallée de blanc
+  M.rows.forEach((r, k) => { block(r.z[0], r.z[1], r.y, k ? rock : wall); flat(r.z[0], r.z[1], r.y + 0.01); });
+  block(-24, M.rows.at(-1).z[0], M.rows.at(-1).y, rock); flat(-24, M.rows.at(-1).z[0], M.rows.at(-1).y + 0.01);
+  // parapets blancs le long des chemins (ouverts aux escaliers et à la jetée)
+  M.rows.forEach((r, k) => {
+    const gaps = [M.stairs[k - 1], k === 0 ? M.jettyX : null].filter(v => v != null);
+    for (let x = -X + 0.4; x < X; x += 0.5) if (!gaps.some(g => Math.abs(x - g) < 1)) box(root, 0.5, 0.35, 0.18, wall, x, r.y, r.z[1] - 0.12);
+  });
+  // escaliers blancs, avec leurs murets bleus
+  M.stairs.forEach((sx, k) => {
+    const lo = M.rows[k], hi = M.rows[k + 1], run = lo.z[1] - 1.4 - lo.z[0], n = 12;
+    for (let i = 0; i < n; i++) box(scene, 1.6, lo.y + ((hi.y - lo.y) * (i + 1)) / n, run / n, wall, sx, 0, lo.z[1] - 1.4 - (i + 0.5) * (run / n));
+    for (const s of [-1, 1]) { const w = box(root, 0.12, 0.4, Math.hypot(run, hi.y - lo.y), blue, 0, 0, 0); w.position.set(sx + s * 0.85, (lo.y + hi.y) / 2 + 0.25, lo.z[1] - 1.4 - run / 2); w.rotation.x = Math.atan2(hi.y - lo.y, run); }
+  });
+  // la mer
+  const nTex = WATER_N().clone(); nTex.needsUpdate = true; nTex.wrapS = nTex.wrapT = THREE.RepeatWrapping; nTex.repeat.set(60, 60);
+  const water = new THREE.Mesh(new THREE.PlaneGeometry(400, 400), new THREE.MeshStandardMaterial({ color: WATER[0], roughness: 0.05, metalness: 0.2, normalMap: nTex, normalScale: new THREE.Vector2(0.35, 0.35), transparent: true, opacity: 0.9, envMapIntensity: 1.8 }));
+  water.rotation.x = -Math.PI / 2; water.position.set(0, M.sea, 80); water.renderOrder = 1; scene.add(water);
+  // la jetée et les barques du port
+  const wood = textured('pierwood', TEX.wood('#8a6a48'));
+  box(root, 1.4, 0.08, 6, wood, M.jettyX, 0.26, 15);
+  for (let z = 12.6; z < 18; z += 1.1) for (const s of [-0.62, 0.62]) cyl(root, 0.06, 1, std('#5a4232'), M.jettyX + s, -0.7, z);
+  const boats = [];
+  for (const [x, z, c, sail, s, ry] of [[12.5, 14.5, '#2b5fa8', false, 1.4, 0.2], [19.5, 15, '#f4f1ea', false, 1.3, -0.1], [-6, 14.5, '#c8402e', false, 1.3, 0.3], [2, 15.5, '#2f8fb0', false, 1.2, -0.2], [-14, 22, '#f4f1ea', true, 2, 0.6], [10, 28, '#f4f1ea', true, 2.2, -0.5]]) {
+    const b = new THREE.Group(); boatModel(b, c, sail, s); b.position.set(x, M.sea, z); b.rotation.y = ry; b.traverse(o => { if (o.isMesh) o.castShadow = true; }); scene.add(b); boats.push(b);
+  }
+  // au sommet : la chapelle à coupole bleue et la rangée de moulins
+  const topY = M.rows.at(-1).y;
+  const ch = sub(root, -13.5, topY, -16.5);
+  box(ch, 3, 2, 2.6, wall, 0, 0, 0); dome(ch, 1.1, 0, 2, 0); box(ch, 1, 2.9, 0.5, wall, 1.4, 0, 1.1);
+  const bell = new THREE.Mesh(new THREE.TorusGeometry(0.22, 0.05, 6, 12, Math.PI), wall); bell.position.set(1.4, 2.65, 1.1); ch.add(bell);
+  ball(ch, 0.09, std('#c9a24a', { metalness: 0.8 }), 1.4, 2.52, 1.1);
+  const door = new THREE.Mesh(new THREE.PlaneGeometry(0.6, 1.1), blue); door.position.set(-0.5, 0.55, 1.31); ch.add(door);
+  glowsDef.push({ x: -14, y: 0.5, z: -15, color: '#ffe2a8', pool: true, yb: topY, r: 1.3 });
+  const sails = [];
+  for (const x of [6, 11.5, 17]) {
+    const mill = sub(root, x, topY, -18.5);
+    cyl(mill, 0.8, 2.6, wall, 0, 0, 0); const cap = new THREE.Mesh(new THREE.ConeGeometry(1, 0.8, 14), std('#9a6a3a')); cap.position.y = 3; mill.add(cap);
+    const s = new THREE.Group(); s.position.set(x, topY + 2.6, -17.65); scene.add(s); sails.push(s);
+    for (let i = 0; i < 6; i++) { const arm = new THREE.Group(); arm.rotation.z = (i * Math.PI) / 3; s.add(arm); box(arm, 0.05, 1.6, 0.03, std('#7a5a3a'), 0, 0, 0); const sail = new THREE.Mesh(new THREE.PlaneGeometry(0.32, 1.25), std('#f4efe4', { side: THREE.DoubleSide })); sail.position.set(0.18, 0.95, 0); arm.add(sail); }
+  }
+  // végétation et détails : bougainvilliers sur les murs, cyprès et oliviers au sommet
+  const deco = (id, x, z, sc = 1, ry = 0) => { const y = L.height(x, z) + GY, d = makeDecor(id); d.position.set(x, y, z); d.scale.setScalar(sc); d.rotation.y = ry; root.add(d); (d.userData.glows || []).forEach(gl => glowsDef.push({ ...gl, x: x + gl.x * sc, z: z + gl.z * sc, yb: y })); return d; };
+  const r = seeded(31);
+  for (let k = 1; k < M.rows.length; k++) for (let i = 0; i < 4; i++) bougainvillea(root, -18 + r() * 36, M.rows[k].y - 0.5, M.rows[k].z[1] + 0.05, 1.2);
+  for (const [x, z, id, sc] of [[-18, -19.5, 'erable', 1.3], [-9.5, -19.8, 'erable', 1.2], [1.5, -19.5, 'cerisier', 1.2], [19.5, -14.5, 'erable', 1.1], [-17.5, -14.6, 'banc', 1], [4, -14, 'toro', 1.1], [-19, 9, 'toro', 1.1], [13, 9.5, 'caisses', 1]]) deco(id, x, z, sc);
+  for (const x of [-16, -8, 0, 8, 16]) for (const k of [0, 2, 4]) deco('lampe', x + 1.8, M.rows[k].path - 0.55, 0.9);
+  scene.add(bake(root));
+  const glows = [];
+  for (const gl of glowsDef) { const h = sub(scene, 0, gl.yb ?? GY, 0); if (gl.pool !== false) glows.push(lightPool(h, gl.x, gl.z, gl.r || 1, gl.color, 0.7)); glows.push(streak(h, gl.x, gl.z + 0.2, 0.4, gl.color, 1)); }
+  for (const x of [-14, -5, 5, 14]) { const h = sub(scene, 0, M.sea + 0.01, 0); const s = streak(h, x, 13.5, 0.6, '#ffcf96', 2.4); s.userData.water = true; glows.push(s); }
+
+  let t = 0;
+  return {
+    glows, groundMats, meshes, water,
+    update(dt) {
+      t += dt;
+      nTex.offset.set(t * 0.01, t * 0.016);
+      sails.forEach((s, i) => (s.rotation.z = t * (0.45 + i * 0.07)));
+      boats.forEach((b, i) => { b.position.y = M.sea + Math.sin(t * 0.9 + i) * 0.04; b.rotation.z = Math.sin(t * 0.7 + i) * 0.04; });
+    },
+  };
+}
+
+export const buildLand = (scene, low) => ({ moderne: landModerne, cotier: landCotier, europe: landEurope, futur: landFutur, med: landMed })[DISTRICT](scene, low);
