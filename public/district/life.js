@@ -206,7 +206,7 @@ export function createLife({ scene, people, low, camera, target, onSound }) {
       const g = new THREE.Group();
       const body = new THREE.Mesh(new THREE.CylinderGeometry(0.11, 0.08, 0.2, 10, 1, true), glowMat('skyLantern', '#ffb35a', null, 1.5, 3.2, 0, { side: THREE.DoubleSide }));
       g.add(body);
-      if (LAYOUT) g.position.set(rnd(-9, 9), LAYOUT.T[3] + 0.5, rnd(LAYOUT.BAND[3][0] + 1, LAYOUT.BAND[3][1] - 1)); // depuis le sommet
+      if (LAYOUT) { const L = LAYOUT.lanterns; g.position.set(rnd(...L.x), L.y, rnd(...L.z)); } // depuis le haut du quartier
       else g.position.set(rnd(-9, 9), HILL.y + 0.5, rnd(16, 20));
       root.add(g);
       skyLanterns.push({ g, vx: rnd(-0.08, 0.08), vz: rnd(-0.2, -0.05), ph: rnd(0, 6) });

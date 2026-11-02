@@ -57,5 +57,43 @@ const moderne = {
   decorOK: (x, z) => Math.abs(x) < 16.2 && z > -21.3 && z < 10.9 && !ROAD.some(r => Math.abs(z - r) < 1.25 && Math.abs(x) < 16.4) && !RAMPS.some(r => Math.abs(x - r.x) < 1 && z <= r.z0 + 0.5 && z >= r.z1 - 0.5),
 };
 
-export const LAYOUTS = { moderne };
+// ---------- Village côtier : « Le Front de mer » ----------
+// Tout en longueur : la mer (vers +z, côté caméra) puis la plage, la promenade en planches, une rangée de maisons collées
+// face à la mer, et le haut du village une marche plus haut. Le port à l'est, la falaise du phare à l'ouest.
+const C = { up: 1.4, cliff: 3, row: -1, upRow: -9.3, prom: 3, upSt: -5.2, beach: [4.5, 9.5], stairs: [-20.3, 20.3], portX: 21.5, cliffX: -21.5, sea: -0.42 };
+function heightCotier(x, z) {
+  for (const sx of C.stairs) if (Math.abs(x - sx) < 0.9 && z <= 1.5 && z >= -4) return lerp(0, C.up, (1.5 - z) / 5.5);
+  if (x < C.cliffX) return C.cliff;
+  if (z > C.beach[1] || (x > C.portX && z > C.beach[0])) return C.sea; // la mer, et le bassin du port
+  if (z > C.beach[0]) return lerp(0, -0.34, (z - C.beach[0]) / (C.beach[1] - C.beach[0]));
+  return z < -4 ? C.up : 0;
+}
+const cotier = {
+  bounds: { x0: -24, x1: 24, z0: -12, z1: 12 },
+  view: { x: 0, z: 0, dist: 52 },
+  height: heightCotier, C, BOARD: { x0: -27, x1: 27, z0: -14, z1: 16 },
+  plots: [
+    // la rangée face à la mer : 9 maisons collées (les 3 du centre d'abord)
+    ...[-17.2, -12.9, -8.6, -4.3, 0, 4.3, 8.6, 12.9, 17.2].map(x => ({ x, z: C.row, y: 0, ry: 0, w: 4.3, depth: 5, sector: Math.abs(x) < 5 ? 0 : 1, size: 1 })),
+    // le haut du village : maisons plus grandes, avec jardin
+    ...[-16.5, -11, -5.5, 0, 5.5, 11, 16.5].map((x, k) => ({ x, z: C.upRow, y: C.up, ry: 0, w: 5.4, depth: 5, sector: k < 4 ? 2 : 3, size: 1.5 })),
+  ],
+  start: 4, // la crêperie, au centre du front de mer
+  paths: [
+    [[-21.2, 3], [-17.2, 3], [-12.9, 3], [-8.6, 3], [-4.3, 3], [0, 3], [4.3, 3], [8.6, 3], [12.9, 3], [17.2, 3], [20.3, 3], [24, 3], [26.2, 3]], // la promenade
+    [[-8.6, 3], [-8.6, 7]], [[4.3, 3], [4.3, 7]], [[12.9, 3], [12.9, 7]], // descentes vers la plage
+    [[24, 3], [24, 4.6, 0.12], [24, 9, 0.12], [24, 14.5, 0.12]], // la jetée du port
+    [[-20.3, 3], [-20.3, 1.5], [-20.3, -4], [-20.3, -5.2]], [[20.3, 3], [20.3, 1.5], [20.3, -4], [20.3, -5.2]], // escaliers
+    [[-21.2, -5.2], [-20.3, -5.2], [-16.5, -5.2], [-11, -5.2], [-5.5, -5.2], [0, -5.2], [5.5, -5.2], [11, -5.2], [16.5, -5.2], [20.3, -5.2]], // rue du haut
+  ],
+  edges: [[26.2, 3], [-21.2, 3], [-21.2, -5.2]],
+  views: [[-8.6, 7, 0], [4.3, 7, 0], [12.9, 7, 0], [24, 14.5, 0], [-19, 3.6, 0], [0, -5.2, 0]],
+  pigeons: [[-3, 6.5], [9, 7.5], [24, 8], [-14, 3.8]],
+  vendor: { z: 3.6, y: 0.06 },
+  lanterns: { x: [-18, 18], z: [-13, -11], y: 2 },
+  decorOK: (x, z) => x > C.cliffX + 0.4 && x < 26.5 && z > -13.8 && z < C.beach[1] - 0.6 && !(x > C.portX && z > C.beach[0] - 0.2) && Math.abs(z - C.prom) > 0.7 && Math.abs(z - C.upSt) > 0.75 && !C.stairs.some(sx => Math.abs(x - sx) < 1.1 && z < 2 && z > -4.5),
+};
+moderne.lanterns = { x: [-9, 9], z: [BAND[3][0] + 1, BAND[3][1] - 1], y: T[3] + 0.5 };
+
+export const LAYOUTS = { moderne, cotier };
 export const LAYOUT = LAYOUTS[DISTRICT] || null;

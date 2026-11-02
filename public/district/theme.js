@@ -40,8 +40,8 @@ export const THEMES = {
     d: { plante: ['Pot design', '🪴'], caisses: ['Transat', '🏖️'], banc: ['Banc design', '🪑'], velo: ['Trottinette', '🛴'], lampe: ['Lampadaire moderne', '💡'], bambou: ['Haie taillée', '🌳'], toro: ['Borne lumineuse', '🔦'], panneau: ['Panneau', '🪧'], bonsai: ['Sculpture', '🗿'], vending: ['Distributeur', '🥤'], cerisier: ['Palmier', '🌴'], erable: ['Olivier', '🫒'], torii: ['Arche design', '⛩️'], puits: ['Jacuzzi', '🛁'], neko: ['Statue chromée', '🪩'], sakura: ['Grand palmier', '🌴'], jizo: ['Sculpture abstraite', '🗿'], kiosque: ['Pergola', '🛖'], fontaine: ['Fontaine', '⛲'] },
   },
   cotier: {
-    name: 'Village côtier', jp: 'LA CÔTE', title: 'Le Village côtier', pitch: 'Des maisons colorées face à la mer, une plage, un ponton et des mouettes. Ça sent les vacances.',
-    sectors: ['Le front de mer', 'La rue du port', 'Le haut du village', 'La pointe'],
+    name: 'Village côtier', jp: 'LA CÔTE', title: 'Le Village côtier', pitch: 'Une rangée de maisons colorées face à la mer, la plage, la promenade, le port et le phare. Ça sent les vacances.',
+    sectors: ['Le cœur du front de mer', 'Toute la promenade', 'Le haut du village', 'Les hauteurs'],
     hill: 'Le phare', hillView: 'Vue du phare', south: 'La plage', festival: '⚓ Fête du port ce soir ! Musique, feux d’artifice et visiteurs en plus (revenus ×1,5)', festivalName: 'Fête du port',
     vendor: ['🍦', 'Glacier', 'Le marchand de glaces longe le front de mer. Touche sa charrette !', 'Cornets de glace pour toute la plage', ''],
     font: 'Georgia, "Times New Roman", serif', levels: GENERIC_LEVELS, sea: true, weather: { neige: 0.2, brouillard: 1.6, nuages: 1.3 },

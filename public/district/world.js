@@ -97,7 +97,7 @@ export function createWorld(canvas, { low }) {
   const sun = new THREE.DirectionalLight('#fff', 2.5);
   sun.castShadow = true;
   sun.shadow.mapSize.set(low ? 1024 : 2048, low ? 1024 : 2048);
-  const SH = LAYOUT ? 24 : 17;
+  const SH = LAYOUT ? 28 : 17;
   Object.assign(sun.shadow.camera, { left: -SH, right: SH, top: SH, bottom: -SH, near: 1, far: 90 });
   sun.shadow.bias = -0.0006; sun.shadow.normalBias = 0.03;
   scene.add(hemi, sun, sun.target);

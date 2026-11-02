@@ -5,6 +5,7 @@ import { PLOTS, BUILDINGS } from './sim.js';
 import { HILL, CANAL } from './terrain.js';
 import { T } from './theme.js';
 import { LAYOUT } from './layouts.js';
+import { DISTRICT } from './theme.js';
 
 const V = (x, y, z) => new THREE.Vector3(x, y, z);
 const lerp = (a, b, t) => a + (b - a) * t;
@@ -55,8 +56,10 @@ export function createCinema(world, { fade, label }) {
     for (const k of ['rue', 'colline', 'sanctuaire', 'canal', 'feux']) delete SHOTS[k];
     const C = LAYOUT.view, M = LAYOUT.MARINA, TT = LAYOUT.T;
     Object.assign(SHOTS, {
-      ensemble: () => { const a0 = rnd(0.3, 2.8), d = sign(); return { name: 'Le quartier', dur: 18, at: t => ({ pos: V(C.x + Math.cos(a0 + d * t * 0.35) * 46, 30, C.z + Math.sin(a0 + d * t * 0.35) * 46), look: V(C.x, 2, C.z), blur: 0.7 }) }; },
+      ensemble: () => { const a0 = rnd(0.3, 2.8), d = sign(); return { name: 'Le quartier', dur: 18, at: t => ({ pos: V(C.x + Math.cos(a0 + d * t * 0.35) * C.dist, 30, C.z + Math.sin(a0 + d * t * 0.35) * C.dist), look: V(C.x, 2, C.z), blur: 0.7 }) }; },
       dessus: () => { const a0 = rnd(0, 6.28); return { name: 'Vu du ciel', dur: 14, at: t => ({ pos: V(Math.sin(a0 + t * 0.3) * 4, 56, C.z + Math.cos(a0 + t * 0.3) * 4), look: V(0, 0, C.z), blur: 0.4 }) }; },
+    });
+    if (DISTRICT === 'moderne') Object.assign(SHOTS, {
       marina: () => { const d = sign(); return { name: T.south, dur: 16, at: t => { const x = lerp(-13 * d, 3 * d, t); return { pos: V(x, 4.6, M.z0 + 4.5), look: V(x + d * 3, 2.4, -4), blur: 0.9 }; } }; },
       lacets: () => ({ name: 'Les lacets', dur: 18, at: t => ({ pos: V(lerp(12, -4, t), lerp(2.2, 15, t), lerp(15, -2, t)), look: V(0, lerp(1.5, TT[3], t), lerp(2, -16, t)), blur: 0.8 }) }),
       belvedere: () => ({ name: T.hillView, dur: 16, at: t => ({ pos: V(lerp(-15, -11, t), TT[3] + 2.6, -14.2), look: V(lerp(-4, 4, t), 0.5, 10), blur: 0.7 }) }),
@@ -66,6 +69,12 @@ export function createCinema(world, { fade, label }) {
         const P = PLOTS[best[1]], s = sign();
         return { name: BUILDINGS[best[0].type].name, dur: 15, at: t => ({ pos: V(P.x + s * lerp(P.w * 0.6, P.w * 0.25, t), P.y + lerp(3.4, 2.4, t), P.z + P.depth / 2 + 2.6), look: V(P.x, P.y + 1, P.z), blur: 1.1 }) };
       },
+    });
+    if (DISTRICT === 'cotier') Object.assign(SHOTS, {
+      front: () => { const d = sign(); return { name: 'Le front de mer', dur: 18, at: t => { const x = lerp(-17 * d, 17 * d, t); return { pos: V(x, 1.5, 6.2), look: V(x + d * 6, 0.9, 1.2), blur: 1 }; } }; },
+      mer: () => ({ name: 'Vu de la mer', dur: 18, at: t => ({ pos: V(lerp(-12, 12, t), 3.2, 19), look: V(lerp(-8, 8, t), 0.8, -1), blur: 0.7 }) }),
+      port: () => ({ name: 'Le port', dur: 15, at: t => ({ pos: V(24, lerp(1.4, 2.4, t), 14.8), look: V(lerp(14, 4, t), 1, 0), blur: 0.9 }) }),
+      phare: () => { const s0 = sign(); return { name: T.hill, dur: 15, at: t => { const a = s0 * lerp(0.4, 1.4, t); return { pos: V(-24.3 + Math.sin(a) * 10, 9.5, 2 + Math.cos(a) * 10), look: V(-24.3, 6.2, 2), blur: 0.7 }; } }; },
     });
   }
 

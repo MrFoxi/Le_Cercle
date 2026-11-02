@@ -323,13 +323,16 @@ function amphora(g) { const pts = [[0.02, 0], [0.09, 0.05], [0.16, 0.2], [0.15, 
 function arch(g, color, glowC) { const m = glowC ? glowMat('archG' + glowC, glowC, null, 0.8, 3, 0) : std(color, { roughness: 0.6 }); for (const s of [-1, 1]) box(g, 0.16, 1.3, 0.16, m, s * 0.7, 0, 0); const t = new THREE.Mesh(new THREE.TorusGeometry(0.7, 0.08, 6, 18, Math.PI), m); t.position.y = 1.3; g.add(t); }
 function pergola(g, vine) { const w = std('#7a5a3a'); for (const [x, z] of [[-0.6, -0.5], [0.6, -0.5], [-0.6, 0.5], [0.6, 0.5]]) box(g, 0.07, 1.2, 0.07, w, x, 0, z); for (let i = 0; i < 6; i++) box(g, 1.4, 0.05, 0.06, w, 0, 1.2, -0.55 + i * 0.22); if (vine) { for (let i = 0; i < 7; i++) shape(g, G.ico, leaf('#4f7a35'), -0.5 + (i % 4) * 0.33, 1.28, -0.4 + Math.floor(i / 4) * 0.6, 0.35, 0.12, 0.35); for (let i = 0; i < 5; i++) ball(g, 0.05, std('#6a2a5a'), -0.4 + i * 0.2, 1.15, 0); } box(g, 0.9, 0.05, 0.4, PALEWOOD(), 0, 0.4, 0); }
 export function boatModel(g, hull = '#f4f1ea', sail = true, s = 1) {
-  const pts = [[-0.7, 0], [-0.55, -0.12], [0.55, -0.12], [0.8, 0.02]].map(([x, y]) => new THREE.Vector2(x * s, y * s));
-  const sh = new THREE.Shape(pts); const geo = new THREE.ExtrudeGeometry(sh, { depth: 0.36 * s, bevelEnabled: false }); geo.translate(0, 0.08 * s, -0.18 * s);
-  g.add(new THREE.Mesh(geo, std(hull, { roughness: 0.5 })));
-  box(g, 1.3 * s, 0.03, 0.3 * s, PALEWOOD(), 0.05, 0.06 * s, 0);
-  if (sail) { cyl(g, 0.015, 1.1 * s, std('#ddd'), 0.1 * s, 0.08, 0); const tri = new THREE.Shape([new THREE.Vector2(0, 0), new THREE.Vector2(0.55 * s, 0), new THREE.Vector2(0, 0.95 * s)]); const sl = new THREE.Mesh(new THREE.ShapeGeometry(tri), std('#f8f6f0', { side: THREE.DoubleSide })); sl.position.set(0.12 * s, 0.2, 0); g.add(sl); }
+  // coque profilée (vue de côté : proue relevée), pont en bois, liseré, et une cabine pour les bateaux à moteur
+  const pts = [[-0.72, 0.16], [-0.6, -0.1], [-0.3, -0.2], [0.5, -0.2], [0.82, 0.22], [0.7, 0.18], [-0.66, 0.12]].map(([x, y]) => new THREE.Vector2(x * s, y * s));
+  const geo = new THREE.ExtrudeGeometry(new THREE.Shape(pts), { depth: 0.52 * s, bevelEnabled: false }); geo.translate(0, 0.06 * s, -0.26 * s);
+  g.add(new THREE.Mesh(geo, std(hull, { roughness: 0.45 })));
+  box(g, 1.3 * s, 0.03, 0.46 * s, PALEWOOD(), 0.04 * s, 0.17 * s, 0);
+  for (const k of [-1, 1]) box(g, 1.3 * s, 0.03 * s, 0.01, std('#f4f1ea'), 0.04 * s, 0.1 * s, k * 0.265 * s);
+  if (sail) { cyl(g, 0.015 * s, 1.1 * s, std('#dddddd'), 0.1 * s, 0.18 * s, 0); const tri = new THREE.Shape([new THREE.Vector2(0, 0), new THREE.Vector2(0.55 * s, 0), new THREE.Vector2(0, 0.95 * s)]); const sl = new THREE.Mesh(new THREE.ShapeGeometry(tri), std('#f8f6f0', { side: THREE.DoubleSide })); sl.position.set(0.12 * s, 0.3 * s, 0); g.add(sl); }
+  else { box(g, 0.42 * s, 0.3 * s, 0.38 * s, std('#f4f1ea'), -0.2 * s, 0.19 * s, 0); box(g, 0.5 * s, 0.04 * s, 0.44 * s, std(hull), -0.2 * s, 0.49 * s, 0); plane(g, 0.3 * s, 0.1 * s, std('#2a3a4a', { roughness: 0.1 }), -0.2 * s, 0.4 * s, 0.195 * s); }
 }
-function lighthouse(g, s = 1, glows) {
+export function lighthouse(g, s = 1, glows) {
   for (let i = 0; i < 6; i++) cyl(g, (0.32 - i * 0.03) * s, 0.5 * s, std(i % 2 ? '#c8323a' : '#f4f1ea', { roughness: 0.6 }), 0, i * 0.5 * s, 0);
   const lamp = glowMat('lhLamp', '#fff1b8', null, 0.6, 4, 0);
   cyl(g, 0.2 * s, 0.32 * s, lamp, 0, 3 * s, 0);
