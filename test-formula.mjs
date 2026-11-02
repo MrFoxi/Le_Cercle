@@ -104,7 +104,7 @@ for (const def of TRACKS) {
 }
 
 // Classement mondial : temps refusés sous le minimum du circuit.
-assert(api.check({ track: 'riviera', name: 'A', ms: 27000 }));
+assert(api.check({ track: 'riviera', name: 'A', ms: 24000 }));
 assert(api.check({ track: 'nulle-part', name: 'A', ms: 50000 }));
 assert.strictEqual(api.check({ track: 'riviera', name: 'A', ms: 45000 }), null);
 

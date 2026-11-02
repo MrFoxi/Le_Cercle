@@ -6,7 +6,7 @@ export const KERB = 1.4; // largeur des vibreurs
 // [x, y, rayon] : y vers le bas de l'écran. Le départ est sur le segment qui va du dernier coin au premier.
 export const TRACKS = [
   {
-    id: 'riviera', name: 'Riviera', laps: 3, theme: 'city', width: 12, runoff: 1.2, escape: 2, runoffKind: 'paved', water: 'south', aiPace: 1.14,
+    id: 'riviera', name: 'Riviera', laps: 3, theme: 'city', width: 12, runoff: 1.2, escape: 2, runoffKind: 'paved', water: 'south', aiPace: 1.1,
     hills: [[50, -240, 210, 14]], // la montée vers le casino
     desc: 'Circuit urbain en bord de mer : murs tout proches, épingle serrée, aucune erreur permise.',
     corners: [
@@ -15,7 +15,7 @@ export const TRACKS = [
     ],
   },
   {
-    id: 'lago', name: 'Autodromo del Lago', laps: 3, theme: 'park', width: 14, runoff: 9, escape: 14, runoffKind: 'grass', water: 'lake', aiPace: 1.02,
+    id: 'lago', name: 'Autodromo del Lago', laps: 3, theme: 'park', width: 14, runoff: 9, escape: 14, runoffKind: 'grass', water: 'lake', aiPace: 1.08,
     hills: [[420, -250, 230, 11], [-380, -360, 170, 7], [950, -250, 420, 70], [-1000, -150, 420, 60], [0, -1050, 520, 80], [300, 650, 380, 45]],
     desc: 'Le temple de la vitesse : longues lignes droites, aspiration, DRS et freinages à la limite.',
     corners: [
@@ -24,7 +24,7 @@ export const TRACKS = [
     ],
   },
   {
-    id: 'marina', name: 'Marina by Night', laps: 3, theme: 'night', width: 13, runoff: 4, escape: 6, runoffKind: 'paved', water: 'south', aiPace: 1.14,
+    id: 'marina', name: 'Marina by Night', laps: 3, theme: 'night', width: 13, runoff: 4, escape: 6, runoffKind: 'paved', water: 'south', aiPace: 1.1,
     hills: [[250, -300, 150, 7]],
     desc: 'Grand prix de nuit sous les projecteurs : virages à angle droit, chicanes et longue ligne droite.',
     corners: [

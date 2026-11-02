@@ -1,6 +1,6 @@
 // Top Formula : menus, garage, modes de jeu (course rapide, contre-la-montre, multijoueur), boucle de course, HUD, résultats.
 import * as THREE from 'three';
-import { TRACKS, trackById, buildTrack, gridSlot } from './tracks.js';
+import { TRACKS, trackById, buildTrack, gridSlot, locate } from './tracks.js';
 import { createCar, stepCar, collideCars, aero, KMH, CAR, env } from './physics.js';
 import { LEVELS, createBrain, drive } from './ai.js';
 import { createView, buildCar } from './render.js';
@@ -300,7 +300,7 @@ function startRace(cfg) {
   }
   race = {
     cfg, t, cars, player, laps, clock: 0, goAt: 5 + (cfg.mode === 'multi' ? 1 : 0.4 + Math.random() * 1.2), acc: 0, paused: false,
-    overtakes: 0, lastPos: 0, rec: [], recAt: 0, lastSend: 0, done: false, results: null, follow: player, followSwitch: 0, msgUntil: 0, towerAt: 0, lastLap: 0,
+    overtakes: 0, lastPos: 0, rec: [], recAt: 0, lastSend: -Infinity, done: false, results: null, follow: player, followSwitch: 0, msgUntil: 0, towerAt: 0, lastLap: 0,
   };
   if (params.has('debug')) Object.assign(window, { race, view }); // pour les tests
   if (cfg.mode === 'demo') race.clock = race.goAt + 0.01;
@@ -698,6 +698,8 @@ function interpolateRemotes(now) {
     let da = b.a - a.a; da = Math.atan2(Math.sin(da), Math.cos(da));
     const nx = a.x + (b.x - a.x) * f, ny = a.y + (b.y - a.y) * f, dt = Math.max(0.01, b.at - a.at);
     Object.assign(c, { vx: (b.x - a.x) / dt, vy: (b.y - a.y) / dt, x: nx, y: ny, a: a.a + da * f, speed: b.v, steer: b.st, s: a.s + (b.s - a.s) * f, lap: b.l, drsOpen: !!b.d, finished: b.f ?? null, best: b.b ?? null, skid: b.k });
+    // où elle est sur la piste : sert à la poser à la bonne hauteur (relief) et à l'incliner dans les pentes
+    const loc = locate(race.t, nx, ny, c.i); c.i = loc.i; c.along = loc.along; c.lat = loc.lat;
   }
 }
 

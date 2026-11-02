@@ -7,7 +7,7 @@ import { locate, KERB } from './tracks.js';
 export const KMH = 4.2;
 // Conditions de la course (pluie : moins d'adhérence et de freinage).
 export const env = { wet: false };
-export const CAR = { len: 5, wid: 2, base: 3.2, accel: 19, vmax: 76, brake: 40, grip: 27, reverse: 9 };
+export const CAR = { len: 5, wid: 2, base: 3.2, accel: 19, vmax: 76, brake: 40, grip: 31, reverse: 9 };
 const SURF = { asphalt: [1, 0], kerb: [0.92, 0], paved: [0.82, 0.15], grass: [0.5, 1.1], sand: [0.45, 2.2] }; // [adhérence, frein en plus]
 const R = 1.15, AXLE = 1.45; // deux cercles par voiture pour les contacts
 
@@ -22,7 +22,8 @@ export function createCar(track, slot, extra = {}) {
 }
 const progress = (t, c) => c.k * t.ds + c.along;
 
-export const steerMax = v => 0.45 / (1 + (Math.abs(v) / 14) ** 1.5);
+// Braquage maximal : à toute vitesse, juste de quoi dépasser un peu l'adhérence (au clavier, un coup de volant à fond glisse à peine).
+export const steerMax = v => Math.min(0.44, Math.atan(1.2 * CAR.grip * CAR.base / Math.max(1, v * v)));
 
 // Un pas de simulation pour une voiture. input : { throttle, brake, steer (gauche +), handbrake, drs }
 export function stepCar(car, input, t, dt, time) {
@@ -65,6 +66,7 @@ export function stepCar(car, input, t, dt, time) {
   const grip = CAR.grip * Math.sqrt(perf) * gripMul * (env.wet ? 0.8 : 1) * (input.handbrake ? 0.5 : 1) * (1 - 0.3 * brk * (along > 15 ? 1 : 0)) * (1 - car.damage * 0.001);
   const corr = Math.max(-grip * dt, Math.min(grip * dt, side));
   side -= corr;
+  if (!input.handbrake) side *= Math.exp(-dt * 2.5); // les pneus remordent vite après une glisse (sauf au frein à main)
   car.skid = Math.abs(side) + (brk > 0.8 && along > 25 ? 1.5 : 0);
   if (Math.abs(side) > 0.3) along -= Math.sign(along) * Math.min(Math.abs(along), Math.abs(side) * 1.3 * dt); // la glisse freine
   car.vx = nfx * along + lx * side;
