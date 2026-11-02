@@ -3,10 +3,10 @@
 // Chaque navigateur déplace son personnage et envoie sa position ; le serveur tient les rôles, les déguisements,
 // les tirs (un objet innocent coûte de la vie au chasseur), les moqueries des objets, les gadgets des chasseurs
 // (radar, grenade à confettis) et fait jouer les robots. Testé par test-prophunt.js.
-const M = require('../public/prophunt/map');
+const PH = require('../public/prophunt/map');
 
 const MAX_PLAYERS = 12;
-const SETTINGS = { rounds: [2, 4, 6], hide: [20, 30, 45], hunt: [120, 150, 180, 240] };
+const SETTINGS = { rounds: [2, 4, 6], hide: [20, 30, 45], hunt: [120, 150, 180, 240], map: ['hasard', ...PH.MAPS] };
 const HIDE_MS = 30000, HUNT_MS = 150000, ROUND_END_MS = 7000, TICK_MS = 100;
 const TAG_RANGE = 4, MISS_DAMAGE = 12, FOUND_HEAL = 20, TAUNT_CD = 8000, FORCED_WHISTLE = 35000, FORM_CD = 10000;
 // Moqueries : plus c'est voyant, plus ça rapporte.
@@ -27,7 +27,8 @@ class Room {
     this.phase = 'lobby'; // lobby | hide | hunt | roundEnd | over
     this.round = 0;
     this.roundNo = 0;
-    this.settings = { rounds: 4, hide: 30, hunt: 150 };
+    this.settings = { rounds: 4, hide: 30, hunt: 150, map: 'hasard' };
+    this.mapId = 'place';
     this.wins = {};
     this.timer = null;
   }
@@ -86,6 +87,9 @@ class Room {
   nextRound() {
     this.roundNo++;
     this.phase = 'hide';
+    // carte choisie, ou chacune à son tour (« au hasard » : on part d'une carte tirée au sort)
+    if (this.settings.map !== 'hasard') this.mapId = this.settings.map;
+    else { this.mapStart ??= Math.floor(this.rng() * PH.MAPS.length); this.mapId = PH.MAPS[(this.mapStart + this.roundNo - 1) % PH.MAPS.length]; }
     this.phaseAt = this.clock();
     const n = this.players.length, hunters = Math.max(1, Math.round(n / 4));
     // les humains passent chasseurs avant les robots, à nombre de chasses égal
@@ -97,7 +101,7 @@ class Room {
     for (const p of this.players) {
       const hunter = this.roles[p.name] === 'hunter';
       if (hunter) p.hunted++;
-      const sp = M.spawn(hunter ? h++ : q++, hunter);
+      const sp = this.map.spawn(hunter ? h++ : q++, hunter);
       this.bodies[p.name] = { x: sp.x, z: sp.z, ry: 0, type: null, alive: true, hp: 100, whistleAt: this.clock(), movedAt: 0, heard: this.clock(), formAt: 0, radar: true, grenade: true, marked: 0 };
     }
     this.brains = {};
@@ -122,6 +126,7 @@ class Room {
     else if (this.phase === 'roundEnd') { if (this.roundNo < this.settings.rounds) this.nextRound(); else this.finish(); }
   }
   playing() { return this.phase === 'hide' || this.phase === 'hunt'; }
+  get map() { return PH.get(this.mapId); }
   living(role) { return Object.entries(this.bodies).filter(([n, b]) => b.alive && this.roles[n] === role); }
 
   /* ---- Ce que font les joueurs ---- */
@@ -131,8 +136,8 @@ class Room {
     if (!b?.alive || !this.playing() || !p || ![p.x, p.z, p.ry].every(num)) return;
     if (this.roles[name] === 'hunter' && this.phase === 'hide') { b.heard = this.clock(); return; } // immobile, mais bien là
     // pas plus loin que ce qu'on peut courir depuis la dernière position reçue (au moins 3 m : petites saccades)
-    const far = Math.max(3, (this.clock() - b.heard) / 1000 * M.RUN * 1.6);
-    if (Math.abs(p.x) > M.HALF || Math.abs(p.z) > M.HALF || Math.hypot(p.x - b.x, p.z - b.z) > far) return;
+    const far = Math.max(3, (this.clock() - b.heard) / 1000 * PH.RUN * 1.6);
+    if (Math.abs(p.x) > this.map.HALF || Math.abs(p.z) > this.map.HALF || Math.hypot(p.x - b.x, p.z - b.z) > far) return;
     if (Math.hypot(p.x - b.x, p.z - b.z) > 0.02) b.movedAt = this.clock();
     Object.assign(b, { x: p.x, z: p.z, ry: p.ry, heard: this.clock() });
   }
@@ -140,8 +145,8 @@ class Room {
   disguise(name, type) {
     const b = this.bodies?.[name];
     if (!b?.alive || this.roles[name] !== 'prop' || !this.playing()) throw new Error('Tu ne peux pas te transformer maintenant');
-    if (!M.PROPS[type]) throw new Error('Objet inconnu');
-    if (!M.decor.some(d => d.type === type && Math.hypot(d.x - b.x, d.z - b.z) < 4.5)) throw new Error('Approche-toi de cet objet pour le copier');
+    if (!this.map.PROPS[type]) throw new Error('Objet inconnu');
+    if (!this.map.decor.some(d => d.type === type && Math.hypot(d.x - b.x, d.z - b.z) < 4.5)) throw new Error('Approche-toi de cet objet pour le copier');
     const wait = this.phase === 'hunt' && b.type ? FORM_CD - (this.clock() - b.formAt) : 0; // pendant la chasse : une transformation toutes les 10 s
     if (wait > 0) throw new Error(`Encore ${Math.ceil(wait / 1000)} s avant de pouvoir changer de forme`);
     b.type = type;
@@ -166,7 +171,7 @@ class Room {
       this.notify?.();
       return this.checkEnd();
     }
-    const d = M.decor[target.decor];
+    const d = this.map.decor[target.decor];
     if (!d || Math.hypot(d.x - b.x, d.z - b.z) > TAG_RANGE + 0.5) return;
     this.miss(name, b, d);
   }
@@ -260,10 +265,10 @@ class Room {
     if (!hunter) {
       if (b.type) { if (this.phase === 'hunt' && this.rng() < 0.004) this.taunt(name, ['canard', 'pet', 'rire', 'coucou'][Math.floor(this.rng() * 4)]); return; }
       if (!br.goal) {
-        const d = M.decor[Math.floor(this.rng() * M.decor.length)], a = this.rng() * Math.PI * 2;
+        const real = this.map.decor.filter(x => !x.scenery), d = real[Math.floor(this.rng() * real.length)], a = this.rng() * Math.PI * 2;
         br.goal = { x: d.x + Math.cos(a) * (d.r + 0.5), z: d.z + Math.sin(a) * (d.r + 0.5), type: d.type };
       }
-      if (this.walk(b, br.goal, M.RUN, dt) < 0.2 || now - this.phaseAt > HIDE_MS - 3000 || this.phase === 'hunt') {
+      if (this.walk(b, br.goal, PH.RUN, dt) < 0.2 || now - this.phaseAt > HIDE_MS - 3000 || this.phase === 'hunt') {
         b.type = br.goal.type; b.ry = this.rng() * Math.PI * 2;
       }
       return;
@@ -271,7 +276,7 @@ class Room {
     if (this.phase !== 'hunt') return;
     // Chasseur : va vers le dernier sifflet entendu, sinon fait le tour des objets ; tire de temps en temps.
     if (br.whistle && now - br.whistle.at < 8000) br.goal = br.whistle;
-    if (!br.goal || this.walk(b, br.goal, M.SPEED, dt) < 0.4) { const d = M.decor[Math.floor(this.rng() * M.decor.length)]; br.goal = { x: d.x + 0.6, z: d.z + 0.6 }; br.whistle = null; }
+    if (!br.goal || this.walk(b, br.goal, PH.SPEED, dt) < 0.4) { const d = this.map.decor[Math.floor(this.rng() * this.map.decor.length)]; br.goal = { x: d.x + 0.6, z: d.z + 0.6 }; br.whistle = null; }
     if (now < br.next) return;
     br.next = now + 1500 + this.rng() * 1500;
     // gadgets : la grenade là où ça a sifflé, le radar au milieu de la chasse
@@ -284,7 +289,7 @@ class Room {
     const suspect = hidden.find(([, t]) => now - t.movedAt < 6000 || now - t.whistleAt < 6000);
     const pick = suspect ?? (hidden.length && this.rng() < 0.3 ? hidden[0] : null);
     if (pick) return this.tag(name, { player: pick[0] });
-    const fakes = M.decor.filter(d => near(d.x, d.z));
+    const fakes = this.map.decor.filter(d => near(d.x, d.z));
     if (fakes.length && b.hp > 40 && this.rng() < 0.25) this.tag(name, { decor: fakes[Math.floor(this.rng() * fakes.length)].id });
   }
   // Fait avancer un robot vers un point (en contournant les obstacles comme il peut). Renvoie la distance restante.
@@ -293,8 +298,8 @@ class Room {
     if (d < 0.05) return d;
     const step = Math.min(d, speed * dt), x0 = b.x, z0 = b.z;
     b.x += dx / d * step; b.z += dz / d * step;
-    M.collide(b, b.type ? M.PROPS[b.type].r : M.R);
-    if (Math.hypot(b.x - x0, b.z - z0) < step * 0.3) { b.x += -dz / d * step; b.z += dx / d * step; M.collide(b, M.R); } // bloqué : on longe
+    this.map.collide(b, b.type ? this.map.PROPS[b.type].r : PH.R);
+    if (Math.hypot(b.x - x0, b.z - z0) < step * 0.3) { b.x += -dz / d * step; b.z += dx / d * step; this.map.collide(b, PH.R); } // bloqué : on longe
     b.ry = Math.atan2(dx, dz);
     b.movedAt = this.clock();
     return Math.hypot(goal.x - b.x, goal.z - b.z);
@@ -310,6 +315,7 @@ class Room {
       deadline: this.deadline, result: this.result, ranking: this.phase === 'over' ? this.ranking : null,
       role, roles: this.playing() || this.phase === 'roundEnd' ? this.roles : null, found: this.order ?? [],
       players: this.players.map(p => ({ name: p.name, connected: p.connected, bot: !!p.bot, color: p.color, points: p.points, wins: this.wins[p.name] ?? 0 })),
+      map: this.mapId,
       spawn: this.bodies?.[name] && this.phase === 'hide' ? { x: this.bodies[name].x, z: this.bodies[name].z } : null,
       night: this.roundNo % 2 === 0, gadgets: this.bodies?.[name] ? { radar: this.bodies[name].radar, grenade: this.bodies[name].grenade } : null,
     };

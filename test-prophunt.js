@@ -1,25 +1,34 @@
 // Tests de Prop Hunt : carte (pas d'objet dans un mur), rôles qui tournent, chasseurs immobiles pendant la cachette,
 // déguisement, tirs (trouvé / raté), sifflets, fin de manche, partie complète entre robots.
 const assert = require('assert');
-const M = require('./public/prophunt/map');
+const PH = require('./public/prophunt/map');
+const M = PH.get('place');
 const { Room, HIDE_MS, HUNT_MS } = require('./prophunt/game');
 
 let seed = 11;
 const rng = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
 
-// Carte : objets dans la place, hors des bâtiments, sans se chevaucher ; collisions qui repoussent.
-assert(M.decor.length >= 60 && M.buildings.length === 16);
-for (const d of M.decor) {
-  assert(Math.abs(d.x) < M.HALF && Math.abs(d.z) < M.HALF);
-  assert(!M.buildings.some(b => Math.abs(d.x - b.x) < b.hw && Math.abs(d.z - b.z) < b.hd), 'objet dans un bâtiment');
+// Cartes : objets dans la carte, hors des bâtiments et de l'eau ; départs libres ; collisions qui repoussent.
+for (const id of PH.MAPS) {
+  const m = PH.get(id);
+  assert(m.decor.filter(d => !d.scenery).length >= 60, `${id} : assez d'objets`);
+  for (const d of m.decor) {
+    assert(Math.abs(d.x) < m.HALF && Math.abs(d.z) < m.HALF);
+    assert(!m.blocks.some(b => d.x > b.x0 && d.x < b.x1 && d.z > b.z0 && d.z < b.z1), `${id} : objet dans un bâtiment ou dans l'eau`);
+    assert(d.scenery || m.PROPS[d.type], `${id} : ${d.type} sans définition`);
+  }
+  for (let k = 0; k < 12; k++) for (const h of [true, false]) { const s = m.spawn(k, h), p = m.collide({ ...s }, PH.R); assert(Math.hypot(p.x - s.x, p.z - s.z) < 0.3, `${id} : départ ${k} libre`); }
+  const b = m.buildings[0], p = m.collide({ x: b.x, z: b.z + 0.1 }, PH.R);
+  assert(Math.abs(p.z - b.z) >= b.hd || Math.abs(p.x - b.x) >= b.hw, 'sorti du bâtiment');
 }
-{ const b = M.buildings[0], p = M.collide({ x: b.x, z: b.z + 0.1 }, M.R); assert(Math.abs(p.z - b.z) >= b.hd || Math.abs(p.x - b.x) >= b.hw, 'sorti du bâtiment'); }
+{ const w = PH.get('port').water[0], p = PH.get('port').collide({ x: 0, z: 9 }, PH.R); assert(p.z <= 6.5 - PH.R + 1e-6, 'on ne marche pas sur l’eau'); assert(w.kind === 'mer'); }
 
 const setup = (n, bots = 0) => {
   let now = 1000;
   const r = new Room('ABCDE', rng, false, () => now);
   for (let k = 0; k < n; k++) r.addPlayer('J' + k);
   for (let k = 0; k < bots; k++) r.addBot('J0');
+  r.settings.map = 'place';
   r.start('J0'); r.stop();
   r.at = v => (now = v); r.now = () => now;
   return r;
@@ -89,12 +98,13 @@ const setup = (n, bots = 0) => {
 
 // Partie complète entre robots (un humain spectateur dans son rôle) : les manches se terminent toutes.
 {
-  const r = setup(1, 7);
-  r.settings.rounds = 2;
-  for (let round = 1; round <= 2; round++) {
+  const r = setup(1, 7), seen = new Set();
+  r.settings.rounds = 3; r.settings.map = 'hasard';
+  for (let round = 1; round <= 3; round++) {
     for (let t = 0; t < HIDE_MS / 100; t++) { r.tick(); r.at(r.now() + 100); r.bodies.J0.heard = r.now(); }
     r.timeout(); r.stop();
     assert.strictEqual(r.phase, 'hunt');
+    if (round > 1) seen.add(r.mapId);
     const bots = Object.keys(r.bodies).filter(n => r.get(n).bot && r.roles[n] === 'prop');
     assert(bots.every(n => r.bodies[n].type), 'les robots objets sont déguisés');
     for (let t = 0; t < HUNT_MS / 100 && r.phase === 'hunt'; t++) { r.tick(); r.at(r.now() + 100); r.bodies.J0.heard = r.now(); r.timeout(); }
@@ -103,6 +113,7 @@ const setup = (n, bots = 0) => {
   }
   assert.strictEqual(r.phase, 'over');
   assert(r.ranking.length === 8);
+  assert.strictEqual(seen.size, 2, 'au hasard : une carte différente à chaque manche');
 }
 
 // Moqueries, gadgets des chasseurs, changement de forme, vie regagnée, réglages.

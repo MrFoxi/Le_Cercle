@@ -2,7 +2,8 @@
 // les rôles, les déguisements, les tirs et les sifflets, et renvoie les positions (« snap ») et les effets (« fx »).
 import { createView } from './render.js';
 
-const M = window.PH;
+const PH = window.PH;
+let MAP = PH.get('place'); // carte de la manche en cours
 const $ = s => document.querySelector(s), $$ = s => [...document.querySelectorAll(s)];
 const store = {
   get: k => { try { return localStorage.getItem(k); } catch { return null; } },
@@ -93,6 +94,8 @@ $('#addBot').onclick = () => act('addBot');
 $('#startBtn').onclick = () => { audio(); act('start'); };
 $('#rounds').onchange = e => act('configure', 'rounds', Number(e.target.value));
 $('#hideT').onchange = e => act('configure', 'hide', Number(e.target.value));
+$('#mapSel').innerHTML = [['hasard', '🎲 Au hasard (une carte par manche)'], ...PH.MAPS.map(id => [id, PH.NAMES[id]])].map(([v, l]) => `<option value="${v}">${l}</option>`).join('');
+$('#mapSel').onchange = e => act('configure', 'map', e.target.value);
 $('#huntT').onchange = e => act('configure', 'hunt', Number(e.target.value));
 $('#players').onclick = e => { const b = e.target.closest('[data-bot]'); if (b) act('removeBot', b.dataset.bot); };
 socket.on('session', s => { store.set('prophunt-session', JSON.stringify(s)); history.replaceState(null, '', `?salon=${s.code}`); });
@@ -115,16 +118,19 @@ socket.on('state', s => {
   if (!s) return;
   offset = s.now - Date.now();
   const inGame = ['hide', 'hunt', 'roundEnd', 'over'].includes(s.phase);
+  if (inGame && s.map && view.mapId !== s.map) { MAP = PH.get(s.map); view.loadMap(s.map); }
   if (inGame) show('game'); else { show('room'); $('#board').hidden = true; }
   const key = `${s.round}.${s.roundNo}`;
   if (s.phase === 'hide' && key !== roundKey) {
     roundKey = key; seenFound = 0; lastCount = null; remotes.clear();
+    MAP = PH.get(s.map); view.loadMap(s.map);
     me = s.spawn && !s.spectator ? { x: s.spawn.x, z: s.spawn.z, ry: 0, type: null, alive: true, hp: 100, moving: false } : null;
     locked = false; watching = null; gadgets = { radar: true, grenade: true }; tauntAt = 0;
     // objets : la place devant soi ; chasseurs (au pied de la fontaine) : regard vers l'extérieur
     if (me) view.cam.yaw = Math.atan2(me.x, me.z) + (s.role === 'hunter' ? Math.PI : 0);
     $('#feed').innerHTML = ''; $('#board').hidden = true; $('#spectating').hidden = true;
     view.setNight(s.night, s.role === 'hunter');
+    feed(`📍 ${PH.NAMES[s.map]}`);
     if (s.night) feed('🌙 Manche de nuit !');
     feed(s.role === 'hunter' ? '🎯 Tu es chasseur ! Attends que les objets se cachent.' : '🪴 Tu es un objet : transforme-toi et cache-toi !');
   }
@@ -140,7 +146,7 @@ function renderRoom() {
   $('#players').innerHTML = s.players.map(p => `<li class="${p.connected ? '' : 'off'}"><i class="dot" style="background:${p.color}"></i><span>${esc(p.name)}${p.name === s.host ? ' 👑' : ''}${p.wins ? ` · 🏆 ${p.wins}` : ''}</span>${p.bot && host ? `<button class="small ghost" data-bot="${esc(p.name)}" aria-label="Retirer ${esc(p.name)}">✕</button>` : ''}</li>`).join('');
   $('#spect').textContent = s.spectators.length ? `👁 ${s.spectators.join(', ')}` : '';
   $('#addBot').hidden = !host; $('#rounds').disabled = !host; $('#rounds').value = s.settings.rounds;
-  $('#hideT').disabled = $('#huntT').disabled = !host; $('#hideT').value = s.settings.hide; $('#huntT').value = s.settings.hunt;
+  $('#hideT').disabled = $('#huntT').disabled = $('#mapSel').disabled = !host; $('#mapSel').value = s.settings.map; $('#hideT').value = s.settings.hide; $('#huntT').value = s.settings.hunt;
   $('#startBtn').hidden = !host; $('#startBtn').disabled = s.players.length < 2;
   $('#roomHint').textContent = host ? (s.players.length < 3 ? 'C’est plus drôle à 4 ou plus : ajoute des robots ou invite des amis.' : 'Tout le monde est là ? Lance la partie !') : 'Le créateur du salon lance la partie.';
 }
@@ -153,7 +159,7 @@ function showBoard(s) {
   const rows = over ? s.ranking : [...s.players].sort((a, b) => b.points - a.points);
   $('#boardTitle').textContent = over ? `🏆 ${rows[0]?.name === s.me ? 'Tu gagnes la partie !' : `${rows[0]?.name} gagne la partie !`}` : s.result?.winner === 'hunters' ? '🎯 Les chasseurs ont tout trouvé !' : '🪴 Les objets ont tenu bon !';
   $('#boardList').innerHTML = rows.map((p, k) => `<li class="${p.name === s.me ? 'me' : ''}"><b>${k + 1}</b><i class="dot" style="width:14px;height:14px;border-radius:50%;background:${p.color}"></i><span>${esc(p.name)}</span>${over ? '' : `<em>${roleOf(p.name) === 'hunter' ? '🎯' : s.result?.survivors.includes(p.name) ? '🪴 caché' : '🔎 trouvé'}</em>`}<strong>${p.points} pts</strong></li>`).join('');
-  const best = !over && s.result?.best ? `🏅 Meilleure cachette : ${s.result.best}${s.result.forms?.[s.result.best] ? ` (${M.PROPS[s.result.forms[s.result.best]]?.name ?? ''})` : ''} · ` : '';
+  const best = !over && s.result?.best ? `🏅 Meilleure cachette : ${s.result.best}${s.result.forms?.[s.result.best] ? ` (${MAP.PROPS[s.result.forms[s.result.best]]?.name ?? ''})` : ''} · ` : '';
   $('#boardHint').textContent = over ? '' : `${best}Manche ${s.roundNo}/${s.settings.rounds} terminée · les rôles changent…`;
   const btns = $('#boardButtons'); btns.innerHTML = '';
   if (over) {
@@ -282,8 +288,8 @@ function action() {
   } else {
     if (!a) return toast('Vise un objet de la place');
     if (a.far) return toast('Approche-toi de cet objet');
-    const type = a.decor !== undefined ? M.decor[a.decor].type : remoteAt(a.player, performance.now() / 1000)?.type;
-    if (!type) return toast('Ça, tu ne peux pas le copier');
+    const type = a.decor !== undefined ? MAP.decor[a.decor].type : remoteAt(a.player, performance.now() / 1000)?.type;
+    if (!type || !MAP.PROPS[type]) return toast('Ça, tu ne peux pas le copier');
     act('disguise', type).then(r => { if (r?.ok) { me.type = type; SFX.poof(); view.burst(me.x, me.z, 'found'); } });
   }
 }
@@ -350,13 +356,13 @@ function frame(now) {
         if (l > 0.1) {
           fwd /= Math.max(1, l); side /= Math.max(1, l);
           const y = view.cam.yaw, fx = -Math.sin(y), fz = -Math.cos(y);
-          const sp = (k('ShiftLeft') || k('ShiftRight') || l > 0.9 && touch.x ? M.RUN : M.SPEED) * dt;
+          const sp = (k('ShiftLeft') || k('ShiftRight') || l > 0.9 && touch.x ? PH.RUN : PH.SPEED) * dt;
           const vx = (fx * fwd - fz * side) * sp, vz = (fz * fwd + fx * side) * sp;
           me.x += vx; me.z += vz; me.moving = true;
           if (!me.type) me.ry = Math.atan2(vx, vz);
         }
-        const others = list.filter(o => o.alive).map(o => ({ x: o.x, z: o.z, r: o.type ? M.PROPS[o.type].r : M.R }));
-        M.collide(me, me.type ? M.PROPS[me.type].r : M.R, others);
+        const others = list.filter(o => o.alive).map(o => ({ x: o.x, z: o.z, r: o.type ? MAP.PROPS[o.type].r : PH.R }));
+        MAP.collide(me, me.type ? MAP.PROPS[me.type].r : PH.R, others);
         if (me.type && !locked) me.ry = view.cam.yaw + Math.PI; // l'objet se tourne comme la caméra (R pour bloquer)
       }
       if (me.alive && now - lastSend > 66) { lastSend = now; socket.volatile.emit('pos', { x: +me.x.toFixed(2), z: +me.z.toFixed(2), ry: +me.ry.toFixed(2) }); }
@@ -368,7 +374,7 @@ function frame(now) {
       if (!watching || !list.find(o => o.name === watching && o.alive)) watching = list.find(o => o.alive)?.name ?? null;
       focus = list.find(o => o.name === watching) ?? { x: 0, z: 6 };
     }
-    view.update(list, { x: focus.x, z: focus.z, h: focus.type ? Math.min(1.2, M.PROPS[focus.type].h * 0.7 + 0.2) : 0.55 }, dt, t);
+    view.update(list, { x: focus.x, z: focus.z, h: focus.type ? Math.min(1.2, MAP.PROPS[focus.type].h * 0.7 + 0.2) : 0.55 }, dt, t);
     hud(s, list, now);
   } else {
     view.cam.yaw += dt * 0.05;
@@ -412,8 +418,8 @@ function hud(s, list, now) {
     $('#cross').classList.toggle('on', !!a && !a.far);
     view.highlight(role === 'prop' && a && !a.far && a.decor !== undefined ? a.decor : null);
     if (a && !a.far && role === 'prop' && $('#aimHint').hidden) {
-      const type = a.decor !== undefined ? M.decor[a.decor].type : null;
-      if (type && type !== me.type) { $('#aimHint').textContent = `E : devenir ${M.PROPS[type].name}`; $('#aimHint').hidden = false; clearTimeout(toastTimer); toastTimer = setTimeout(() => ($('#aimHint').hidden = true), 400); }
+      const type = a.decor !== undefined ? MAP.decor[a.decor].type : null;
+      if (type && MAP.PROPS[type] && type !== me.type) { $('#aimHint').textContent = `E : devenir ${MAP.PROPS[type].name}`; $('#aimHint').hidden = false; clearTimeout(toastTimer); toastTimer = setTimeout(() => ($('#aimHint').hidden = true), 400); }
     }
   }
 }
@@ -428,11 +434,12 @@ function labels(list, s) {
     let el = labelEls.get(o.name);
     if (!el) { el = document.createElement('span'); box.append(el); labelEls.set(o.name, el); }
     el.textContent = (theirs === 'hunter' ? '🎯 ' : '') + o.name;
-    const [x, y, ok] = view.project(o.x, o.type ? M.PROPS[o.type].h + 0.25 : 0.85, o.z);
+    const [x, y, ok] = view.project(o.x, o.type ? MAP.PROPS[o.type].h + 0.25 : 0.85, o.z);
     el.style.left = `${x}px`; el.style.top = `${y}px`; el.hidden = !ok;
   }
   for (const [n, el] of labelEls) if (!seen.has(n)) { el.remove(); labelEls.delete(n); }
 }
 if (params.has('debug')) window.ph = { view, me: () => me, aimed }; // pour les tests
+view.loadMap('place');
 requestAnimationFrame(frame);
 show('home');

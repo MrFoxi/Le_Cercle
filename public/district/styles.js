@@ -6,7 +6,13 @@ import {
   flatRoof, interior, acUnit, LOOK, FLOOR, G, seeded, foliage, PALEWOOD, HOOKS, FONT, makePerson, buildBuilding,
 } from './models.js';
 import { makeCat } from './animals.js';
-import { DISTRICT, T } from './theme.js';
+import { DISTRICT as PAGE_DISTRICT, THEMES } from './theme.js';
+
+// Quartier : celui de la page (?quartier=…), ou celui demandé dans l'adresse de ce module (styles.js?quartier=…),
+// ce qui permet à un autre jeu (Prop Hunt) de charger l'apparence d'un quartier précis.
+const OWN = new URL(import.meta.url).searchParams.get('quartier');
+const DISTRICT = OWN && THEMES[OWN] ? OWN : PAGE_DISTRICT;
+const T = THEMES[DISTRICT];
 
 export const THEMED = DISTRICT !== 'japon';
 const hash = s => [...s].reduce((h, c) => (h * 31 + c.charCodeAt(0)) >>> 0, 7);
@@ -562,4 +568,6 @@ export const GROUND = {
 }[DISTRICT];
 export const WATER = { japon: ['#1d4a52', 0.78], moderne: ['#2a8f9f', 0.8], cotier: ['#1f9fb0', 0.85], europe: ['#2c4f58', 0.82], futur: ['#0a2a4a', 0.85, '#1fb8ff'], med: ['#1aa0c8', 0.85] }[DISTRICT];
 
-if (THEMED) { HOOKS.building = buildThemed; HOOKS.decor = themedDecor; FONT.sign = T.font; }
+// Installe les bâtiments et décorations de ce quartier (à rappeler si un autre quartier a été installé entre-temps).
+export function install() { HOOKS.building = THEMED ? buildThemed : null; HOOKS.decor = THEMED ? themedDecor : null; FONT.sign = THEMED ? T.font : null; }
+if (THEMED) install();
