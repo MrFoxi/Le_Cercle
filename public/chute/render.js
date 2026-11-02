@@ -126,10 +126,12 @@ export function createView(canvas) {
         if (st !== anim[k].state) {
           if (st === 2) { anim[k].at = time; anim[k].rx = (Math.random() - 0.5) * 3; anim[k].rz = (Math.random() - 0.5) * 3; const t = C.tiles[k]; for (let j = 0; j < 3; j++) puff(t.x + (Math.random() - 0.5), t.y + (Math.random() - 0.5), t.h, LAYER_COLORS[t.layer]); }
           anim[k].state = st;
+          if (st === 0) place(k, time); // dalle revenue (nouvelle manche)
         }
       }
     },
-    reset() { anim.forEach(a => Object.assign(a, { state: 0, at: 0 })); },
+    // Nouvelle manche : toutes les dalles reviennent à leur place (y compris celles tombées avant).
+    reset() { anim.forEach((a, k) => { Object.assign(a, { state: 0, at: -10 }); place(k, 0); }); meshes.forEach(m => { m.instanceMatrix.needsUpdate = true; m.instanceColor.needsUpdate = true; }); },
     // list : [{ name, color, x, y, z, alive, dash, dx, dy, ground }] ; focus : { x, y, z } suivi par la caméra
     update(list, focus, dt, time, state) {
       voidMat.uniforms.uTime.value = time;

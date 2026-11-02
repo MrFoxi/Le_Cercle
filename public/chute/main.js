@@ -95,7 +95,7 @@ socket.on('state', s => {
   const key = `${s.round}.${s.roundNo}`;
   if (s.phase === 'countdown' && key !== roundKey) {
     roundKey = key; seenOrder = 0; lastCount = null;
-    view.reset(); state.fill(0); remotes.clear();
+    view.reset(); state.fill(0); remotes.clear(); tilesStr = '';
     me = s.spawn && !s.spectator ? C.newPlayer(s.spawn.x, s.spawn.y) : null;
     $('#feed').innerHTML = ''; $('#board').hidden = true; $('#spectating').hidden = true;
   }
