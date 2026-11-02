@@ -58,8 +58,11 @@
         <li>À chaque manche, il y a des <b>objets</b> et des <b>chasseurs</b> (1 pour 4 joueurs). Les rôles tournent.</li>
         <li><b>Objets</b> : 30 secondes pour se cacher. Vise un objet de la place et appuie sur <kbd>E</kbd> pour en prendre la forme, puis fonds-toi dans le décor. <kbd>R</kbd> bloque ta rotation.</li>
         <li><b>Chasseurs</b> : les yeux bandés pendant la cachette, puis 2 min 30 pour tout trouver. Clique sur ce qui te semble louche… mais chaque objet innocent te coûte de la vie !</li>
-        <li><kbd>F</kbd> : siffler (+1 point, mais on t’entend). Un objet silencieux trop longtemps siffle tout seul.</li>
-        <li>Points : objet trouvé +2 au chasseur, objet qui survit +3, sifflet +1.</li>
+        <li><b>Moqueries</b> : <kbd>F</kbd> siffler (+1), <kbd>1</kbd> canard (+1), <kbd>2</kbd> pet (+2), <kbd>3</kbd> fou rire (+2), <kbd>4</kbd> coucou (+3). Ça rapporte… mais tout le monde entend d’où ça vient. Un objet silencieux trop longtemps siffle tout seul.</li>
+        <li>Pendant la chasse, un objet peut <b>changer de forme</b> (toutes les 10 s) pour semer un chasseur.</li>
+        <li><b>Gadgets des chasseurs</b> (une fois par manche) : <kbd>Q</kbd> radar (montre les objets à moins de 7 m), <kbd>G</kbd> grenade à confettis (fait scintiller les objets touchés). Trouver un objet redonne de la vie. Dans la dernière minute, un battement de cœur s’accélère près d’un objet caché.</li>
+        <li>Une manche sur deux se joue <b>de nuit</b> : les chasseurs ont une lampe torche.</li>
+        <li>Points : objet trouvé +2 au chasseur, objet qui survit +3, moqueries de +1 à +3.</li>
       </ul>
       <p class="hint"><kbd>Z</kbd><kbd>Q</kbd><kbd>S</kbd><kbd>D</kbd> : bouger · <kbd>Maj</kbd> : courir · souris : regarder (clique dans l’image) · clic ou <kbd>E</kbd> : action. Sur téléphone : joystick, glisser pour regarder, boutons à l’écran.</p>
     </div>
@@ -79,6 +82,8 @@
       <div class="card">
         <h2>Partie</h2>
         <label>Manches <select id="rounds"><option value="2">2 manches</option><option value="4">4 manches</option><option value="6">6 manches</option></select></label>
+        <label>Temps pour se cacher <select id="hideT"><option value="20">20 s</option><option value="30">30 s</option><option value="45">45 s</option></select></label>
+        <label>Temps de chasse <select id="huntT"><option value="120">2 min</option><option value="150">2 min 30</option><option value="180">3 min</option><option value="240">4 min</option></select></label>
         <p class="hint" id="roomHint"></p>
         <button class="primary big" id="startBtn">C’est parti !</button>
       </div>
@@ -99,7 +104,8 @@
     <div id="spectating" class="spectating" hidden></div>
     <div class="touch" id="touch" hidden>
       <div class="stick" id="stick"><i></i></div>
-      <div class="btns"><button id="tWhistle" aria-label="Siffler">🎵</button><button id="tLock" aria-label="Bloquer la rotation">🔒</button><button id="tAction" aria-label="Action">🎯</button></div>
+      <div class="btns"><button id="tWhistle" aria-label="Se moquer">🎵</button><button id="tLock" aria-label="Bloquer la rotation">🔒</button><button id="tRadar" aria-label="Radar">📡</button><button id="tGrenade" aria-label="Grenade à confettis">🎉</button><button id="tAction" aria-label="Action">🎯</button></div>
+      <div class="taunts" id="tauntBar" hidden><button data-taunt="sifflet">🎵<small>+1</small></button><button data-taunt="canard">🦆<small>+1</small></button><button data-taunt="pet">💨<small>+2</small></button><button data-taunt="rire">😂<small>+2</small></button><button data-taunt="coucou">👋<small>+3</small></button></div>
     </div>
     <button class="ghost small quit" id="quitGame">Quitter</button>
   </section>

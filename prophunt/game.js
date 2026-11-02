@@ -1,13 +1,17 @@
 // Prop Hunt : des objets (joueurs déguisés en objets du décor) se cachent, des chasseurs les cherchent.
-// Phases d'une manche : cachette (30 s, chasseurs aveuglés), chasse (2 min 30), résultat. Les rôles tournent.
+// Phases d'une manche : cachette (chasseurs aveuglés), chasse, résultat. Les rôles tournent ; une manche sur deux de nuit.
 // Chaque navigateur déplace son personnage et envoie sa position ; le serveur tient les rôles, les déguisements,
-// les tirs (un objet innocent coûte de la vie au chasseur), les sifflets, et fait jouer les robots. Testé par test-prophunt.js.
+// les tirs (un objet innocent coûte de la vie au chasseur), les moqueries des objets, les gadgets des chasseurs
+// (radar, grenade à confettis) et fait jouer les robots. Testé par test-prophunt.js.
 const M = require('../public/prophunt/map');
 
 const MAX_PLAYERS = 12;
-const SETTINGS = { rounds: [2, 4, 6] };
+const SETTINGS = { rounds: [2, 4, 6], hide: [20, 30, 45], hunt: [120, 150, 180, 240] };
 const HIDE_MS = 30000, HUNT_MS = 150000, ROUND_END_MS = 7000, TICK_MS = 100;
-const TAG_RANGE = 4, MISS_DAMAGE = 12, WHISTLE_CD = 8000, FORCED_WHISTLE = 35000;
+const TAG_RANGE = 4, MISS_DAMAGE = 12, FOUND_HEAL = 20, TAUNT_CD = 8000, FORCED_WHISTLE = 35000, FORM_CD = 10000;
+// Moqueries : plus c'est voyant, plus ça rapporte.
+const TAUNTS = { sifflet: 1, canard: 1, pet: 2, rire: 2, coucou: 3 };
+const RADAR_RANGE = 7, GRENADE_RANGE = 12, GRENADE_RADIUS = 3, MARK_MS = 6000;
 const COLORS = ['#ff5a5f', '#3d8bff', '#ffc93c', '#2fd47a', '#a46bff', '#ff8a3d', '#22d3ee', '#f472b6', '#84cc16', '#f8fafc', '#94a3b8', '#e11d48'];
 const BOT_NAMES = ['Robot Théière', 'Robot Pot-de-fleur', 'Robot Lanterne', 'Robot Tabouret', 'Robot Bonsaï', 'Robot Parapluie', 'Robot Sushi', 'Robot Gong', 'Robot Éventail', 'Robot Daruma', 'Robot Origami'];
 const num = v => typeof v === 'number' && Number.isFinite(v);
@@ -23,7 +27,7 @@ class Room {
     this.phase = 'lobby'; // lobby | hide | hunt | roundEnd | over
     this.round = 0;
     this.roundNo = 0;
-    this.settings = { rounds: 4 };
+    this.settings = { rounds: 4, hide: 30, hunt: 150 };
     this.wins = {};
     this.timer = null;
   }
@@ -94,7 +98,7 @@ class Room {
       const hunter = this.roles[p.name] === 'hunter';
       if (hunter) p.hunted++;
       const sp = M.spawn(hunter ? h++ : q++, hunter);
-      this.bodies[p.name] = { x: sp.x, z: sp.z, ry: 0, type: null, alive: true, hp: 100, whistleAt: this.clock(), movedAt: 0, heard: this.clock() };
+      this.bodies[p.name] = { x: sp.x, z: sp.z, ry: 0, type: null, alive: true, hp: 100, whistleAt: this.clock(), movedAt: 0, heard: this.clock(), formAt: 0, radar: true, grenade: true, marked: 0 };
     }
     this.brains = {};
     this.order = []; // objets trouvés, dans l'ordre
@@ -106,8 +110,8 @@ class Room {
   stop() { clearInterval(this.timer); this.timer = null; }
 
   get deadline() {
-    if (this.phase === 'hide') return this.phaseAt + HIDE_MS;
-    if (this.phase === 'hunt') return this.phaseAt + HUNT_MS;
+    if (this.phase === 'hide') return this.phaseAt + this.settings.hide * 1000;
+    if (this.phase === 'hunt') return this.phaseAt + this.settings.hunt * 1000;
     if (this.phase === 'roundEnd') return this.phaseAt + ROUND_END_MS;
     return null;
   }
@@ -138,7 +142,10 @@ class Room {
     if (!b?.alive || this.roles[name] !== 'prop' || !this.playing()) throw new Error('Tu ne peux pas te transformer maintenant');
     if (!M.PROPS[type]) throw new Error('Objet inconnu');
     if (!M.decor.some(d => d.type === type && Math.hypot(d.x - b.x, d.z - b.z) < 4.5)) throw new Error('Approche-toi de cet objet pour le copier');
+    const wait = this.phase === 'hunt' && b.type ? FORM_CD - (this.clock() - b.formAt) : 0; // pendant la chasse : une transformation toutes les 10 s
+    if (wait > 0) throw new Error(`Encore ${Math.ceil(wait / 1000)} s avant de pouvoir changer de forme`);
     b.type = type;
+    b.formAt = this.clock();
   }
   // Un chasseur clique sur quelque chose : un joueur caché (trouvé !) ou un objet innocent (il perd de la vie).
   tag(name, target) {
@@ -151,8 +158,10 @@ class Room {
       const t = this.bodies[target.player];
       if (!t?.alive || this.roles[target.player] !== 'prop' || Math.hypot(t.x - b.x, t.z - b.z) > TAG_RANGE + 0.5) return this.miss(name, b, t ?? b);
       t.alive = false;
+      t.foundAt = now;
       this.order.push(target.player);
       this.get(name).points += 2;
+      b.hp = Math.min(100, b.hp + FOUND_HEAL); // trouver redonne de la vie
       this.emit?.('fx', { kind: 'found', x: t.x, z: t.z, by: name, who: target.player });
       this.notify?.();
       return this.checkEnd();
@@ -166,14 +175,34 @@ class Room {
     this.emit?.('fx', { kind: 'miss', x: at.x, z: at.z, by: name });
     if (b.hp <= 0) { b.alive = false; this.emit?.('fx', { kind: 'hunterOut', x: b.x, z: b.z, by: name }); this.notify?.(); this.checkEnd(); }
   }
-  // Un objet siffle : il gagne un point, mais tout le monde l'entend.
-  whistle(name, forced = false) {
+  // Un objet se moque des chasseurs (sifflet, canard, pet, fou rire, coucou) : des points, mais tout le monde l'entend.
+  taunt(name, kind = 'sifflet', forced = false) {
     const b = this.bodies?.[name], now = this.clock();
-    if (!b?.alive || this.roles[name] !== 'prop' || this.phase !== 'hunt' || (!forced && now - b.whistleAt < WHISTLE_CD)) return;
-    b.whistleAt = now;
-    if (!forced) this.get(name).points += 1;
-    this.emit?.('fx', { kind: 'whistle', x: b.x, z: b.z, forced });
+    if (!b?.alive || this.roles[name] !== 'prop' || this.phase !== 'hunt' || !TAUNTS[kind] || (!forced && now - (b.tauntAt ?? 0) < TAUNT_CD)) return;
+    b.whistleAt = now; // dernier bruit (pour le sifflet forcé)
+    if (!forced) b.tauntAt = now; // attente entre deux moqueries
+    if (!forced) this.get(name).points += TAUNTS[kind];
+    this.emit?.('fx', { kind: 'whistle', taunt: kind, x: b.x, z: b.z, forced });
     this.heard(b.x, b.z); // les robots chasseurs accourent
+  }
+  whistle(name, forced = false) { this.taunt(name, 'sifflet', forced); }
+  // Radar (une fois par manche) : renvoie au chasseur la position des objets cachés à moins de 7 m.
+  radar(name) {
+    const b = this.bodies?.[name];
+    if (!b?.alive || this.roles[name] !== 'hunter' || this.phase !== 'hunt' || !b.radar) return null;
+    b.radar = false;
+    this.emit?.('fx', { kind: 'radar', x: b.x, z: b.z, by: name });
+    return this.living('prop').filter(([, t]) => Math.hypot(t.x - b.x, t.z - b.z) < RADAR_RANGE).map(([, t]) => ({ x: t.x, z: t.z }));
+  }
+  // Grenade à confettis (une fois par manche) : les objets touchés scintillent quelques secondes, pour tout le monde.
+  grenade(name, x, z) {
+    const b = this.bodies?.[name];
+    if (!b?.alive || this.roles[name] !== 'hunter' || this.phase !== 'hunt' || !b.grenade || !num(x) || !num(z)) return;
+    if (Math.hypot(x - b.x, z - b.z) > GRENADE_RANGE) return;
+    b.grenade = false;
+    const hits = this.living('prop').filter(([, t]) => Math.hypot(t.x - x, t.z - z) < GRENADE_RADIUS).map(([n]) => n);
+    for (const n of hits) this.bodies[n].marked = this.clock() + MARK_MS;
+    this.emit?.('fx', { kind: 'grenade', x, z, hits });
   }
 
   tick() {
@@ -186,10 +215,10 @@ class Room {
       if (p?.bot) this.think(n, b);
       else if (!p?.connected || now - b.heard > 30000) { b.alive = false; this.notify?.(); this.checkEnd(); continue; } // parti
       // Sifflet forcé : un objet resté muet trop longtemps se trahit.
-      if (this.phase === 'hunt' && this.roles[n] === 'prop' && now - b.whistleAt > FORCED_WHISTLE) this.whistle(n, true);
+      if (this.phase === 'hunt' && this.roles[n] === 'prop' && now - b.whistleAt > FORCED_WHISTLE) this.taunt(n, 'sifflet', true);
     }
     const r = v => Math.round(v * 100) / 100;
-    this.emit?.('snap', Object.entries(this.bodies).map(([n, b]) => [n, r(b.x), r(b.z), r(b.ry), b.type ?? '', b.alive ? 1 : 0, b.hp]));
+    this.emit?.('snap', Object.entries(this.bodies).map(([n, b]) => [n, r(b.x), r(b.z), r(b.ry), b.type ?? '', b.alive ? 1 : 0, b.hp, b.marked > now ? 1 : 0]));
   }
   checkEnd() {
     if (this.phase !== 'hunt') return;
@@ -202,7 +231,10 @@ class Room {
     const survivors = this.living('prop').map(([n]) => n);
     if (winner === 'props') for (const n of survivors) this.get(n).points += 3;
     else for (const [n] of this.living('hunter')) this.get(n).points += 2;
-    this.result = { winner, survivors, found: [...this.order] };
+    // meilleure cachette : un survivant au hasard parmi les objets jamais touchés par un confetti, sinon celui trouvé le plus tard
+    const forms = Object.fromEntries(Object.entries(this.bodies).filter(([n]) => this.roles[n] === 'prop').map(([n, b]) => [n, b.type]));
+    const best = survivors.length ? survivors[0] : this.order.at(-1) ?? null;
+    this.result = { winner, survivors, found: [...this.order], forms, best };
     this.phase = 'roundEnd';
     this.phaseAt = this.clock();
     this.stop();
@@ -226,7 +258,7 @@ class Room {
     const now = this.clock(), dt = TICK_MS / 1000, hunter = this.roles[name] === 'hunter';
     // Objet : file vers un coin tranquille près d'un objet, prend sa forme, puis ne bouge plus.
     if (!hunter) {
-      if (b.type) return;
+      if (b.type) { if (this.phase === 'hunt' && this.rng() < 0.004) this.taunt(name, ['canard', 'pet', 'rire', 'coucou'][Math.floor(this.rng() * 4)]); return; }
       if (!br.goal) {
         const d = M.decor[Math.floor(this.rng() * M.decor.length)], a = this.rng() * Math.PI * 2;
         br.goal = { x: d.x + Math.cos(a) * (d.r + 0.5), z: d.z + Math.sin(a) * (d.r + 0.5), type: d.type };
@@ -242,6 +274,11 @@ class Room {
     if (!br.goal || this.walk(b, br.goal, M.SPEED, dt) < 0.4) { const d = M.decor[Math.floor(this.rng() * M.decor.length)]; br.goal = { x: d.x + 0.6, z: d.z + 0.6 }; br.whistle = null; }
     if (now < br.next) return;
     br.next = now + 1500 + this.rng() * 1500;
+    // gadgets : la grenade là où ça a sifflé, le radar au milieu de la chasse
+    if (b.grenade && br.whistle && Math.hypot(br.whistle.x - b.x, br.whistle.z - b.z) < GRENADE_RANGE) this.grenade(name, br.whistle.x, br.whistle.z);
+    if (b.radar && now - this.phaseAt > this.settings.hunt * 500) { const pings = this.radar(name); if (pings?.length) br.goal = pings[0]; }
+    const marked = this.living('prop').find(([, t]) => t.marked > now && Math.hypot(t.x - b.x, t.z - b.z) < TAG_RANGE - 0.5);
+    if (marked) return this.tag(name, { player: marked[0] });
     const near = (x, z) => Math.hypot(x - b.x, z - b.z) < TAG_RANGE - 0.5;
     const hidden = this.living('prop').filter(([, t]) => near(t.x, t.z));
     const suspect = hidden.find(([, t]) => now - t.movedAt < 6000 || now - t.whistleAt < 6000);
@@ -274,7 +311,8 @@ class Room {
       role, roles: this.playing() || this.phase === 'roundEnd' ? this.roles : null, found: this.order ?? [],
       players: this.players.map(p => ({ name: p.name, connected: p.connected, bot: !!p.bot, color: p.color, points: p.points, wins: this.wins[p.name] ?? 0 })),
       spawn: this.bodies?.[name] && this.phase === 'hide' ? { x: this.bodies[name].x, z: this.bodies[name].z } : null,
+      night: this.roundNo % 2 === 0, gadgets: this.bodies?.[name] ? { radar: this.bodies[name].radar, grenade: this.bodies[name].grenade } : null,
     };
   }
 }
-module.exports = { Room, SETTINGS, MAX_PLAYERS, HIDE_MS, HUNT_MS };
+module.exports = { Room, SETTINGS, MAX_PLAYERS, HIDE_MS, HUNT_MS, TAUNTS };

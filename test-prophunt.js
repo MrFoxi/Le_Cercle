@@ -105,4 +105,55 @@ const setup = (n, bots = 0) => {
   assert(r.ranking.length === 8);
 }
 
+// Moqueries, gadgets des chasseurs, changement de forme, vie regagnée, réglages.
+{
+  const r = setup(4);
+  const h = Object.keys(r.roles).find(n => r.roles[n] === 'hunter'), props = Object.keys(r.roles).filter(n => r.roles[n] === 'prop');
+  const hb = r.bodies[h], [p1, p2, p3] = props.map(n => r.bodies[n]);
+  // tout le monde près d'un même objet
+  const d = M.decor[5];
+  [p1, p2].forEach((b, k) => Object.assign(b, { x: d.x + 0.5 + k * 0.4, z: d.z }));
+  Object.assign(p3, { x: d.x + 9, z: d.z });
+  r.disguise(props[0], d.type);
+  r.at(r.deadline); r.timeout(); r.stop();
+  for (const b of Object.values(r.bodies)) b.heard = r.now();
+  // changer de forme pendant la chasse : pas avant 10 s
+  const p3pts = r.get(props[2]).points; r.taunt(props[2], 'canard'); assert.strictEqual(r.get(props[2]).points, p3pts + 1, 'moquerie dès le début de la chasse');
+  r.disguise(props[0], d.type);
+  assert.throws(() => r.disguise(props[0], d.type), /Encore/);
+  r.at(r.now() + 10500); r.disguise(props[0], d.type);
+  // moqueries : points selon le son, une toutes les 8 s (et dès le début de la chasse)
+  const pts = r.get(props[1]).points;
+  r.taunt(props[1], 'coucou'); r.taunt(props[1], 'pet');
+  assert.strictEqual(r.get(props[1]).points, pts + 3);
+  r.at(r.now() + 8100); r.taunt(props[1], 'pet'); assert.strictEqual(r.get(props[1]).points, pts + 5);
+  r.taunt(props[2], 'inventé'); // moquerie inconnue : ignorée
+  // radar : les objets à moins de 7 m, une seule fois
+  Object.assign(hb, { x: d.x - 1, z: d.z });
+  const pings = r.radar(h);
+  assert.strictEqual(pings.length, 2);
+  assert.strictEqual(r.radar(h), null, 'un seul radar par manche');
+  // grenade : marque les objets touchés, pas trop loin du chasseur
+  const fx = []; r.emit = (ev, f) => ev === 'fx' && fx.push(f);
+  r.grenade(h, d.x + 30, d.z); assert(hb.grenade, 'trop loin : pas lancée');
+  r.grenade(h, d.x + 0.5, d.z);
+  assert(!hb.grenade && p1.marked > r.now() && p2.marked > r.now() && !(p3.marked > r.now()));
+  assert.deepStrictEqual(fx.find(f => f.kind === 'grenade').hits.sort(), [props[0], props[1]].sort());
+  // vie regagnée en trouvant un objet
+  hb.hp = 50; r.at(r.now() + 500); r.tag(h, { player: props[0] });
+  assert.strictEqual(hb.hp, 70);
+}
+{
+  let now = 0;
+  const r = new Room('QWERT', rng, false, () => now);
+  r.addPlayer('A'); r.addBot('A');
+  r.configure('A', 'hide', 20); r.configure('A', 'hunt', 240);
+  assert.throws(() => r.configure('A', 'hunt', 7), /invalide/);
+  r.start('A'); r.stop();
+  assert.strictEqual(r.deadline, 20000);
+  now = 20000; r.timeout(); r.stop();
+  assert.strictEqual(r.deadline, 20000 + 240000);
+  assert.strictEqual(r.viewFor('A').night, false);
+}
+
 console.log('Prop Hunt : tests OK');

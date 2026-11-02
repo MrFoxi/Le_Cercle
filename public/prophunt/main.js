@@ -32,7 +32,24 @@ const SFX = {
   tick: () => blip(520, 520, 0.1, 'square', 0.05),
   go: () => blip(880, 1320, 0.35, 'square', 0.07),
   win: () => [523, 659, 784, 1046, 1318].forEach((f, k) => blip(f, f, 0.22, 'triangle', 0.1, k * 0.11)),
+  canard: v => { for (const k of [0, 0.22]) { blip(520, 380, 0.16, 'sawtooth', v * 0.7, k); blip(1040, 760, 0.16, 'square', v * 0.25, k); } },
+  pet: v => noise(0.55, 90, v * 2.2, 140),
+  rire: v => [0, 0.16, 0.32, 0.5, 0.66].forEach((t, k) => blip(700 - k * 40, 520 - k * 40, 0.12, 'triangle', v, t)),
+  coucou: v => { blip(784, 780, 0.28, 'sine', v); blip(622, 620, 0.4, 'sine', v, 0.32); },
+  radar: () => blip(1800, 600, 0.6, 'sine', 0.08),
+  heart: v => { blip(70, 45, 0.12, 'sine', v); blip(65, 40, 0.12, 'sine', v * 0.7, 0.16); },
 };
+// Bruit filtré (pet) : un souffle grave qui vibre.
+function noise(dur, freq, vol, wobble) {
+  if (!ac) return;
+  const t = ac.currentTime, b = ac.createBuffer(1, ac.sampleRate * dur, ac.sampleRate), d = b.getChannelData(0);
+  for (let k = 0; k < d.length; k++) d[k] = Math.random() * 2 - 1;
+  const src = ac.createBufferSource(), f = ac.createBiquadFilter(), g = ac.createGain(), lfo = ac.createOscillator(), lg = ac.createGain();
+  src.buffer = b; f.type = 'bandpass'; f.frequency.value = freq; f.Q.value = 6; lfo.frequency.value = 28; lg.gain.value = wobble;
+  lfo.connect(lg).connect(f.frequency); lfo.start(t); lfo.stop(t + dur);
+  g.gain.setValueAtTime(vol, t); g.gain.exponentialRampToValueAtTime(0.001, t + dur);
+  src.connect(f).connect(g).connect(ac.destination); src.start(t);
+}
 
 /* ---------------- Écrans et salons ---------------- */
 let pseudo = store.get('prophunt-pseudo') || store.get('pseudo') || '';
@@ -75,6 +92,8 @@ $('#copyLink').onclick = () => { navigator.clipboard?.writeText(`${location.orig
 $('#addBot').onclick = () => act('addBot');
 $('#startBtn').onclick = () => { audio(); act('start'); };
 $('#rounds').onchange = e => act('configure', 'rounds', Number(e.target.value));
+$('#hideT').onchange = e => act('configure', 'hide', Number(e.target.value));
+$('#huntT').onchange = e => act('configure', 'hunt', Number(e.target.value));
 $('#players').onclick = e => { const b = e.target.closest('[data-bot]'); if (b) act('removeBot', b.dataset.bot); };
 socket.on('session', s => { store.set('prophunt-session', JSON.stringify(s)); history.replaceState(null, '', `?salon=${s.code}`); });
 socket.on('closed', msg => { alert(msg); leave(); });
@@ -101,10 +120,12 @@ socket.on('state', s => {
   if (s.phase === 'hide' && key !== roundKey) {
     roundKey = key; seenFound = 0; lastCount = null; remotes.clear();
     me = s.spawn && !s.spectator ? { x: s.spawn.x, z: s.spawn.z, ry: 0, type: null, alive: true, hp: 100, moving: false } : null;
-    locked = false; watching = null;
+    locked = false; watching = null; gadgets = { radar: true, grenade: true }; tauntAt = 0;
     // objets : la place devant soi ; chasseurs (au pied de la fontaine) : regard vers l'extérieur
     if (me) view.cam.yaw = Math.atan2(me.x, me.z) + (s.role === 'hunter' ? Math.PI : 0);
     $('#feed').innerHTML = ''; $('#board').hidden = true; $('#spectating').hidden = true;
+    view.setNight(s.night, s.role === 'hunter');
+    if (s.night) feed('🌙 Manche de nuit !');
     feed(s.role === 'hunter' ? '🎯 Tu es chasseur ! Attends que les objets se cachent.' : '🪴 Tu es un objet : transforme-toi et cache-toi !');
   }
   for (const n of s.found.slice(seenFound)) feed(n === s.me ? '😱 Tu as été trouvé !' : `🔎 ${n} a été trouvé !`);
@@ -119,6 +140,7 @@ function renderRoom() {
   $('#players').innerHTML = s.players.map(p => `<li class="${p.connected ? '' : 'off'}"><i class="dot" style="background:${p.color}"></i><span>${esc(p.name)}${p.name === s.host ? ' 👑' : ''}${p.wins ? ` · 🏆 ${p.wins}` : ''}</span>${p.bot && host ? `<button class="small ghost" data-bot="${esc(p.name)}" aria-label="Retirer ${esc(p.name)}">✕</button>` : ''}</li>`).join('');
   $('#spect').textContent = s.spectators.length ? `👁 ${s.spectators.join(', ')}` : '';
   $('#addBot').hidden = !host; $('#rounds').disabled = !host; $('#rounds').value = s.settings.rounds;
+  $('#hideT').disabled = $('#huntT').disabled = !host; $('#hideT').value = s.settings.hide; $('#huntT').value = s.settings.hunt;
   $('#startBtn').hidden = !host; $('#startBtn').disabled = s.players.length < 2;
   $('#roomHint').textContent = host ? (s.players.length < 3 ? 'C’est plus drôle à 4 ou plus : ajoute des robots ou invite des amis.' : 'Tout le monde est là ? Lance la partie !') : 'Le créateur du salon lance la partie.';
 }
@@ -131,7 +153,8 @@ function showBoard(s) {
   const rows = over ? s.ranking : [...s.players].sort((a, b) => b.points - a.points);
   $('#boardTitle').textContent = over ? `🏆 ${rows[0]?.name === s.me ? 'Tu gagnes la partie !' : `${rows[0]?.name} gagne la partie !`}` : s.result?.winner === 'hunters' ? '🎯 Les chasseurs ont tout trouvé !' : '🪴 Les objets ont tenu bon !';
   $('#boardList').innerHTML = rows.map((p, k) => `<li class="${p.name === s.me ? 'me' : ''}"><b>${k + 1}</b><i class="dot" style="width:14px;height:14px;border-radius:50%;background:${p.color}"></i><span>${esc(p.name)}</span>${over ? '' : `<em>${roleOf(p.name) === 'hunter' ? '🎯' : s.result?.survivors.includes(p.name) ? '🪴 caché' : '🔎 trouvé'}</em>`}<strong>${p.points} pts</strong></li>`).join('');
-  $('#boardHint').textContent = over ? '' : `Manche ${s.roundNo}/${s.settings.rounds} terminée · les rôles changent…`;
+  const best = !over && s.result?.best ? `🏅 Meilleure cachette : ${s.result.best}${s.result.forms?.[s.result.best] ? ` (${M.PROPS[s.result.forms[s.result.best]]?.name ?? ''})` : ''} · ` : '';
+  $('#boardHint').textContent = over ? '' : `${best}Manche ${s.roundNo}/${s.settings.rounds} terminée · les rôles changent…`;
   const btns = $('#boardButtons'); btns.innerHTML = '';
   if (over) {
     if (host) { const b = document.createElement('button'); b.className = 'primary'; b.textContent = 'Rejouer'; b.onclick = async () => { await act('again'); act('start'); }; btns.append(b); }
@@ -146,11 +169,11 @@ const view = createView($('#view'));
 view.resize(); addEventListener('resize', () => view.resize());
 socket.on('snap', list => {
   const at = performance.now() / 1000;
-  for (const [n, x, z, ry, type, alive, hp] of list) {
+  for (const [n, x, z, ry, type, alive, hp, marked] of list) {
     if (!remotes.has(n)) remotes.set(n, []);
-    const b = remotes.get(n); b.push({ at, x, z, ry, type, alive, hp });
+    const b = remotes.get(n); b.push({ at, x, z, ry, type, alive, hp, marked });
     if (b.length > 10) b.shift();
-    if (me && n === room?.me) { me.hp = hp; me.type = type || null; if (!alive && me.alive) { me.alive = false; } }
+    if (me && n === room?.me) { me.hp = hp; me.type = type || null; me.marked = !!marked; if (!alive && me.alive) { me.alive = false; } }
   }
 });
 function remoteAt(n, t) {
@@ -158,12 +181,20 @@ function remoteAt(n, t) {
   let k = b.findIndex(s => s.at > t); if (k < 0) k = b.length - 1;
   const B = b[k], A = b[Math.max(0, k - 1)], f = B.at > A.at ? Math.max(0, Math.min(1, (t - A.at) / (B.at - A.at))) : 1;
   let dr = B.ry - A.ry; dr = Math.atan2(Math.sin(dr), Math.cos(dr));
-  return { x: A.x + (B.x - A.x) * f, z: A.z + (B.z - A.z) * f, ry: A.ry + dr * f, type: B.type, alive: B.alive, hp: B.hp, moving: Math.hypot(B.x - A.x, B.z - A.z) > 0.01 };
+  return { x: A.x + (B.x - A.x) * f, z: A.z + (B.z - A.z) * f, ry: A.ry + dr * f, type: B.type, alive: B.alive, hp: B.hp, marked: B.marked, moving: Math.hypot(B.x - A.x, B.z - A.z) > 0.01 };
 }
 socket.on('fx', f => {
-  view.burst(f.x, f.z, f.kind === 'hunterOut' ? 'miss' : f.kind);
   const d = me ? Math.hypot(f.x - me.x, f.z - me.z) : 8, near = Math.max(0.02, 0.16 * (1 - Math.min(1, d / 30)));
-  if (f.kind === 'whistle') { SFX.whistle(near); if (roleOf(room?.me) === 'hunter') feed(f.forced ? '🎵 Un objet s’est trahi en sifflant !' : '🎵 Un objet siffle quelque part…'); }
+  if (f.kind === 'whistle') {
+    const t = f.taunt ?? 'sifflet';
+    view.burst(f.x, f.z, 'taunt', t);
+    (t === 'sifflet' ? SFX.whistle : SFX[t])?.(near);
+    if (roleOf(room?.me) === 'hunter') feed(f.forced ? '🎵 Un objet s’est trahi en sifflant !' : { sifflet: '🎵 Un objet siffle…', canard: '🦆 Coin coin ?!', pet: '💨 Quelqu’un a… pété ?', rire: '😂 Un objet se moque de toi !', coucou: '👋 Coucou !' }[t]);
+    return;
+  }
+  view.burst(f.x, f.z, f.kind === 'hunterOut' ? 'miss' : f.kind);
+  if (f.kind === 'radar' && f.by !== room?.me) { SFX.radar(); if (roleOf(room?.me) === 'prop') feed('📡 Un chasseur a lancé son radar !'); }
+  if (f.kind === 'grenade') { SFX.found(); feed(f.hits.length ? `🎉 Confettis : ${f.hits.includes(room?.me) ? 'tu scintilles, bouge !' : `${f.hits.length} objet(s) touché(s) !`}` : '🎉 Confettis… dans le vide'); }
   if (f.kind === 'found') { SFX.found(); }
   if (f.kind === 'miss' && f.by === room?.me) { SFX.miss(); toast('Raté ! −12 de vie'); }
   if (f.kind === 'hunterOut') feed(f.by === room?.me ? '💀 Plus de vie : tu ne chasses plus cette manche' : `💀 ${f.by} n’a plus de vie !`);
@@ -180,7 +211,11 @@ addEventListener('keydown', e => {
   keys.add(e.code);
   if (e.repeat) return;
   if (e.code === 'KeyE') action();
-  if (e.code === 'KeyF') whistle();
+  if (e.code === 'KeyF') taunt('sifflet');
+  const T = { Digit1: 'canard', Digit2: 'pet', Digit3: 'rire', Digit4: 'coucou', Numpad1: 'canard', Numpad2: 'pet', Numpad3: 'rire', Numpad4: 'coucou' }[e.code];
+  if (T) taunt(T);
+  if (e.code === 'KeyQ') radar();
+  if (e.code === 'KeyG') grenade();
   if (e.code === 'KeyR') toggleLock();
   if (e.code === 'Tab' && !me?.alive) { e.preventDefault(); nextWatch(); }
 });
@@ -222,7 +257,10 @@ $('#touch').hidden = !matchMedia('(pointer: coarse)').matches;
   });
   addEventListener('pointerup', e => { if (look?.id === e.pointerId) look = null; });
   $('#tAction').addEventListener('pointerdown', e => { e.preventDefault(); e.stopPropagation(); audio(); me?.alive ? action() : nextWatch(); });
-  $('#tWhistle').addEventListener('pointerdown', e => { e.preventDefault(); e.stopPropagation(); whistle(); });
+  $('#tWhistle').addEventListener('pointerdown', e => { e.preventDefault(); e.stopPropagation(); $('#tauntBar').hidden = !$('#tauntBar').hidden; });
+  for (const b of $$('#tauntBar [data-taunt]')) b.addEventListener('pointerdown', e => { e.preventDefault(); e.stopPropagation(); taunt(b.dataset.taunt); $('#tauntBar').hidden = true; });
+  $('#tRadar').addEventListener('pointerdown', e => { e.preventDefault(); e.stopPropagation(); radar(); });
+  $('#tGrenade').addEventListener('pointerdown', e => { e.preventDefault(); e.stopPropagation(); grenade(); });
   $('#tLock').addEventListener('pointerdown', e => { e.preventDefault(); e.stopPropagation(); toggleLock(); });
 }
 // Ce qu'on vise, à portée
@@ -249,7 +287,36 @@ function action() {
     act('disguise', type).then(r => { if (r?.ok) { me.type = type; SFX.poof(); view.burst(me.x, me.z, 'found'); } });
   }
 }
-function whistle() { if (me?.alive && room?.role === 'prop' && room.phase === 'hunt') socket.emit('whistle'); }
+let tauntAt = 0;
+function taunt(kind) {
+  if (!me?.alive || room?.role !== 'prop' || room.phase !== 'hunt') return;
+  const wait = 8 - (performance.now() / 1000 - tauntAt);
+  if (wait > 0) return toast(`Encore ${Math.ceil(wait)} s avant la prochaine moquerie`);
+  tauntAt = performance.now() / 1000;
+  socket.emit('taunt', kind);
+}
+// Radar : la réponse n'arrive qu'à moi (positions des objets proches, en rouge, pendant 2 s)
+function radar() {
+  if (!me?.alive || room?.role !== 'hunter' || room.phase !== 'hunt') return;
+  if (!gadgets.radar) return toast('Radar déjà utilisé cette manche');
+  gadgets.radar = false; SFX.radar();
+  socket.emit('radar', pings => {
+    if (!pings) return;
+    toast(pings.length ? `📡 ${pings.length} objet(s) caché(s) tout près !` : '📡 Rien à moins de 7 m');
+    for (const p of pings) view.burst(p.x, p.z, 'ping');
+  });
+}
+// Grenade à confettis : là où l'on vise (jusqu'à 12 m), sinon devant soi
+function grenade() {
+  if (!me?.alive || room?.role !== 'hunter' || room.phase !== 'hunt') return;
+  if (!gadgets.grenade) return toast('Grenade déjà lancée cette manche');
+  const a = view.aim(room.me);
+  let p = a?.point ?? null;
+  if (!p || Math.hypot(p.x - me.x, p.z - me.z) > 12) { const y = view.cam.yaw; p = { x: me.x - Math.sin(y) * 6, z: me.z - Math.cos(y) * 6 }; }
+  gadgets.grenade = false;
+  socket.emit('grenade', { x: +p.x.toFixed(2), z: +p.z.toFixed(2) });
+}
+let gadgets = { radar: true, grenade: true };
 function toggleLock() { if (room?.role !== 'prop') return; locked = !locked; toast(locked ? '🔒 Rotation bloquée' : '🔓 Rotation libre'); }
 function nextWatch() {
   const alive = room?.players.map(p => p.name).filter(n => n !== room.me && remoteAt(n, performance.now() / 1000)?.alive) ?? [];
@@ -258,7 +325,7 @@ function nextWatch() {
 }
 
 /* ---------------- Boucle de jeu ---------------- */
-let last = performance.now(), lastSend = 0;
+let last = performance.now(), lastSend = 0, heartAt = 0;
 const labelEls = new Map();
 function frame(now) {
   requestAnimationFrame(frame);
@@ -293,7 +360,7 @@ function frame(now) {
         if (me.type && !locked) me.ry = view.cam.yaw + Math.PI; // l'objet se tourne comme la caméra (R pour bloquer)
       }
       if (me.alive && now - lastSend > 66) { lastSend = now; socket.volatile.emit('pos', { x: +me.x.toFixed(2), z: +me.z.toFixed(2), ry: +me.ry.toFixed(2) }); }
-      list.push({ name: s.me, color: colorOf(s.me), hunter: s.role === 'hunter', x: me.x, z: me.z, ry: me.ry, type: me.type, alive: me.alive, moving: me.moving });
+      list.push({ name: s.me, color: colorOf(s.me), hunter: s.role === 'hunter', x: me.x, z: me.z, ry: me.ry, type: me.type, alive: me.alive, moving: me.moving, marked: me.marked });
     }
     // Caméra : moi, sinon un joueur encore en jeu (Tab ou clic pour changer)
     let focus = me?.alive ? me : null;
@@ -324,8 +391,17 @@ function hud(s, list, now) {
   $('#hp').hidden = role !== 'hunter' || !me;
   $('#hp i').style.width = `${me?.hp ?? 100}%`;
   $('#lockHint').hidden = !alive || document.pointerLockElement === canvas || !['hide', 'hunt'].includes(s.phase);
-  $('#keys').innerHTML = !alive ? '' : role === 'hunter' ? 'Clic / <b>E</b> : tirer sur ce qui est louche<br><b>Maj</b> : courir' : 'Vise un objet + <b>E</b> : te transformer<br><b>R</b> : bloquer ta rotation · <b>F</b> : siffler (+1)<br><b>Maj</b> : courir';
-  $('#tWhistle').hidden = role !== 'prop'; $('#tLock').hidden = role !== 'prop';
+  $('#keys').innerHTML = !alive ? '' : role === 'hunter'
+    ? `Clic / <b>E</b> : tirer sur ce qui est louche<br><b>Q</b> : radar ${gadgets.radar ? '✅' : '❌'} · <b>G</b> : grenade à confettis ${gadgets.grenade ? '✅' : '❌'}<br><b>Maj</b> : courir`
+    : `Vise un objet + <b>E</b> : te transformer · <b>R</b> : bloquer ta rotation<br><b>F</b> 🎵 <b>1</b> 🦆 <b>2</b> 💨 <b>3</b> 😂 <b>4</b> 👋 : se moquer${me?.marked ? '<br>✨ <b>Tu scintilles : change de place !</b>' : ''}<br><b>Maj</b> : courir`;
+  $('#tWhistle').hidden = $('#tLock').hidden = role !== 'prop'; $('#tRadar').hidden = $('#tGrenade').hidden = role !== 'hunter';
+  if (role !== 'prop' || !alive) $('#tauntBar').hidden = true;
+  // Battement de cœur du chasseur dans la dernière minute, plus rapide près d'un objet caché
+  if (role === 'hunter' && alive && s.phase === 'hunt' && left <= 60) {
+    let d = Infinity;
+    for (const o of list) if (o.alive && roleOf(o.name) === 'prop') d = Math.min(d, Math.hypot(o.x - me.x, o.z - me.z));
+    if (d < 5 && now - heartAt > 320 + d * 160) { heartAt = now; SFX.heart(0.25 * (1 - d / 6)); }
+  }
   $('#tAction').textContent = role === 'hunter' ? '🎯' : '✨';
   const sp = $('#spectating');
   sp.hidden = alive || !s.roles || !['hide', 'hunt'].includes(s.phase);
@@ -334,6 +410,7 @@ function hud(s, list, now) {
   if (alive && ['hide', 'hunt'].includes(s.phase) && now % 120 < 20) {
     const a = aimed();
     $('#cross').classList.toggle('on', !!a && !a.far);
+    view.highlight(role === 'prop' && a && !a.far && a.decor !== undefined ? a.decor : null);
     if (a && !a.far && role === 'prop' && $('#aimHint').hidden) {
       const type = a.decor !== undefined ? M.decor[a.decor].type : null;
       if (type && type !== me.type) { $('#aimHint').textContent = `E : devenir ${M.PROPS[type].name}`; $('#aimHint').hidden = false; clearTimeout(toastTimer); toastTimer = setTimeout(() => ($('#aimHint').hidden = true), 400); }
