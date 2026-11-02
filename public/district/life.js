@@ -69,7 +69,13 @@ export function createLife({ scene, people, low, camera, target, onSound }) {
   const neighbors = i => NAV.adj[i].map(([j]) => j).filter(j => !NAV.nodes[j].edge);
 
   // ---------- Voitures volantes (néo-cité) ----------
-  const cars = !T.futur ? [] : Array.from({ length: low ? 5 : 9 }, (_, i) => {
+  // néo-cité à plateformes : les voitures tournent sur des couloirs aériens, chacun à son altitude
+  const laneCars = (LAYOUT?.lanes || []).flatMap((ln, k) => Array.from({ length: low ? 2 : 3 }, (_, i) => {
+    const g = makeHoverCar(['#e6eaf0', '#ff4fd8', '#3ff0ff', '#1c2130', '#ffb03a', '#8aff5a'][(k * 3 + i) % 6]);
+    root.add(g);
+    return { g, ln, a: (i / 3) * Math.PI * 2 + k, ph: rnd(0, 6) };
+  }));
+  const cars = !T.futur || LAYOUT ? [] : Array.from({ length: low ? 5 : 9 }, (_, i) => {
     const g = makeHoverCar(['#e6eaf0', '#ff4fd8', '#3ff0ff', '#1c2130', '#ffb03a', '#8aff5a'][i % 6]);
     const dir = i % 2 ? 1 : -1, y = 0.6 + (i % 3) * 0.55;
     g.position.set(rnd(-14, 14), y, dir * (0.55 + (i % 3) * 0.05)); g.rotation.y = dir > 0 ? 0 : Math.PI;
@@ -316,6 +322,12 @@ export function createLife({ scene, people, low, camera, target, onSound }) {
     followables() { return [...cats.filter(c => c.mode === 'walk').map(c => ({ obj: c.root, h: 0.3 })), ...(vendor ? [{ obj: vendor.g, h: 0.8 }] : [])]; },
     update(dt, { night, season, rain, festival, hour }) {
       cats.forEach(c => stepCat(c, dt));
+      for (const c of laneCars) {
+        c.a += c.ln.v * dt;
+        const x = Math.cos(c.a) * c.ln.r, z = Math.sin(c.a) * c.ln.r, dx = -Math.sin(c.a) * Math.sign(c.ln.v), dz = Math.cos(c.a) * Math.sign(c.ln.v);
+        c.g.position.set(x, c.ln.y + Math.sin(performance.now() / 700 + c.ph) * 0.08, z);
+        c.g.rotation.set(0, Math.atan2(-dz, dx), Math.sign(c.ln.v) * 0.12); // penchée dans le virage
+      }
       for (const c of cars) { // voitures volantes au-dessus de la route
         c.g.position.x += c.v * dt;
         if (Math.abs(c.g.position.x) > 15) c.g.position.x = -Math.sign(c.v) * 15;

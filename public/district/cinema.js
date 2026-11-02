@@ -77,6 +77,12 @@ export function createCinema(world, { fade, label }) {
       grandrue: () => { const d = sign(); return { name: 'La Grand’Rue', dur: 16, at: t => { const a = deg2(lerp(110, 60, t) * d + (d < 0 ? 180 : 0)); return { pos: V(Math.cos(a) * 15, 1.5, Math.sin(a) * 15), look: V(Math.cos(a - d * 0.5) * 13.5, 1.2, Math.sin(a - d * 0.5) * 13.5), blur: 1.1 }; } }; },
       abbaye: () => { const a0 = rnd(0, 6.28); return { name: T.hill, dur: 15, at: t => { const a = a0 + t * 0.8; return { pos: V(Math.cos(a) * 17, 14, Math.sin(a) * 17), look: V(1.5, 6.5, 0), blur: 0.6 }; } }; },
     });
+    if (DISTRICT === 'futur') Object.assign(SHOTS, {
+      place: () => { const a0 = rnd(0, 6.28); return { name: 'La place centrale', dur: 16, at: t => { const a = a0 + t * 1.2; return { pos: V(Math.cos(a) * 11, 6, Math.sin(a) * 11), look: V(0, 2.5, 0), blur: 0.9 }; } }; },
+      tours: () => { const s0 = sign(); return { name: T.hill, dur: 18, at: t => ({ pos: V(s0 * lerp(11, 7, t), lerp(5, 22, t), -12), look: V(s0 * 3, lerp(6, 11, t), -22), blur: 0.8 }) }; },
+      trafic: () => { const a0 = rnd(0, 6.28); return { name: 'Le trafic aérien', dur: 16, at: t => { const a = a0 + t * 1.4; return { pos: V(Math.cos(a) * 14.5, 8.8, Math.sin(a) * 14.5), look: V(Math.cos(a + 0.6) * 12, 7, Math.sin(a + 0.6) * 12), blur: 0.9 }; } }; },
+      abime: () => ({ name: T.south, dur: 15, at: t => ({ pos: V(lerp(-3, 3, t), 4, 26), look: V(0, -40, lerp(-5, 5, t)), blur: 0.5 }) }),
+    });
     if (DISTRICT === 'cotier') Object.assign(SHOTS, {
       front: () => { const d = sign(); return { name: 'Le front de mer', dur: 18, at: t => { const x = lerp(-17 * d, 17 * d, t); return { pos: V(x, 1.5, 6.2), look: V(x + d * 6, 0.9, 1.2), blur: 1 }; } }; },
       mer: () => ({ name: 'Vu de la mer', dur: 18, at: t => ({ pos: V(lerp(-12, 12, t), 3.2, 19), look: V(lerp(-8, 8, t), 0.8, -1), blur: 0.7 }) }),

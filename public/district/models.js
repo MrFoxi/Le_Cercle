@@ -240,6 +240,8 @@ export function bake(group) {
     if (o.material.transparent && !o.material.userData.glow) { keep.push(o); return; }
     const g = (o.geometry.index ? o.geometry.toNonIndexed() : o.geometry.clone()).applyMatrix4(new THREE.Matrix4().multiplyMatrices(inv, o.matrixWorld));
     for (const k of Object.keys(g.attributes)) if (!['position', 'normal', 'uv'].includes(k)) g.deleteAttribute(k);
+    if (!g.attributes.uv) g.setAttribute('uv', new THREE.BufferAttribute(new Float32Array(g.attributes.position.count * 2), 2)); // toutes les pièces fusionnées doivent avoir les mêmes attributs
+    if (!g.attributes.normal) g.computeVertexNormals();
     if (!byMat.has(o.material)) byMat.set(o.material, []);
     byMat.get(o.material).push(g);
   });

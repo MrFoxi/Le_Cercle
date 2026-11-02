@@ -160,7 +160,7 @@ function shop(g, type, level, depth, info, rng) {
     info.glows.push({ x: 0, y: H + 0.8, z: front, color: fgc, strong: true });
   }
 }
-const signText = type => T.b[type][0].replace(/^(Le |La |Les |L’)/, '').toUpperCase().slice(0, 18);
+const signText = type => T.b[type][0].replace(/^(Le |La |Les |L’)/, '').toUpperCase().slice(0, 26); // la taille du texte s'adapte à l'enseigne
 
 // ---------- Logements ----------
 function home(g, type, level, depth, info, rng) {
@@ -286,11 +286,53 @@ function bigVilla(g, type, level, w, D, info) {
 }
 const hashN = s => hash(s);
 
+// Tour géante de la néo-cité : un hall vitré (avec son intérieur animé), puis des étages qui montent avec le niveau.
+const TOWER_WIN = () => canvasTex('towerWin', 64, 64, (x, w, h) => {
+  x.fillStyle = '#141a2a'; x.fillRect(0, 0, w, h);
+  const r = seeded(13);
+  for (let yy = 2; yy < h; yy += 16) for (let xx = 2; xx < w; xx += 16) { x.fillStyle = r() < 0.55 ? '#ffe2b0' : r() < 0.5 ? '#9fe8ff' : '#2a3350'; x.fillRect(xx, yy, 12, 10); }
+});
+function megaTower(g, type, level, w, D, info, rng) {
+  const base = LOOK[type], neon = pickBy(ST.neon, type), home = base.style === 'home';
+  const shell = std('#dfe6f0', { roughness: 0.25, metalness: 0.4 }), dark = std('#1c2130', { roughness: 0.35, metalness: 0.5 });
+  const nm = glowMat('neon' + neon, neon, null, 0.7, 3.4, 0);
+  box(g, w, 0.06, D, std('#2a3040', { roughness: 0.4 }), 0, 0, 0);
+  // hall : murs du fond et des côtés, plafond, façade vitrée ouverte sur l'intérieur
+  const back = -D / 2 + 0.1, front = D / 2 - 0.25;
+  box(g, w - 0.2, FLOOR, 0.1, shell, 0, 0, back);
+  for (const s of [-1, 1]) box(g, 0.1, FLOOR, D - 0.3, shell, s * (w / 2 - 0.15), 0, 0);
+  box(g, w - 0.1, 0.14, D - 0.1, dark, 0, FLOOR, 0);
+  box(g, w - 0.2, 0.05, 0.05, nm, 0, FLOOR - 0.05, front);
+  for (const s of [-1, 1]) box(g, 0.05, FLOOR, 0.05, nm, s * (w / 2 - 0.15), 0, front);
+  if (!home) interior(g, base, level, { W: 4, D: 3, back: front - 3, front, cz: front - 1.5, depth: D }, info, rng);
+  else { box(g, 1.6, 0.4, 0.6, shell, 0, 0, back + 0.8); plane(g, 0.9, 1.1, std('#3a4458'), 0, 0.55, back + 0.12); }
+  box(g, 0.8, 0.03, 0.25, glowMat('ceil', '#ffd9a0', null, 0.4, 2.2, 0), 0, FLOOR - 0.06, 0);
+  // la tour au-dessus du hall
+  const tw = w - 1.4, td = D - 1.8, H = FLOOR * (1.5 + level * 0.9), tz = -0.25;
+  const wt = TOWER_WIN().clone(); wt.needsUpdate = true; wt.wrapS = wt.wrapT = THREE.RepeatWrapping; wt.repeat.set(Math.round(tw), Math.round(H / 0.7));
+  const win = mat(`towerWin${type}${level}`, () => { const m = new THREE.MeshStandardMaterial({ map: wt, emissive: '#ffffff', emissiveMap: wt, emissiveIntensity: 0.05, roughness: 0.3, metalness: 0.3 }); m.userData.glow = { day: 0.05, night: 1.1, sched: 'A' }; return m; });
+  box(g, tw, H, td, win, 0, FLOOR + 0.14, tz);
+  box(g, tw + 0.1, 0.12, td + 0.1, dark, 0, FLOOR + 0.14 + H, tz); // toit
+  for (const [sx, sz] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) box(g, 0.06, H, 0.06, nm, sx * (tw / 2 + 0.02), FLOOR + 0.14, tz + sz * (td / 2 + 0.02));
+  let top = FLOOR + 0.14 + H;
+  if (level >= 4) { const ringT = new THREE.Mesh(new THREE.TorusGeometry(Math.max(tw, td) * 0.78, 0.06, 6, 40), nm); ringT.rotation.x = Math.PI / 2; ringT.position.set(0, top - H * 0.35, tz); g.add(ringT); }
+  if (level >= 7) { const h2 = H * 0.3; box(g, tw * 0.55, h2, td * 0.55, shell, 0, top, tz); top += h2; }
+  if (level >= 8) { cyl(g, Math.min(tw, td) * 0.45, 0.08, dark, 0, top, tz); const car = makeHoverCar(neon); car.position.set(0.2, top + 0.3, tz); car.userData.dynamic = false; g.add(car); top += 0.1; }
+  cyl(g, 0.03, 1.4, std('#9aa4b4', { metalness: 0.8 }), tw / 2 - 0.3, top, tz - td / 2 + 0.3);
+  ball(g, 0.07, glowMat('beacon', '#ff3a5a', null, 1, 4, 0), tw / 2 - 0.3, top + 1.45, tz - td / 2 + 0.3);
+  // enseigne holographique au-dessus du hall
+  sign(g, signText(type), '#070a14', neon, Math.min(3.6, w - 0.8), 0.45, 0, FLOOR + 0.25, front + 0.05, false, 3.4);
+  info.light = { x: 0, y: FLOOR - 0.35, z: front - 1.2, color: neon };
+  info.glows.push({ x: 0, y: FLOOR, z: front + 0.3, color: neon, strong: true }, { x: 0, y: 0.6, z: front + 0.4, color: neon, pool: true, r: 1.6 });
+  info.door = { x: 0, z: D / 2 }; info.doorIn = { x: 0, z: front - 0.3 }; info.front = front;
+}
+
 function buildThemed(type, level, depth = 4.2, w = 4.3) {
   const g = new THREE.Group(), rng = seeded(type.length * 977 + level * 31);
   const info = { seats: [], staff: [], steam: [], glows: [], light: null, screens: [] };
   info.door = { x: 0, z: depth / 2 }; info.front = -depth / 2 + 3;
   if (DISTRICT === 'moderne' && LOOK[type].style === 'home' && w > 6) { bigVilla(g, type, level, w, depth, info); return { group: g, info }; }
+  if (DISTRICT === 'futur' && w > 5) { megaTower(g, type, level, w, depth, info, rng); return { group: g, info }; }
   box(g, 4.3, 0.04, depth, textured('slabfloor', TEX.slab()), 0, 0, 0);
   if (LOOK[type].style === 'home') home(g, type, level, depth, info, rng);
   else shop(g, type, level, depth, info, rng);

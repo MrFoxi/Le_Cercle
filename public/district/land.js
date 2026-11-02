@@ -1,7 +1,7 @@
-// Little District : relief des quartiers qui ont leur propre plan (quartier moderne, village côtier, vieille ville).
+// Little District : relief des quartiers qui ont leur propre plan (quartier moderne, village côtier, vieille ville, néo-cité).
 // Même interface que buildTerrain : { glows, groundMats, meshes, update }.
 import * as THREE from 'three';
-import { TEX, std, textured, glowMat, box, cyl, sub, makeDecor, lightPool, streak, bake, seeded } from './models.js';
+import { TEX, std, textured, glowMat, box, cyl, sub, makeDecor, lightPool, streak, bake, seeded, canvasTex } from './models.js';
 import { WATER_N, GRASS } from './terrain.js';
 import { streetLamp, boatModel, lighthouse, WATER, GRANITE as GRANITE_T } from './styles.js';
 import { DISTRICT } from './theme.js';
@@ -317,4 +317,67 @@ function pitchedRoof(p, w, d, y, m, gable, pitch) {
   for (const s of [-1, 1]) { const g = new THREE.Mesh(geo, gable); g.rotation.y = Math.PI / 2; g.position.set(s * (w / 2) - 0.05, y, 0); p.add(g); }
 }
 
-export const buildLand = (scene, low) => ({ moderne: landModerne, cotier: landCotier, europe: landEurope })[DISTRICT](scene, low);
+// ---------- Néo-cité : plateformes flottantes, passerelles lumineuses, la ville tout en bas ----------
+function landFutur(scene, low) {
+  const L = LAYOUT, F = L.F;
+  const root = new THREE.Group(), glowsDef = [], groundMats = [], meshes = [];
+  const NEON = ['#3ff0ff', '#ff4fd8', '#8aff5a', '#ffb03a', '#7a6bff'];
+  // dalles sombres avec une grille de lumière
+  const tile = canvasTex('futurTile', 256, 256, (x, w, h) => {
+    x.fillStyle = '#20263a'; x.fillRect(0, 0, w, h);
+    for (let i = 0; i < 4; i++) for (let k = 0; k < 4; k++) { x.fillStyle = (i + k) % 2 ? '#262d44' : '#1c2234'; x.fillRect(i * 64 + 2, k * 64 + 2, 60, 60); }
+    x.strokeStyle = 'rgba(63,240,255,.35)'; x.lineWidth = 2; for (let i = 0; i <= 4; i++) { x.beginPath(); x.moveTo(i * 64, 0); x.lineTo(i * 64, h); x.stroke(); x.beginPath(); x.moveTo(0, i * 64); x.lineTo(w, i * 64); x.stroke(); }
+  }, { repeat: [1, 1] });
+  const shell = std('#dfe6f0', { roughness: 0.25, metalness: 0.5 }), dark = std('#2a3040', { roughness: 0.4, metalness: 0.6 });
+  F.pads.forEach((p, k) => {
+    const t = tile.clone(); t.needsUpdate = true; t.wrapS = t.wrapT = THREE.RepeatWrapping; t.repeat.set(p.r / 2, p.r / 2);
+    const topM = new THREE.MeshStandardMaterial({ map: t, roughness: 0.35, metalness: 0.3 });
+    const body = new THREE.Mesh(new THREE.CylinderGeometry(p.r, p.r * 0.82, 0.9, 48), [shell, topM, dark]);
+    body.position.set(p.x, p.y - 0.45, p.z); body.castShadow = body.receiveShadow = true; scene.add(body); meshes.push(body);
+    const c = NEON[k % NEON.length];
+    const rim = new THREE.Mesh(new THREE.TorusGeometry(p.r, 0.05, 6, 64), glowMat('rim' + c, c, null, 0.8, 3, 0)); rim.rotation.x = Math.PI / 2; rim.position.set(p.x, p.y + 0.02, p.z); root.add(rim);
+    // réacteurs anti-gravité sous la plateforme
+    const eng = new THREE.Mesh(new THREE.ConeGeometry(p.r * 0.45, 1.8, 16), dark); eng.rotation.x = Math.PI; eng.position.set(p.x, p.y - 1.8, p.z); root.add(eng);
+    const glow = new THREE.Mesh(new THREE.CircleGeometry(p.r * 0.25, 16), glowMat('engine' + c, c, null, 2, 4, 0)); glow.rotation.x = Math.PI / 2; glow.position.set(p.x, p.y - 2.71, p.z); root.add(glow);
+    for (let i = 0; i < 6; i++) { const a = (i / 6) * Math.PI * 2; const l = new THREE.Mesh(new THREE.SphereGeometry(0.06, 6, 5), glowMat('padLight', '#ffffff', null, 1, 3, 0)); l.position.set(p.x + Math.cos(a) * (p.r - 0.25), p.y + 0.05, p.z + Math.sin(a) * (p.r - 0.25)); root.add(l); }
+  });
+  // passerelles : une dalle de verre en pente, bordée de néons
+  F.walks.forEach(([ax, az, ay, bx, bz, by], k) => {
+    const len = Math.hypot(bx - ax, bz - az), slope = Math.hypot(len, by - ay), yaw = Math.atan2(bx - ax, bz - az), c = NEON[(k + 1) % NEON.length];
+    const g = sub(scene, (ax + bx) / 2, (ay + by) / 2, (az + bz) / 2, yaw);
+    const deck = new THREE.Mesh(new THREE.BoxGeometry(1.8, 0.12, slope), std('#9fb4c8', { roughness: 0.1, metalness: 0.4, transparent: true, opacity: 0.85 }));
+    deck.rotation.x = -Math.atan2(by - ay, len); deck.position.y = -0.05; deck.receiveShadow = true; g.add(deck); meshes.push(deck);
+    for (const s of [-1, 1]) { const rail = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.05, slope), glowMat('walkRail' + c, c, null, 1, 3.2, 0)); rail.rotation.x = deck.rotation.x; rail.position.set(s * 0.88, 0.45, 0); g.add(rail); }
+  });
+  // la ville tout en bas : des tours sombres aux fenêtres allumées, perdues dans la brume
+  const winTex = canvasTex('farCity', 64, 128, (x, w, h) => { x.fillStyle = '#121828'; x.fillRect(0, 0, w, h); const r = seeded(5); for (let yy = 4; yy < h; yy += 8) for (let xx = 4; xx < w; xx += 8) if (r() < 0.4) { x.fillStyle = r() < 0.3 ? '#3ff0ff' : r() < 0.5 ? '#ff4fd8' : '#ffd9a0'; x.fillRect(xx, yy, 6, 5); } });
+  const cityM = new THREE.MeshBasicMaterial({ map: winTex, color: '#c8c8e0', fog: false }); // hors du brouillard : on voit l'abîme et ses lumières
+  const N = low ? 160 : 320, city = new THREE.InstancedMesh(new THREE.BoxGeometry(1, 1, 1), cityM, N), d = new THREE.Object3D(), r = seeded(77);
+  for (let i = 0; i < N; i++) {
+    const a = r() * Math.PI * 2, dist = 10 + r() * 150, h = 10 + r() * 22, w = 5 + r() * 7;
+    d.position.set(Math.cos(a) * dist, F.void - 50 + h / 2, Math.sin(a) * dist); d.scale.set(w, h, w); d.rotation.y = r() * 3; d.updateMatrix(); city.setMatrixAt(i, d.matrix); // très bas : on a le vertige
+    city.setColorAt(i, new THREE.Color().setScalar(0.85 - (dist / 160) * 0.6)); // plus loin, plus sombre : de la profondeur
+  }
+  city.frustumCulled = false; scene.add(city); // ses tours sont partout : on la dessine toujours
+  const floor = new THREE.Mesh(new THREE.PlaneGeometry(400, 400), new THREE.MeshBasicMaterial({ color: '#03050c', fog: false })); floor.rotation.x = -Math.PI / 2; floor.position.y = F.void - 50; scene.add(floor);
+  // projecteurs qui balaient le ciel la nuit
+  const beams = [[-30, -40], [35, -30], [-40, 30]].map(([x, z], i) => { const b = new THREE.Mesh(new THREE.ConeGeometry(1.5, 60, 12, 1, true).translate(0, 30, 0), new THREE.MeshBasicMaterial({ color: NEON[i], transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide })); b.position.set(x, F.void, z); scene.add(b); return b; });
+  // décor des plateformes : arbres néon, bornes, hologramme au centre de la place
+  const deco = (id, x, z, sc = 1, ry = 0) => { const y = L.height(x, z) + GY, dd = makeDecor(id); dd.position.set(x, y, z); dd.scale.setScalar(sc); dd.rotation.y = ry; root.add(dd); (dd.userData.glows || []).forEach(gl => glowsDef.push({ ...gl, x: x + gl.x * sc, z: z + gl.z * sc, yb: y })); return dd; };
+  deco('jizo', 0, 0, 1.6); deco('fontaine', 0, 0, 0.9);
+  for (const [x, z, id, sc] of [[6.2, 2.5, 'cerisier', 0.9], [-6.2, -2.5, 'erable', 0.9], [24, -4.5, 'sakura', 0.8], [-24, -4.5, 'cerisier', 0.9], [-24, 4.5, 'bambou', 1], [6, -24, 'sakura', 0.9], [-6.5, -26, 'kiosque', 0.9], [4.5, 21.5, 'lampe', 1], [-4.5, 21.5, 'lampe', 1], [0, 22.5, 'torii', 1.2]]) deco(id, x, z, sc);
+  scene.add(bake(root));
+  const glows = [];
+  for (const gl of glowsDef) { const h = sub(scene, 0, gl.yb ?? GY, 0); if (gl.pool !== false) glows.push(lightPool(h, gl.x, gl.z, gl.r || 1, gl.color, 0.7)); glows.push(streak(h, gl.x, gl.z + 0.2, 0.4, gl.color, 1)); }
+
+  let t = 0;
+  return {
+    glows, groundMats, meshes, water: null,
+    update(dt, night = 0) {
+      t += dt;
+      beams.forEach((b, i) => { b.rotation.z = Math.sin(t * 0.25 + i * 2) * 0.35; b.rotation.x = Math.cos(t * 0.2 + i) * 0.25; b.material.opacity = night * 0.08; });
+    },
+  };
+}
+
+export const buildLand = (scene, low) => ({ moderne: landModerne, cotier: landCotier, europe: landEurope, futur: landFutur })[DISTRICT](scene, low);

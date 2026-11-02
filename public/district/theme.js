@@ -76,9 +76,9 @@ export const THEMES = {
     d: { plante: ['Jardinière', '🪴'], caisses: ['Tonneaux', '🛢️'], banc: ['Banc de pierre', '🪑'], velo: ['Charrette', '🛒'], lampe: ['Lanterne en fer', '🏮'], bambou: ['Buisson', '🌳'], toro: ['Borne de pierre', '🪨'], panneau: ['Enseigne', '🪧'], bonsai: ['Pot de lavande', '🪻'], vending: ['Fontaine à eau', '🚰'], cerisier: ['Tilleul', '🌳'], erable: ['Platane', '🍁'], torii: ['Calvaire', '✝️'], puits: ['Puits', '🪣'], neko: ['Gargouille', '🗿'], sakura: ['Grand chêne', '🌳'], jizo: ['Statue de chevalier', '🛡️'], kiosque: ['Kiosque à musique', '🎺'], fontaine: ['Fontaine', '⛲'] },
   },
   futur: {
-    name: 'Quartier futuriste', jp: 'NÉO-CITÉ', title: 'Néo-Cité', pitch: 'Des tours lumineuses, des voitures volantes au-dessus de la route et des habitants qui lévitent. Bienvenue en 2150.',
-    sectors: ['Le secteur 1', 'L’avenue des néons', 'Le secteur haut', 'Les jardins suspendus'],
-    hill: 'La flèche', hillView: 'Vue de la flèche', south: 'Le canal d’énergie', festival: '✨ Festival de lumière ce soir ! Hologrammes, feux d’artifice et visiteurs en plus (revenus ×1,5)', festivalName: 'Festival de lumière',
+    name: 'Quartier futuriste', jp: 'NÉO-CITÉ', title: 'Néo-Cité', pitch: 'Des plateformes qui flottent au-dessus du vide, des tours géantes, des voitures volantes et des habitants qui lévitent. Bienvenue en 2150.',
+    sectors: ['La place centrale', 'L’arrivée', 'Les tours est et ouest', 'Les tours du nord'],
+    hill: 'Les tours', hillView: 'Le belvédère', south: 'L’abîme', festival: '✨ Festival de lumière ce soir ! Hologrammes, feux d’artifice et visiteurs en plus (revenus ×1,5)', festivalName: 'Festival de lumière',
     vendor: ['🤖', 'Robot livreur', 'Un robot livreur flotte dans la rue. Touche-le !', 'Repas synthétiques offerts à tout le secteur', ''],
     font: '"Inter", system-ui, sans-serif', levels: GENERIC_LEVELS, futur: true, weather: { pluie: 1.6, neige: 0.3, brouillard: 1.4 },
     b: {

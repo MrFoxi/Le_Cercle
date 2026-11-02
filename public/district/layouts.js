@@ -143,7 +143,64 @@ const europe = {
   },
 };
 
+// ---------- Néo-cité : « La Ville verticale » ----------
+// Pas de sol : des plateformes flottantes au-dessus du vide, reliées par des passerelles lumineuses en pente.
+// La place centrale (commerces), deux tours géantes à l'est et à l'ouest, deux autres au nord, l'arrivée au sud.
+const F = {
+  pads: [ // cx, cz, rayon, hauteur
+    { id: 'hub', x: 0, z: 0, r: 7.5, y: 2 }, { id: 'est', x: 20, z: 0, r: 6.5, y: 4 }, { id: 'ouest', x: -20, z: 0, r: 6.5, y: 5.5 },
+    { id: 'nord', x: 0, z: -22, r: 7.5, y: 6 }, { id: 'sud', x: 0, z: 18, r: 6.5, y: 0.8 }, { id: 'se', x: 14, z: 22, r: 4, y: 2 }, { id: 'so', x: -14, z: 22, r: 4, y: 0 },
+  ],
+  void: -30,
+};
+const padEdge = (a, b) => { const A = F.pads.find(p => p.id === a), B = F.pads.find(p => p.id === b), d = Math.hypot(B.x - A.x, B.z - A.z), ux = (B.x - A.x) / d, uz = (B.z - A.z) / d; return [A.x + ux * A.r, A.z + uz * A.r, A.y, B.x - ux * B.r, B.z - uz * B.r, B.y]; };
+F.walks = [padEdge('hub', 'est'), padEdge('hub', 'ouest'), padEdge('hub', 'nord'), padEdge('hub', 'sud'), padEdge('sud', 'se'), padEdge('sud', 'so')].map(w => w.map(v => +v.toFixed(3)));
+function heightFutur(x, z) {
+  for (const p of F.pads) if (Math.hypot(x - p.x, z - p.z) <= p.r + 0.01) return p.y;
+  for (const [ax, az, ay, bx, bz, by] of F.walks) {
+    const dx = bx - ax, dz = bz - az, L2 = dx * dx + dz * dz, t = ((x - ax) * dx + (z - az) * dz) / L2;
+    if (t >= -0.01 && t <= 1.01 && Math.abs((x - ax) * dz - (z - az) * dx) / Math.sqrt(L2) < 0.95) return lerp(ay, by, t);
+  }
+  return F.void;
+}
+const inward = a => Math.atan2(-Math.cos(deg(a)), -Math.sin(deg(a)));
+const futur = {
+  bounds: { x0: -24, x1: 24, z0: -26, z1: 24 },
+  view: { x: 0, z: -1, dist: 58 },
+  height: heightFutur, F, BOARD: {},
+  plots: [
+    ...[45, 135, 225, 315].map(a => ({ x: +(4.6 * Math.cos(deg(a))).toFixed(3), z: +(4.6 * Math.sin(deg(a))).toFixed(3), y: 2, ry: inward(a), w: 4.3, depth: 3.6, sector: 0, size: 1 })),
+    { x: 3.1, z: 19.5, y: 0.8, ry: Math.PI, w: 4.3, depth: 3.6, sector: 1, size: 1.5 }, { x: -3.1, z: 19.5, y: 0.8, ry: Math.PI, w: 4.3, depth: 3.6, sector: 1, size: 1.5 },
+    { x: 14.5, z: 22, y: 2, ry: -Math.PI / 2, w: 4.3, depth: 3.6, sector: 1, size: 1.5 }, { x: -14.5, z: 22, y: 0, ry: Math.PI / 2, w: 4.3, depth: 3.6, sector: 1, size: 1.5 },
+    { x: 21, z: 0, y: 4, ry: -Math.PI / 2, w: 6, depth: 6, sector: 2, size: 4 }, { x: -21, z: 0, y: 5.5, ry: Math.PI / 2, w: 6, depth: 6, sector: 2, size: 4.5 },
+    { x: -3.3, z: -23, y: 6, ry: 0, w: 5.6, depth: 5.6, sector: 3, size: 6 }, { x: 3.3, z: -23, y: 6, ry: 0, w: 5.6, depth: 5.6, sector: 3, size: 6 },
+  ],
+  start: 0,
+  paths: [
+    ring(2.4, 15),
+    [[2.4, 0], [7.5, 0], [13.5, 0], [17.5, 0]], // vers la tour est
+    [[-2.4, 0], [-7.5, 0], [-13.5, 0], [-17.5, 0]], // vers la tour ouest
+    [[0, -2.4], [0, -7.5], [0, -14.5], [0, -19.6], [-3.3, -19.7]], [[0, -19.6], [3.3, -19.7]], [[0, -14.5], [-4, -17], [-6.4, -20]], // le nord et son belvédère
+    [[0, 2.4], [0, 7.5], [0, 11.5], [0, 15.2], [3.1, 17.2]], [[0, 15.2], [-3.1, 17.2]], [[0, 15.2], [0, 24]], // l'arrivée au sud
+    [[0, 15.2], F.walks[4].slice(0, 2), F.walks[4].slice(3, 5), [12.4, 22]], [[0, 15.2], F.walks[5].slice(0, 2), F.walks[5].slice(3, 5), [-12.4, 22]],
+    [[7.5, 0], [8.5, 0]], [[17.5, 0], [17.6, 4.5], [24.6, 4], [25.6, 1.2]], // tour du pad est jusqu'à son bord
+  ],
+  edges: [[0, 24]],
+  views: [[25.6, 1.2, -Math.PI / 2], [-6.4, -20, 2.4], [0, 24, 0], [0, 7.5, 0]],
+  pigeons: [[1.2, 1.5], [0, 22], [-5, -16]],
+  vendor: { z: 0.6, y: 2.5 }, // le robot livreur traverse en volant
+  lanterns: { x: [-5, 5], z: [-27, -19], y: 6.5 },
+  lanes: [ // couloirs des voitures volantes : cercles autour du centre (rayon, altitude, vitesse en rad/s)
+    { r: 11, y: 4, v: 0.22 }, { r: 14.5, y: 8.5, v: -0.16 }, { r: 27, y: 1.5, v: 0.1 }, { r: 19, y: 12, v: 0.13 }, { r: 33, y: 6, v: -0.08 },
+  ],
+  decorOK: (x, z) => {
+    if (!F.pads.some(p => Math.hypot(x - p.x, z - p.z) < p.r - 0.4)) return false;
+    if (Math.hypot(x, z) < 3 || (Math.abs(z) < 0.9 && Math.abs(x) > 2) || (Math.abs(x) < 0.9 && Math.abs(z) > 2)) return false; // la place et les allées
+    return true;
+  },
+};
+
 moderne.lanterns = { x: [-9, 9], z: [BAND[3][0] + 1, BAND[3][1] - 1], y: T[3] + 0.5 };
 
-export const LAYOUTS = { moderne, cotier, europe };
+export const LAYOUTS = { moderne, cotier, europe, futur };
 export const LAYOUT = LAYOUTS[DISTRICT] || null;

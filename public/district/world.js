@@ -125,7 +125,7 @@ export function createWorld(canvas, { low }) {
   const terrain = LAYOUT ? buildLand(scene, low) : buildTerrain(scene, low);
   groundMats.push(...terrain.groundMats);
   const tableTop = new THREE.Mesh(new THREE.PlaneGeometry(160, 160), new THREE.MeshStandardMaterial({ color: '#0d0f14', roughness: 0.32, metalness: 0.3 }));
-  tableTop.rotation.x = -Math.PI / 2; tableTop.position.y = -1.69; tableTop.receiveShadow = true; scene.add(tableTop);
+  tableTop.rotation.x = -Math.PI / 2; tableTop.position.y = -1.69; tableTop.receiveShadow = true; if (!LAYOUT?.F) scene.add(tableTop); // la néo-cité flotte au-dessus du vide : pas de table
 
   if (T.futur && !LAYOUT) for (const s of [-1, 1]) box(scene, 26.6, 0.012, 0.05, glowMat('roadNeon', s < 0 ? '#ff4fd8' : '#3ff0ff', null, 1, 3, 0), 0, ROAD_Y, s * 1.25);
   // Touffes d'herbe dans les recoins : bordures de trottoir, pied du mur de la colline, bord du canal (couleur de saison)
@@ -232,7 +232,7 @@ export function createWorld(canvas, { low }) {
   // Terrain vague (parcelle libre) ou à vendre (barrière + panneau 売地)
   function makeLot(depth, forSale, kind, w = 4.3) {
     const g = new THREE.Group();
-    const dirt = box(g, w - 0.1, 0.03, depth - 0.1, LAYOUT ? std('#6f9a45', { roughness: 1 }) : textured('dirtT', TEX.dirt()), 0, 0, 0); // plan propre : pelouse prête à bâtir dirt.receiveShadow = true;
+    const dirt = box(g, w - 0.1, 0.03, depth - 0.1, LAYOUT ? std(LAYOUT.F ? '#2a3040' : '#6f9a45', { roughness: LAYOUT.F ? 0.4 : 1, metalness: LAYOUT.F ? 0.5 : 0 }) : textured('dirtT', TEX.dirt()), 0, 0, 0); // plan propre : pelouse prête à bâtir dirt.receiveShadow = true;
     const r = seeded(Math.round(depth * 100 + w));
     for (let i = 0; i < 8 * w / 4.3; i++) { const t = new THREE.Mesh(new THREE.IcosahedronGeometry(0.12 + r() * 0.1, 0), std('#5f7a3a', { flatShading: true })); t.position.set((r() - 0.5) * (w - 0.7), 0.06, r() * (depth - 1) - (depth - 1) / 2); t.scale.y = 0.6; g.add(t); }
     if (forSale && LAYOUT) { // terrain à vendre : barrière et panneau, sans vieille maison
@@ -682,7 +682,7 @@ export function createWorld(canvas, { low }) {
   let fly = null;
   function focus(x, z, dist) {
     const dir = new THREE.Vector3().subVectors(camera.position, controls.target).normalize();
-    fly = { from: controls.target.clone(), to: new THREE.Vector3(x, 0, z), d0: camera.position.distanceTo(controls.target), d1: dist != null ? dist * (camera.aspect < 1 ? 1.7 : 1) : camera.position.distanceTo(controls.target), dir, t: 0 }; // en portrait, on voit moins large : on recule
+    fly = { from: controls.target.clone(), to: new THREE.Vector3(x, LAYOUT ? THREE.MathUtils.clamp(LAYOUT.height(x, z), 0, 12) : 0, z), d0: camera.position.distanceTo(controls.target), d1: dist != null ? dist * (camera.aspect < 1 ? 1.7 : 1) : camera.position.distanceTo(controls.target), dir, t: 0 }; // en portrait, on voit moins large : on recule
   }
   function updateCamera(dt) {
     if (fly) {
@@ -696,7 +696,9 @@ export function createWorld(canvas, { low }) {
     const B = LAYOUT?.bounds || { x0: -12, x1: 12, z0: BASE.z0 + 2, z1: BASE.z1 - 2 };
     const cx = THREE.MathUtils.clamp(controls.target.x, B.x0, B.x1) - controls.target.x, cz = THREE.MathUtils.clamp(controls.target.z, B.z0, B.z1) - controls.target.z;
     controls.target.x += cx; controls.target.z += cz; camera.position.x += cx; camera.position.z += cz;
-    controls.target.y = 0;
+    // la caméra vise le sol qu'elle regarde (terrasses, plateformes en hauteur), pas toujours le niveau 0
+    const gy = LAYOUT ? THREE.MathUtils.clamp(LAYOUT.height(controls.target.x, controls.target.z), 0, 12) : 0, dy = (gy - controls.target.y) * Math.min(1, dt * 3);
+    controls.target.y += dy; camera.position.y += dy;
     controls.update();
     // le flou de maquette se renforce quand on zoome
     const d = camera.position.distanceTo(controls.target);
