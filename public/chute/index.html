@@ -1,0 +1,112 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Chute Libre</title>
+  <link rel="icon" href="favicon.svg" type="image/svg+xml">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+  <script src="/socket.io/socket.io.js"></script>
+  <script src="sim.js"></script>
+  <script type="importmap">{ "imports": { "three": "/vendor/three/build/three.module.js", "three/addons/": "/vendor/three/addons/" } }</script>
+  <script type="module" src="main.js"></script>
+</head>
+<body>
+  <canvas id="view" aria-label="L'arène"></canvas>
+  <div id="labels" aria-hidden="true"></div>
+
+  <!-- Accueil -->
+  <section id="home" class="screen">
+    <a class="back" href="../">← Le Cercle</a>
+    <header class="hero">
+      <h1>Chute <span>Libre</span></h1>
+      <p class="tagline">Le sol s’effondre sous tes pieds. Sois le dernier debout.</p>
+    </header>
+    <form class="card" id="nameForm">
+      <label>Ton pseudo <input name="pseudo" maxlength="20" required autocomplete="nickname" placeholder="Pseudo"></label>
+    </form>
+    <div class="grid">
+      <div class="card">
+        <h2>Jouer tout de suite</h2>
+        <p class="hint">Une partie contre 5 robots, sans attendre personne.</p>
+        <button class="primary big" id="soloBtn">Contre les robots</button>
+      </div>
+      <form class="card" id="createForm">
+        <h2>Créer un salon</h2>
+        <div class="chips">
+          <label class="chip"><input type="radio" name="vis" value="public" checked> 🌍 Public</label>
+          <label class="chip"><input type="radio" name="vis" value="private"> 🔒 Privé</label>
+        </div>
+        <button class="primary">Créer</button>
+      </form>
+      <form class="card" id="joinForm">
+        <h2>Entrer avec un code</h2>
+        <input name="code" maxlength="5" required autocomplete="off" class="code-input" placeholder="ABCDE" aria-label="Code du salon">
+        <div class="row"><button class="primary" name="mode" value="play">Rejoindre</button><button class="ghost" name="mode" value="watch">👁 Regarder</button></div>
+      </form>
+    </div>
+    <div class="card">
+      <h2>Salons en cours</h2>
+      <ul id="rooms" class="list"></ul>
+    </div>
+    <div class="card rules">
+      <h2>Comment on joue</h2>
+      <ul>
+        <li>Chaque dalle touchée <b>craque puis tombe</b> une demi-seconde plus tard : il faut toujours bouger.</li>
+        <li>Tu tombes à l’étage du dessous… sous le 4ᵉ, c’est fini pour cette manche.</li>
+        <li><b>Saute</b> pour franchir les trous : en l’air, tu ne casses rien.</li>
+        <li>La <b>ruée</b> envoie valser ceux que tu percutes.</li>
+        <li>Chaque joueur tombé avant toi te rapporte 1 point. Après toutes les manches, le plus de points gagne.</li>
+      </ul>
+      <p class="hint"><kbd>Z</kbd><kbd>Q</kbd><kbd>S</kbd><kbd>D</kbd> ou flèches : bouger · <kbd>Espace</kbd> : sauter · <kbd>Maj</kbd> ou <kbd>E</kbd> : ruée. Sur téléphone : joystick et boutons à l’écran.</p>
+    </div>
+  </section>
+
+  <!-- Salon -->
+  <section id="room" class="screen" hidden>
+    <button class="back" id="leave">← Quitter le salon</button>
+    <h1 class="title">Salon <span class="code" id="roomCode"></span> <button class="ghost small" id="copyLink">🔗 Copier le lien</button></h1>
+    <div class="grid two">
+      <div class="card">
+        <h2>Joueurs <small id="count"></small></h2>
+        <ul id="players" class="list"></ul>
+        <button class="ghost" id="addBot">🤖 Ajouter un robot</button>
+        <p class="hint" id="spect"></p>
+      </div>
+      <div class="card">
+        <h2>Partie</h2>
+        <label>Manches <select id="rounds"><option value="1">1 manche</option><option value="3">3 manches</option><option value="5">5 manches</option></select></label>
+        <p class="hint" id="roomHint"></p>
+        <button class="primary big" id="startBtn">C’est parti !</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- En jeu -->
+  <section id="hud" hidden>
+    <div class="top"><span id="hRound"></span><span id="hAlive"></span></div>
+    <div id="count3" class="countdown" hidden></div>
+    <ul id="feed" class="feed"></ul>
+    <div id="dashMeter" class="dash"><i></i><span>Ruée</span></div>
+    <div id="spectating" class="spectating" hidden>Tu es tombé… tu regardes la fin de la manche.</div>
+    <div class="touch" id="touch" hidden>
+      <div class="stick" id="stick"><i></i></div>
+      <div class="btns"><button data-key="dash">💨</button><button data-key="jump">⤒</button></div>
+    </div>
+    <button class="ghost small quit" id="quitGame">Quitter</button>
+  </section>
+
+  <!-- Fin de manche / fin de partie -->
+  <div id="board" class="overlay" hidden>
+    <div class="card">
+      <h2 id="boardTitle"></h2>
+      <ol id="boardList" class="ranking"></ol>
+      <p class="hint" id="boardHint"></p>
+      <div class="row center" id="boardButtons"></div>
+    </div>
+  </div>
+</body>
+</html>
