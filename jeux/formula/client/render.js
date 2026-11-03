@@ -225,7 +225,8 @@ export function createView(canvas, t, { quality = 'high', weather = 'dry', time 
   const cam = { x: t.x[0], z: t.y[0], y: t.h[0], h: 80, shake: 0, lx: 0, lz: 0 };
   const cars = new Map();
   const trackH = car => { const i = car.i ?? 0; return t.h[i] + (t.slope[i] ?? 0) * (car.along ?? 0); };
-  const v3 = new THREE.Vector3();
+  const v3 = new THREE.Vector3(), eye = new THREE.Vector3();
+  let fp = false; // vue embarquée (dans le cockpit) au lieu de la vue du dessus
 
   function resize() {
     const w = canvas.clientWidth, h = canvas.clientHeight;
@@ -233,7 +234,7 @@ export function createView(canvas, t, { quality = 'high', weather = 'dry', time 
     composer?.setSize(w, h);
     bloom?.resolution.set(w / 2, h / 2);
     camera.aspect = w / h;
-    camera.fov = w < h ? 52 : 36; // écran en portrait : on recule pour voir sur les côtés
+    camera.fov = fp ? (w < h ? 85 : 68) : w < h ? 52 : 36; // écran en portrait : on recule pour voir sur les côtés
     camera.updateProjectionMatrix();
     if (grade) grade.uniforms.uAspect.value = w / h;
     fx.setScale((h * renderer.getPixelRatio()) / (2 * Math.tan((camera.fov * Math.PI) / 360)));
@@ -251,6 +252,8 @@ export function createView(canvas, t, { quality = 'high', weather = 'dry', time 
     removeCar(id) { const c = cars.get(id); if (c) scene.remove(c.m.group); cars.delete(id); },
     setLights(n) { lamps.forEach((l, k) => (l.material.emissiveIntensity = k < n ? 4 : 0)); },
     shake(v) { cam.shake = Math.min(1.6, cam.shake + v); },
+    // Vue embarquée : la caméra au-dessus du casque, derrière le halo ; sinon, vue du dessus
+    setFirstPerson(on) { fp = on; camera.up.set(0, on ? 1 : 0, on ? 0 : -1); camera.near = on ? 0.05 : 5; resize(); },
     // Choc : étincelles, fumée, débris pour les gros impacts, drapeaux jaunes des commissaires.
     impact(x, y, power, color) {
       const h = hf.at(x, y) + 0.25;
@@ -315,8 +318,15 @@ export function createView(canvas, t, { quality = 'high', weather = 'dry', time 
       fx.rain(wet, cam.x, cam.z, cam.y, dt);
       cam.shake *= Math.exp(-dt * 6);
       const sx = (Math.random() - 0.5) * cam.shake, sz = (Math.random() - 0.5) * cam.shake;
-      camera.position.set(cam.x + sx, cam.y + cam.h, cam.z + cam.h * 0.18 + sz);
-      camera.lookAt(cam.x + sx, cam.y, cam.z + sz);
+      const onboard = fp && follow && cars.get(follow.id);
+      if (onboard && !follow.hidden) {
+        const g = onboard.m.group; g.updateMatrixWorld();
+        camera.position.copy(g.localToWorld(eye.set(0.2, 1.07, 0))).add(v3.set(sx * 0.04, Math.abs(sx) * 0.04, sz * 0.04));
+        camera.lookAt(g.localToWorld(eye.set(40, 0.75, 0)));
+      } else {
+        camera.position.set(cam.x + sx, cam.y + cam.h, cam.z + cam.h * 0.18 + sz);
+        camera.lookAt(cam.x + sx, cam.y, cam.z + sz);
+      }
       sun.target.position.set(cam.x, cam.y, cam.z);
       sun.position.copy(sun.target.position).addScaledVector(sunDir, 400);
       if (grade) {

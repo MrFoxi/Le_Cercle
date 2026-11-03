@@ -221,6 +221,7 @@ addEventListener('keydown', e => {
   if (screen !== 'race' || !race) return;
   if (e.code === 'Escape' || e.code === 'KeyP') togglePause();
   if (e.code === 'KeyR' && !e.repeat) respawn(race.player);
+  if (e.code === 'KeyC' && e.shiftKey && !e.repeat) { firstPerson = !firstPerson; view.setFirstPerson(firstPerson); }
 });
 addEventListener('keyup', e => keys.delete(e.code));
 addEventListener('blur', () => keys.clear());
@@ -251,7 +252,7 @@ function readInput() {
 }
 
 /* ---------------- Course ---------------- */
-let race = null, view = null, raf = 0, last = 0;
+let race = null, view = null, raf = 0, last = 0, firstPerson = false; // firstPerson : vue embarquée (Maj + C), gardée d'une course à l'autre
 function stopRace() {
   cancelAnimationFrame(raf);
   $('#pause').hidden = true;
@@ -273,6 +274,7 @@ function startRace(cfg) {
   view = createView(canvas, t, { quality: settings.quality, weather: cfg.weather, time: cfg.time });
   SND.setRain(env.wet && cfg.mode !== 'demo');
   view.resize();
+  if (firstPerson) view.setFirstPerson(true);
   const cars = [];
   const laps = cfg.mode === 'tt' ? Infinity : cfg.laps ?? def.laps;
   const add = (slot, extra) => { const c = createCar(t, gridSlot(t, slot), extra); cars.push(c); view.addCar(c.id, c.look, { ghost: c.ghost }); return c; };
