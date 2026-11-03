@@ -59,11 +59,11 @@ const CHORDS = [[130.8, 196, 329.6], [110, 164.8, 261.6], [146.8, 220, 349.2], [
 export function ambience(dt, { speed, throttle, weather, night, nearLand, docked }) {
   if (!ac || !amb) return;
   const t = ac.currentTime, set = (p, v, k = 0.4) => p.setTargetAtTime(v, t, k);
-  const wet = weather === 'pluie', windy = wet || weather === 'nuageux';
+  const wet = weather === 'pluie' || weather === 'orage', windy = wet || weather === 'nuageux';
   set(amb.waves.g.gain, 0.16 + Math.sin(t * 0.4) * 0.05 + (wet ? 0.08 : 0));
   set(amb.surf.g.gain, nearLand * 0.05 * (0.6 + Math.sin(t * 0.7) * 0.4));
   set(amb.wind.g.gain, 0.015 + (windy ? 0.035 : 0) + speed * 0.0015); set(amb.wind.f.frequency, 600 + speed * 18 + Math.sin(t * 0.3) * 150, 1);
-  set(amb.rain.g.gain, wet ? 0.06 : 0, 1);
+  set(amb.rain.g.gain, wet ? (weather === 'orage' ? 0.1 : 0.06) : 0, 1);
   set(amb.eg.gain, docked ? 0 : 0.035 + Math.abs(throttle) * 0.05, 0.2);
   set(amb.engine.frequency, 44 + speed * 2.4, 0.2); set(amb.engine2.frequency, 22 + speed * 1.2, 0.2); set(amb.ef.frequency, 220 + Math.abs(throttle) * 500, 0.2);
   // mouettes, le jour près des côtes
@@ -98,5 +98,8 @@ export const SFX = {
   bump: () => { burst(0.3, 300, 0.2); tone(90, { vol: 0.12, dur: 0.25, to: 50 }); },
   treasure: () => [784, 988, 1175, 1568].forEach((f, k) => tone(f, { type: 'sine', vol: 0.06, at: k * 0.08, dur: 0.6 })),
   open: () => tone(700, { type: 'sine', vol: 0.04, dur: 0.12, to: 900 }),
+  thunder: () => { burst(2.6, 220, 0.5, 'lowpass'); burst(1.4, 600, 0.2, 'lowpass', 0.1); tone(50, { vol: 0.15, dur: 2, to: 30, attack: 0.05 }); },
+  whale: () => { tone(180, { type: 'sine', vol: 0.06, attack: 0.6, dur: 2.6, to: 120 }); tone(260, { type: 'sine', vol: 0.04, at: 1.8, attack: 0.5, dur: 2.2, to: 340 }); },
+  dolphin: () => { for (let k = 0; k < 6; k++) tone(2400 + Math.random() * 900, { type: 'sine', vol: 0.025, at: k * 0.07, dur: 0.06, to: 3200 }); },
   horn: () => { tone(110, { type: 'sawtooth', vol: 0.06, attack: 0.08, dur: 0.9 }); tone(165, { type: 'sawtooth', vol: 0.04, attack: 0.08, dur: 0.9 }); },
 };

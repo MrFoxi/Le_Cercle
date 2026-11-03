@@ -6,7 +6,7 @@ import { createWorld } from './world.js';
 import { createPost } from './post.js';
 import { buildBoat, createWake } from './boat.js';
 import { startAudio, ambience, SFX, toggleMute, isMuted } from './audio.js';
-import { ISLANDS, UPGRADES, VILLAGES, ZONES, FOSSE, PEOPLE, HUNTS, RELICS, STORY } from './data.js';
+import { ISLANDS, UPGRADES, VILLAGES, ZONES, FOSSE, PEOPLE, HUNTS, RELICS, STORY, SEASONS, WONDERS } from './data.js';
 import * as G from './game.js';
 import { S, persist, fwd, right, dressBoat } from './state.js';
 import { toast, banner, gain, updateHud, drawMinimap, buildMapLand, catchOpen, closeCatch, coins, baitLabel, esc, showDialog, closeDialog } from './hud.js';
@@ -14,6 +14,7 @@ import { openPanel, closePanel, togglePanel, openVillage } from './panels.js';
 import * as Fishing from './fishing.js';
 import * as Traps from './traps.js';
 import * as Dive from './dive.js';
+import { createWildlife } from './wildlife.js';
 import { updateFx, splashAt } from './fx.js';
 import { $, store } from '/shared/party.js';
 
@@ -31,7 +32,7 @@ renderer.toneMapping = THREE.ACESFilmicToneMapping;
 renderer.toneMappingExposure = 1.05;
 const scene = S.scene = new THREE.Scene();
 const camera = S.camera = new THREE.PerspectiveCamera(55, 1, 0.3, 6000);
-let post = null, wake = null;
+let post = null, wake = null, wildlife = null;
 function resize() { renderer.setSize(innerWidth, innerHeight, false); post?.setSize(innerWidth, innerHeight); camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix(); }
 addEventListener('resize', resize); resize();
 const B = S.B, W = S.W;
@@ -209,11 +210,14 @@ function sail(dt) {
     if (S.time - gateAt > 5) { gateAt = S.time; SFX.splash(); toast(need === Infinity ? '🌫️ Une brume épaisse : impossible d’aller plus loin.' : `🌊 Les vagues sont trop fortes pour ta coque ! Il faut la <b>${esc(UPGRADES.coque.levels[need].name)}</b> (chantier de Port-Galet).`, 5000); }
   }
   B.x = nx; B.z = nz;
+  // le vent fait dériver le bateau, doucement (un peu plus dans l'orage)
+  const dx = Math.sin(W.windDir) * W.wind * dt * (W.kind === 'orage' ? 0.6 : 0.22), dz = Math.cos(W.windDir) * W.wind * dt * (W.kind === 'orage' ? 0.6 : 0.22);
+  if (!blocked(B.x + dx, B.z + dz) && G.hullNeeded(B.x + dx, B.z + dz) <= S.save.levels.coque) { B.x += dx; B.z += dz; }
   return inp;
 }
 
 /* ---------------- Découvertes : îles, zones, trésors ---------------- */
-let zoneNow = null, zoneSince = 0, nightWarned = false, margotDay = -1;
+let zoneNow = null, zoneSince = 0, nightWarned = false, margotDay = -1, seasonNow = -1;
 function explore() {
   const s = S.save;
   for (const i of ISLANDS) if (i.name && Math.hypot(i.x - B.x, i.z - B.z) < i.r + 95 && G.see(s, i.id)) { banner(i.name, 'Nouvelle île découverte !'); toast(`🗺️ ${esc(i.desc)}`, 6000); questHint(i.id); persist(); }
@@ -241,7 +245,7 @@ function explore() {
   }
   // la nuit d'orage dans la Fosse : le Léviathan passe sous le bateau
   const ch = G.chapter(s);
-  if (ch?.goal.event === 'leviathan' && !s.flags.leviathan && G.zoneAt(B.x, B.z) === 'fosse' && G.period(s.time) === 'nuit' && W.kind === 'pluie') {
+  if (ch?.goal.event === 'leviathan' && !s.flags.leviathan && G.zoneAt(B.x, B.z) === 'fosse' && G.period(s.time) === 'nuit' && (W.kind === 'pluie' || W.kind === 'orage')) {
     s.flags.leviathan = true; S.world.leviathan(B.x, B.z); SFX.horn(); banner('…', 'Quelque chose d’immense passe sous le bateau'); persist();
   }
   // fin du concours : le classement
@@ -250,6 +254,9 @@ function explore() {
     if (r.prize) gain(r.prize);
     showDialog('🏆', 'Résultats du concours', `Tu finis ${r.place === 1 ? '1er' : `${r.place}e`} !`, `${r.board.map((b, k) => `${k + 1}. ${b.name} : ${b.score} points`).join('\n')}${r.prize ? `\n\nPrix : +${r.prize} 🪙${r.place === 1 ? ' et la Coupe du concours !' : ''}` : ''}`);
   }
+  // les saisons changent chaque semaine
+  const sea = G.season(s);
+  if (seasonNow !== sea) { if (seasonNow !== -1) { banner(`${SEASONS[sea].icon} ${SEASONS[sea].name}`, `Poissons de saison : ${SEASONS[sea].fish.map(id => G.fishById(id)?.name).join(', ')}`); } seasonNow = sea; S.world.setSeason(SEASONS[sea].tint); }
   // Margot change de village chaque matin
   if (margotDay !== s.days) { margotDay = s.days; S.world.setMargot(S.world.docks.find(d => d.village === G.margotAt(s))); }
   if (G.period(s.time) === 'nuit' && !s.levels.lanterne && s.bait !== 'lumineux' && !nightWarned) { nightWarned = true; toast('🌙 La nuit tombe. Avec une <b>lanterne</b> (chantier) ou un <b>appât lumineux</b> (Anse-Corail), les poissons de nuit viendraient mordre…', 6000); }
@@ -293,15 +300,15 @@ function frame(now) {
     if (G.tick(s, dt) && S.mode !== 'title') toast(`☀️ Jour ${s.days + 1}${s.traps.some(t => G.trapReady(s, t)) ? ' · tes casiers sont pleins' : ''}.`);
     if ((W.left -= dt) < 0) {
       const night = G.period(s.time) === 'nuit', r = Math.random();
-      W.kind = r < 0.42 ? 'clair' : r < 0.66 ? 'nuageux' : r < (night ? 0.78 : 0.86) ? 'pluie' : 'brume';
+      W.kind = r < 0.38 ? 'clair' : r < 0.6 ? 'nuageux' : r < 0.72 ? 'pluie' : r < (night ? 0.86 : 0.8) ? 'orage' : 'brume';
       W.left = 110 + Math.random() * 150;
-      if (S.mode === 'sail' && W.kind !== 'clair') toast({ nuageux: '⛅ Les nuages arrivent.', pluie: '🌧️ Il se met à pleuvoir… certains poissons adorent ça.', brume: '🌫️ La brume se lève sur l’archipel.' }[W.kind]);
+      if (S.mode === 'sail' && W.kind !== 'clair') toast({ nuageux: '⛅ Les nuages arrivent.', pluie: '🌧️ Il se met à pleuvoir… certains poissons adorent ça.', orage: '⛈️ Un orage éclate ! Les vagues se creusent…', brume: '🌫️ La brume se lève sur l’archipel.' }[W.kind]);
     }
   }
-  S.amp = 1 + (W.kind === 'pluie' ? 0.9 : 0);
+  S.amp = 1 + (W.kind === 'pluie' ? 0.9 : W.kind === 'orage' ? 1.7 : 0);
   // le vent tourne lentement et forcit sous la pluie
   W.windDir += Math.sin(S.time * 0.013) * dt * 0.03;
-  W.wind = Math.min(1, 0.3 + 0.35 * (Math.sin(S.time * 0.021) + 1) / 2 + (W.kind === 'pluie' ? 0.35 : W.kind === 'nuageux' ? 0.15 : 0));
+  W.wind = Math.min(1, 0.3 + 0.35 * (Math.sin(S.time * 0.021) + 1) / 2 + (W.kind === 'orage' ? 0.6 : W.kind === 'pluie' ? 0.35 : W.kind === 'nuageux' ? 0.15 : 0));
   const inp = S.mode === 'sail' ? sail(dt) : { throttle: 0 };
   // le bateau sur les vagues
   const boat = S.boat, w = S.world.waveAt(B.x, B.z, S.time, S.amp), f = fwd(B.heading), r = right(B.heading);
@@ -317,6 +324,15 @@ function frame(now) {
   Traps.updateTraps(dt);
   Dive.updateDive(dt);
   updateFx(dt);
+  // les animaux, les autres bateaux ; les merveilles « vivantes »
+  const life = wildlife.update(dt, S.time, S.world.state.night);
+  if (S.mode === 'sail') {
+    const meet = (id, sound) => { if (G.see(s, id)) { const w = WONDERS.find(x => x.id === id); banner(`${w.icon} ${w.name}`, 'Merveille découverte !'); toast(`✨ ${esc(w.desc)}`, 6000); sound?.(); persist(); } };
+    if (life.jumped) { SFX.dolphin(); meet('dauphins'); }
+    if (life.whale) meet('baleines', SFX.whale);
+    if (S.world.state.rainbowT > 0 && S.world.state.rainbowT < 100) meet('arcenciel');
+  }
+  if (S.world.state.thunder) { S.world.state.thunder = false; setTimeout(() => SFX.thunder(), 400 + Math.random() * 900); }
   // caméra
   if (S.mode === 'title') {
     const a = S.time * 0.05;
@@ -377,6 +393,7 @@ setTimeout(() => {
   S.boat.group.traverse(o => { if (o.isMesh) o.castShadow = true; });
   wake = createWake(scene);
   Fishing.initFishing(); Traps.initTraps(); Dive.initDive();
+  wildlife = createWildlife();
   buildMapLand();
   applySave();
   camera.position.set(140, 50, 160); look.set(0, 8, 40);
@@ -384,7 +401,7 @@ setTimeout(() => {
   $('#newBtn').hidden = !(S.save.sold || S.save.cargo.length || S.save.earned);
   $('#playBtn').textContent = S.save.sold || S.save.cargo.length ? '⛵ Reprendre la mer' : '⛵ Prendre la mer';
   requestAnimationFrame(frame);
-  if (params.has('debug')) window.lf = { S, get save() { return S.save; }, B, F: Fishing.F, W, get world() { return S.world; }, get boat() { return S.boat; }, cam, camera, play, openPanel, setTime: t => (S.save.time = t), fishAction, interact, Dive, Traps };
+  if (params.has('debug')) window.lf = { S, get save() { return S.save; }, B, F: Fishing.F, W, get world() { return S.world; }, get boat() { return S.boat; }, cam, camera, play, openPanel, setTime: t => (S.save.time = t), fishAction, interact, Dive, Traps, get wildlife() { return wildlife; } };
   if (params.has('play')) play();
 }, 30);
 addEventListener('beforeunload', () => S.mode !== 'title' && persist());

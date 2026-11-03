@@ -64,7 +64,7 @@ function cast() {
 }
 function startWaiting() {
   F.phase = 'wait'; F.t = 0;
-  const ctx = { zone: G.zoneAt(F.tx, F.tz), time: S.save.time, weather: S.W.kind, rod: S.save.levels.canne, lantern: S.save.levels.lanterne, bait: F.bait };
+  const ctx = { zone: G.zoneAt(F.tx, F.tz), time: S.save.time, weather: S.W.kind, rod: S.save.levels.canne, lantern: S.save.levels.lanterne, bait: F.bait, season: G.season(S.save) };
   F.fish = G.pickFish(ctx, Math.random, F.spot);
   F.delay = F.fish ? G.biteDelay(F.fish, Math.random, F.spot, F.bait) : Infinity;
 }

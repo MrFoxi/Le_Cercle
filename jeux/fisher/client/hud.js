@@ -1,14 +1,14 @@
 // Little Fisher : l'interface en mer. Messages, nom des lieux, argent, cale, heure, appât, carte de la prise, mini-carte et carte.
 import { S } from './state.js';
 import * as G from './game.js';
-import { RARITY, ISLANDS, SPOTS, FOSSE, OPEN_SEA, BAITS, WRECKS, WONDERS, HUNTS, FISH, TREASURES } from './data.js';
+import { RARITY, ISLANDS, SPOTS, FOSSE, OPEN_SEA, BAITS, WRECKS, WONDERS, HUNTS, FISH, TREASURES, SEASONS } from './data.js';
 import { fishImage } from './fishart.js';
 import { SFX } from './audio.js';
 import { $, esc } from '/shared/party.js';
 
 export const coins = n => `${n.toLocaleString('fr-FR')} 🪙`;
 export const rarityTag = f => `<span class="rar" style="background:${RARITY[f.rarity].color}">${RARITY[f.rarity].name}</span>`;
-export const WEATHER = { clair: 'Beau temps', nuageux: 'Nuageux', pluie: 'Pluie', brume: 'Brume' };
+export const WEATHER = { clair: 'Beau temps', nuageux: 'Nuageux', pluie: 'Pluie', brume: 'Brume', orage: 'Orage' };
 
 export function toast(html, ms = 3800) {
   const li = document.createElement('li'); li.innerHTML = html; $('#toasts').prepend(li);
@@ -54,8 +54,8 @@ export function updateHud(hint) {
   $('#hCargo').textContent = `🐟 ${s.cargo.length}/${G.slots(s)}`;
   $('#hBait').textContent = baitLabel();
   const p = G.period(s.time), w = S.W.kind;
-  const icon = w === 'pluie' ? '🌧️' : w === 'brume' ? '🌫️' : p === 'nuit' ? '🌙' : p === 'crepuscule' ? '🌅' : w === 'nuageux' ? '⛅' : '☀️';
-  $('#hClock').textContent = `${icon} ${G.clock(s.time)}`; $('#hClock').title = `${WEATHER[w]} · ${DAYS[s.days % 7]} (jour ${s.days + 1})`;
+  const icon = w === 'orage' ? '⛈️' : w === 'pluie' ? '🌧️' : w === 'brume' ? '🌫️' : p === 'nuit' ? '🌙' : p === 'crepuscule' ? '🌅' : w === 'nuageux' ? '⛅' : '☀️';
+  $('#hClock').textContent = `${icon} ${G.clock(s.time)}`; $('#hClock').title = `${WEATHER[w]} · ${DAYS[s.days % 7]} (jour ${s.days + 1}) · ${SEASONS[G.season(s)].icon} ${SEASONS[G.season(s)].name}`;
   const on = G.contestOn(s);
   $('#hContest').hidden = !on;
   if (on) { const left = Math.max(0, (s.contest.until - G.now(s)) * 24 * 60); $('#hContest').textContent = `🏆 ${Math.floor(left / 60)} h ${String(Math.floor(left % 60)).padStart(2, '0')} · ${s.contest.best} pts`; }
@@ -123,7 +123,7 @@ let sonarAt = -9, sonarCache = [];
 function sonarBlips(range) {
   if (S.time - sonarAt < 2) return sonarCache;
   sonarAt = S.time;
-  const s = S.save, ctx = { time: s.time, weather: S.W.kind, rod: s.levels.canne, lantern: s.levels.lanterne, bait: s.bait };
+  const s = S.save, ctx = { time: s.time, weather: S.W.kind, rod: s.levels.canne, lantern: s.levels.lanterne, bait: s.bait, season: G.season(s) };
   sonarCache = SPOTS.filter(p => Math.hypot(p.x - S.B.x, p.z - S.B.z) < range).map(p => {
     const best = FISH.filter(f => G.canBite(f, { ...ctx, zone: p.zone })).reduce((a, f) => Math.max(a, RANK.indexOf(f.rarity)), -1);
     return { p, color: best >= 0 ? RARITY[RANK[best]].color : '#888888' };

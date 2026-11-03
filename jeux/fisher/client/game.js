@@ -1,7 +1,7 @@
 // Little Fisher : les règles (sans affichage) : zones, choix du poisson qui mord, appâts, prises, casiers, filet, plongée,
 // marché, chantier, missions, temps qui passe, sauvegarde.
 import { ISLANDS, FOSSE, OPEN_SEA, NORTH, CAVE, WORLD, FISH, RARITY, UPGRADES, VILLAGES, PEOPLE, TREASURES, DAY_SECONDS, BAITS, BAIT_SHOPS, GEAR,
-  WRECKS, RELICS, HUNTS, WONDERS, BOATS, HULL_COLORS, FLAGS, AQUARIUM, STORY, MARGOT_ROUTE, MARGOT_STOCK, CONTEST } from './data.js';
+  WRECKS, RELICS, HUNTS, WONDERS, BOATS, HULL_COLORS, FLAGS, AQUARIUM, STORY, MARGOT_ROUTE, MARGOT_STOCK, CONTEST, SEASONS } from './data.js';
 
 export const fishById = id => FISH.find(f => f.id === id);
 export const lvl = (save, key) => UPGRADES[key].levels[save.levels[key]];
@@ -52,6 +52,7 @@ export function period(t) {
   return h >= 7.5 && h < 18 ? 'jour' : 'nuit';
 }
 export const advance = (t, dt) => (t + dt / DAY_SECONDS) % 1;
+export const season = save => Math.floor(save.days / 7) % SEASONS.length; // une saison par semaine
 // Fait passer le temps ; renvoie true quand un nouveau jour commence.
 export function tick(save, dt) {
   const t = save.time + dt / DAY_SECONDS;
@@ -74,7 +75,7 @@ export function canBite(f, ctx) {
   if (f.when === 'nuit' && p !== 'nuit') return false;
   if (f.when === 'crepuscule' && p !== 'crepuscule') return false;
   if (f.when === 'nuit' && !lightOk(ctx)) return false;   // la nuit, il faut de la lumière pour les attirer
-  if (f.weather && f.weather !== weather) return false;
+  if (f.weather && f.weather !== weather && !(f.weather === 'pluie' && weather === 'orage')) return false; // l'orage, c'est aussi de la pluie
   return (f.minRod ?? 0) <= rod;
 }
 // Tire le poisson qui va mordre (null : rien ici). spot : on pêche dans un remous (les rares mordent plus).
@@ -86,6 +87,7 @@ export function pickFish(ctx, rng = Math.random, spot = false) {
     if (f.rarity !== 'commun') w *= luck * (spot ? 1.8 : 1) * (ctx.bait ? 1 : 0.6);
     if (ctx.bait && f.bait === ctx.bait) w *= 3;
     if (ctx.bait === 'dore') w *= f.rarity === 'legende' ? 3 : f.rarity === 'rare' ? 1.5 : 1;
+    if (ctx.season != null && SEASONS[ctx.season].fish.includes(f.id)) w *= 2; // poisson de saison
     return [f, w];
   });
   const total = list.reduce((a, [, w]) => a + w, 0);
@@ -440,7 +442,7 @@ export function digHunt(save, id) {
 // La merveille visible ici et maintenant (pas encore vue), ou null.
 export function wonderHere(save, x, z, ctx) {
   for (const w of WONDERS) {
-    if (save.seen.includes(w.id)) continue;
+    if (w.special || save.seen.includes(w.id)) continue; // les merveilles « spéciales » se déclenchent ailleurs (animaux, arc-en-ciel)
     if (w.zone ? zoneAt(x, z) !== w.zone : Math.hypot(w.x - x, w.z - z) > w.r) continue;
     const h = ((ctx.time % 1) + 1) % 1 * 24;
     if (w.when === 'nuit' && period(ctx.time) !== 'nuit') continue;

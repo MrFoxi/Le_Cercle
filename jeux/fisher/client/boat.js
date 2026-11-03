@@ -199,16 +199,16 @@ export function createWake(scene) {
         const k = Math.min(1, speed / 20);
         for (const side of [-1, 1]) { // les deux bras du V, poussés vers l'extérieur
           const bx = x + fx * 2.2 + rx * side * 1.2, bz = z + fz * 2.2 + rz * side * 1.2, out = 1.5 + speed * 0.12;
-          emit(bx, bz, rx * side * out, rz * side * out, 0.3 + k * 0.25, 2.6);
+          emit(bx, bz, rx * side * out, rz * side * out, 0.25 + k * 0.12, 2.2);
         }
-        emit(x - fx * 3.4, z - fz * 3.4, 0, 0, 0.4 + k * 0.5, 1.8); // remous de l'hélice
+        emit(x - fx * 3.4, z - fz * 3.4, 0, 0, 0.35 + k * 0.25, 1.5); // remous de l'hélice
       }
       for (let n = 0; n < N; n++) {
         const it = items[n]; it.age += dt;
         const life = Math.max(0, 1 - it.age / it.life);
         it.x += it.vx * dt; it.z += it.vz * dt; it.vx *= Math.exp(-dt * 0.8); it.vz *= Math.exp(-dt * 0.8);
         o.position.set(it.x, waveH(it.x, it.z) + 0.1, it.z);
-        o.scale.set(1, 1, 1).multiplyScalar(life > 0 ? it.s * (1 + it.age * 1.1) * Math.min(1, life * 2.2) : 0.0001);
+        o.scale.set(1, 1, 1).multiplyScalar(life > 0 ? it.s * (1 + it.age * 0.8) * Math.min(1, life * 2.2) : 0.0001);
         o.updateMatrix(); m.setMatrixAt(n, o.matrix);
       }
       m.instanceMatrix.needsUpdate = true;

@@ -75,6 +75,7 @@ const CORALS = ['#ff8a8a', '#ffb35c', '#c27be0', '#ff6fa8', '#ffd36b'].map(c => 
 export function createWorld(renderer, scene, { low = false } = {}) {
   const rng = mulberry(20261103);
   const uTime = { value: 0 }; // horloge partagée par l'eau, les reflets du fond et la végétation
+  const uSeason = { value: new THREE.Vector4(0, 0, 0, 0) }; // couleur de la saison (rgb) et force (a)
   let under = false, deep = false; // la caméra est sous l'eau (plongée) ; deep : dans les grands fonds
   const root = new THREE.Group(); scene.add(root);
   const anim = []; // fonctions (dt, t, night) appelées à chaque image
@@ -315,7 +316,9 @@ export function createWorld(renderer, scene, { low = false } = {}) {
   // Végétation qui ondule au vent : le haut des plantes bouge, le pied reste fixe.
   function sway(mat, amp, from) {
     mat.onBeforeCompile = sh => {
-      sh.uniforms.uTime = uTime;
+      sh.uniforms.uTime = uTime; sh.uniforms.uSeason = uSeason;
+      // saisons : les feuillages verts (pas les troncs) se teintent vers la couleur de la saison
+      sh.fragmentShader = 'uniform vec4 uSeason;\n' + sh.fragmentShader.replace('#include <color_fragment>', '#include <color_fragment>\n  diffuseColor.rgb = mix(diffuseColor.rgb, uSeason.rgb * (0.5 + dot(diffuseColor.rgb, vec3(0.3, 0.59, 0.11)) * 3.0), uSeason.a * step(0.02, diffuseColor.g - diffuseColor.r));');
       sh.vertexShader = 'uniform float uTime;\n' + sh.vertexShader.replace('#include <begin_vertex>', `#include <begin_vertex>
         vec3 ip = vec3(0.0);
         #ifdef USE_INSTANCING
@@ -629,7 +632,17 @@ export function createWorld(renderer, scene, { low = false } = {}) {
   const blend = (key, night, dusk, out) => out.copy(KEYS[key][2]).lerp(KEYS[key][1], dusk).lerp(KEYS[key][0], night);
   const GREY = C('#8d98a3'), MIST = C('#c9d3da');
   const sunDir = new THREE.Vector3();
-  const state = { night: 0, fog: 0.0011 };
+  const state = { night: 0, fog: 0.0011, flash: 0, thunder: false, rainbowT: 0, wasWet: false };
+  // l'arc-en-ciel : un grand anneau aux couleurs du spectre, posé sur l'horizon
+  const rainbow = new THREE.Mesh(new THREE.TorusGeometry(950, 45, 6, 80, Math.PI), new THREE.ShaderMaterial({
+    uniforms: { uK: { value: 0 } }, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, fog: false, side: THREE.DoubleSide,
+    vertexShader: 'varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',
+    fragmentShader: `uniform float uK; varying vec2 vUv;
+      vec3 hue(float h){ return clamp(abs(mod(h * 6.0 + vec3(0.0, 4.0, 2.0), 6.0) - 3.0) - 1.0, 0.0, 1.0); }
+      void main(){ float v = fract(vUv.y + 0.25) * 2.0; float a = smoothstep(0.0, 0.2, v) * (1.0 - smoothstep(0.8, 1.0, v));
+        gl_FragColor = vec4(hue(v * 0.8) * a * uK * 0.35, 1.0); }`,
+  }));
+  rainbow.visible = false; scene.add(rainbow);
 
   // t : heure du jour (0 à 1) ; weather : clair, nuageux, pluie, brume ; focus : le bateau (ombres, pluie autour de lui)
   function update(dt, time, t, weather, focus, camera) {
@@ -637,8 +650,15 @@ export function createWorld(renderer, scene, { low = false } = {}) {
     sunDir.set(Math.cos(ang) * 0.8, e, 0.45).normalize();
     const night = 1 - sstep(-0.32, 0.0, e), dusk = (1 - sstep(0.05, 0.4, Math.abs(e))) * (1 - night * 0.6);
     state.night = night;
-    const wet = weather === 'pluie' ? 1 : weather === 'nuageux' ? 0.45 : 0, mist = weather === 'brume' ? 1 : 0;
-    const fade = c => c.lerp(GREY.clone().multiplyScalar(1 - night * 0.8), wet * 0.55).lerp(MIST.clone().multiplyScalar(1 - night * 0.75), mist * 0.6);
+    const storm = weather === 'orage' ? 1 : 0, wet = weather === 'pluie' || storm ? 1 : weather === 'nuageux' ? 0.45 : 0, mist = weather === 'brume' ? 1 : 0;
+    // éclairs pendant l'orage
+    state.flash = Math.max(0, state.flash - dt * 4);
+    if (storm && !under && Math.random() < dt * 0.12) { state.flash = 1; state.thunder = true; }
+    // arc-en-ciel : quand la pluie s'arrête en plein jour
+    if (state.wasWet && !wet && night < 0.3) state.rainbowT = 110;
+    state.wasWet = wet > 0.9;
+    state.rainbowT = Math.max(0, state.rainbowT - dt);
+    const fade = c => c.lerp(GREY.clone().multiplyScalar((1 - night * 0.8) * (1 - storm * 0.45)), wet * 0.55 + storm * 0.25).lerp(MIST.clone().multiplyScalar(1 - night * 0.75), mist * 0.6);
     fade(blend('top', night, dusk, skyU.uTop.value)); fade(blend('horizon', night, dusk, skyU.uHorizon.value));
     blend('sun', night, dusk, skyU.uSunColor.value);
     const light = night > 0.5 ? sunDir.clone().negate() : sunDir; // la nuit, la lune éclaire à l'opposé
@@ -648,7 +668,7 @@ export function createWorld(renderer, scene, { low = false } = {}) {
     blend('deep', night, dusk, U.uDeep.value); blend('shallow', night, dusk, U.uShallow.value);
     U.uDeep.value.lerp(GREY.clone().multiplyScalar(0.35), wet * 0.35); U.uShallow.value.lerp(GREY.clone().multiplyScalar(0.6), wet * 0.3);
     U.uSky.value.copy(skyU.uHorizon.value); U.uSkyTop.value.copy(skyU.uTop.value);
-    U.uNight.value = night; U.uAmp.value = 1 + wet * 0.9; uTime.value = time;
+    U.uNight.value = night; U.uAmp.value = 1 + wet * 0.9 + storm * 0.8; uTime.value = time;
     // brouillard : plus épais sous la pluie, dans la brume et près de la limite du monde
     const edge = sstep(WORLD - 220, WORLD + 40, Math.max(Math.abs(focus.x), Math.abs(focus.z)));
     const fog = 0.0011 + wet * 0.0012 + mist * 0.0075 + edge * 0.012;
@@ -665,7 +685,14 @@ export function createWorld(renderer, scene, { low = false } = {}) {
     sun.color.copy(skyU.uSunColor.value);
     sun.intensity = (night > 0.5 ? 0.6 : 2.6 * (1 - dusk * 0.35)) * (1 - wet * 0.55 - mist * 0.4);
     sun.position.copy(focus).addScaledVector(light, 260); sun.target.position.copy(focus);
-    blend('hemi', night, dusk, hemi.color); hemi.intensity = (0.95 - night * 0.4) * (1 - wet * 0.2);
+    blend('hemi', night, dusk, hemi.color); hemi.intensity = (0.95 - night * 0.4) * (1 - wet * 0.2 - storm * 0.2) + state.flash * 3;
+    if (state.flash > 0.01) { skyU.uTop.value.lerp(new THREE.Color('#dfe8ff'), state.flash * 0.7); skyU.uHorizon.value.lerp(new THREE.Color('#eef2ff'), state.flash * 0.6); sun.intensity += state.flash * 3; }
+    rainbow.visible = state.rainbowT > 0 && !under;
+    if (rainbow.visible) { // en face du soleil, très loin
+      rainbow.position.set(camera.position.x - sunDir.x * 1500, -120, camera.position.z - sunDir.z * 1500);
+      rainbow.lookAt(camera.position.x, -120, camera.position.z);
+      rainbow.material.uniforms.uK.value = Math.min(1, state.rainbowT / 15, (110 - state.rainbowT) / 10);
+    }
     hemi.groundColor.set(night > 0.5 ? '#18233a' : '#5d7d5a');
     winMat.emissiveIntensity = bulbs.emissiveIntensity = night * 2.2 + dusk * 0.4;
     for (const l of lights) l.intensity = night * 90;
@@ -696,6 +723,8 @@ export function createWorld(renderer, scene, { low = false } = {}) {
     heightAt, waveAt, docks, obstacles, people, treasures, spots: spotMeshes, update, state, sunDir,
     hideTreasure: id => { const g = treasures.get(id); if (g) g.visible = false; },
     setUnder: (on, isDeep = false) => { under = on; deep = on && isDeep; },
+    // saisons : les feuillages et l'herbe changent de teinte (automne roux, hiver froid…)
+    setSeason: tint => uSeason.value.set(...tint),
     huntSpots: decor.huntSpots, setHunt: decor.setHunt, leviathan: decor.leviathan, setMargot: decor.setMargot,
   };
 }

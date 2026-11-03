@@ -411,9 +411,21 @@ export const WONDERS = [
   { id: 'lucioles', name: 'La Grotte aux Lucioles', icon: '✨', x: -598, z: -168, r: 18, desc: 'Une grotte où des milliers de petites lumières bleues scintillent.' },
   { id: 'cimetiere', name: 'Le Cimetière des navires', icon: '⚓', x: -850, z: 410, r: 110, desc: 'Des carcasses de navires échoués sur le sable, comme des baleines endormies.' },
   { id: 'rayonvert', name: 'Le Rayon vert', icon: '🟢', zone: 'large', when: 'soir', weather: 'clair', desc: 'Au large, à l’instant précis où le soleil disparaît, un éclair vert.' },
+  { id: 'baleines', name: 'Le Chant des baleines', icon: '🐋', special: true, desc: 'Une baleine qui souffle tout près du bateau. On entend son chant à travers la coque.' },
+  { id: 'arcenciel', name: 'L’Arc-en-ciel', icon: '🌈', special: true, desc: 'Après la pluie, un arc-en-ciel complet au-dessus de l’archipel.' },
+  { id: 'dauphins', name: 'La Danse des dauphins', icon: '🐬', special: true, desc: 'Des dauphins qui sautent à côté du bateau, comme pour faire la course.' },
 ];
 
 export const DAY_SECONDS = 600; // une journée dure 10 minutes
+
+// ---------- Saisons (une par semaine de jeu) : couleurs des arbres et poissons de saison (deux fois plus nombreux) ----------
+// tint : couleur vers laquelle tirent les feuillages (rgb, en couleurs « linéaires ») et sa force
+export const SEASONS = [
+  { id: 'printemps', name: 'Printemps', icon: '🌸', fish: ['rouget', 'labre', 'sole', 'omble'], tint: [0.1, 0.32, 0.05, 0.25] },
+  { id: 'ete', name: 'Été', icon: '☀️', fish: ['maquereau', 'thon', 'perroquet', 'barramundi'], tint: [0, 0, 0, 0] },
+  { id: 'automne', name: 'Automne', icon: '🍂', fish: ['bar', 'daurade', 'congre', 'tarpon'], tint: [0.5, 0.16, 0.02, 0.8] },
+  { id: 'hiver', name: 'Hiver', icon: '❄️', fish: ['hareng', 'morue', 'calmar', 'requin'], tint: [0.42, 0.48, 0.52, 0.45] },
+];
 
 // ---------- L'histoire : le mystère du Léviathan ----------
 // goal : talk (écouter un habitant), wreck (fouiller une épave), relic (avoir une relique), upgrade (niveau d'amélioration),
