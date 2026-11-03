@@ -6,10 +6,10 @@ import { createWorld } from './world.js';
 import { createPost } from './post.js';
 import { buildBoat, createWake } from './boat.js';
 import { startAudio, ambience, SFX, toggleMute, isMuted } from './audio.js';
-import { ISLANDS, UPGRADES, VILLAGES, ZONES, FOSSE, PEOPLE, HUNTS, RELICS } from './data.js';
+import { ISLANDS, UPGRADES, VILLAGES, ZONES, FOSSE, PEOPLE, HUNTS, RELICS, STORY } from './data.js';
 import * as G from './game.js';
 import { S, persist, fwd, right, dressBoat } from './state.js';
-import { toast, banner, gain, updateHud, drawMinimap, buildMapLand, catchOpen, closeCatch, coins, baitLabel, esc } from './hud.js';
+import { toast, banner, gain, updateHud, drawMinimap, buildMapLand, catchOpen, closeCatch, coins, baitLabel, esc, showDialog, closeDialog } from './hud.js';
 import { openPanel, closePanel, togglePanel, openVillage } from './panels.js';
 import * as Fishing from './fishing.js';
 import * as Traps from './traps.js';
@@ -103,6 +103,9 @@ $('#bMap').onclick = () => togglePanel('map');
 $('#minimap').onclick = () => togglePanel('map');
 $('#hBait').onclick = () => cycleBait();
 $('#cOk').onclick = closeCatch;
+$('#dOk').onclick = closeDialog;
+// Chaque prise compte pour le concours du dimanche
+S.onCatch = (f, res) => { if (G.contestCatch(S.save, f, res.fish.size)) setTimeout(() => toast(`🏆 Nouveau meilleur score au concours : <b>${S.save.contest.best} points</b> (${esc(f.name)})`), 400); };
 $('#bMute').onclick = () => { $('#bMute').textContent = toggleMute() ? '🔇' : '🔊'; };
 $('#bMute').textContent = isMuted() ? '🔇' : '🔊';
 $('#bQuality').textContent = LOW ? '⚙️ léger' : '⚙️';
@@ -210,7 +213,7 @@ function sail(dt) {
 }
 
 /* ---------------- Découvertes : îles, zones, trésors ---------------- */
-let zoneNow = null, zoneSince = 0, nightWarned = false;
+let zoneNow = null, zoneSince = 0, nightWarned = false, margotDay = -1;
 function explore() {
   const s = S.save;
   for (const i of ISLANDS) if (i.name && Math.hypot(i.x - B.x, i.z - B.z) < i.r + 95 && G.see(s, i.id)) { banner(i.name, 'Nouvelle île découverte !'); toast(`🗺️ ${esc(i.desc)}`, 6000); questHint(i.id); persist(); }
@@ -231,6 +234,24 @@ function explore() {
   const w = G.wonderHere(s, B.x, B.z, { time: s.time, weather: W.kind });
   if (w) { G.see(s, w.id); banner(`${w.icon} ${w.name}`, 'Merveille découverte !'); toast(`✨ ${esc(w.desc)}`, 6000); SFX.treasure(); questHint(w.id); persist(); }
   for (const id of Object.keys(HUNTS)) { const p = S.world.huntSpots[id].water; S.world.setHunt(id, s.hunts[id] === 'actif' && Math.hypot(p.x - B.x, p.z - B.z) < 70); }
+  // l'histoire : un chapitre se termine dès que son objectif est atteint
+  if (G.chapterReady(s)) {
+    const c = G.finishChapter(s); gain(c.reward); SFX.upgrade(); persist();
+    showDialog(c.end ? '🐉' : '📜', `Chapitre ${s.story} · ${c.title}`, c.end ? 'Fin de l’histoire' : 'Le mystère du Léviathan', `${c.say}\n\n+${c.reward} 🪙${c.relic ? ` · ${RELICS[c.relic].icon} ${RELICS[c.relic].name}` : ''}${G.chapter(s) ? `\n\nEnsuite : ${G.chapter(s).task}` : ''}`);
+  }
+  // la nuit d'orage dans la Fosse : le Léviathan passe sous le bateau
+  const ch = G.chapter(s);
+  if (ch?.goal.event === 'leviathan' && !s.flags.leviathan && G.zoneAt(B.x, B.z) === 'fosse' && G.period(s.time) === 'nuit' && W.kind === 'pluie') {
+    s.flags.leviathan = true; S.world.leviathan(B.x, B.z); SFX.horn(); banner('…', 'Quelque chose d’immense passe sous le bateau'); persist();
+  }
+  // fin du concours : le classement
+  if (s.contest && !s.contest.done && G.now(s) >= s.contest.until) {
+    const r = G.endContest(s); persist();
+    if (r.prize) gain(r.prize);
+    showDialog('🏆', 'Résultats du concours', `Tu finis ${r.place === 1 ? '1er' : `${r.place}e`} !`, `${r.board.map((b, k) => `${k + 1}. ${b.name} : ${b.score} points`).join('\n')}${r.prize ? `\n\nPrix : +${r.prize} 🪙${r.place === 1 ? ' et la Coupe du concours !' : ''}` : ''}`);
+  }
+  // Margot change de village chaque matin
+  if (margotDay !== s.days) { margotDay = s.days; S.world.setMargot(S.world.docks.find(d => d.village === G.margotAt(s))); }
   if (G.period(s.time) === 'nuit' && !s.levels.lanterne && s.bait !== 'lumineux' && !nightWarned) { nightWarned = true; toast('🌙 La nuit tombe. Avec une <b>lanterne</b> (chantier) ou un <b>appât lumineux</b> (Anse-Corail), les poissons de nuit viendraient mordre…', 6000); }
 }
 function questHint(place) {
@@ -343,6 +364,8 @@ function play() {
   const back = S.save.sold || S.save.cargo.length;
   banner(back ? 'Bon retour en mer !' : 'Port-Galet', back ? `Jour ${S.save.days + 1} · ${G.clock(S.save.time)}` : 'Ton petit port, ton petit bateau. L’archipel t’attend.');
   if (!back) setTimeout(() => toast('🧔 Joseph : « Va pêcher un peu, puis reviens au ponton (<b>E</b>) vendre tes prises ! »', 7000), 1500);
+  else if (G.chapter(S.save)) setTimeout(() => toast(`📖 Histoire : ${esc(G.chapter(S.save).task)}`, 7000), 2500);
+  if (G.isSunday(S.save) && S.save.contest?.day !== S.save.days) setTimeout(() => toast('🏆 C’est dimanche : concours de pêche à Port-Galet !', 6000), 4000);
 }
 $('#playBtn').onclick = play;
 $('#newBtn').onclick = () => { if (!confirm('Recommencer une nouvelle partie ? Ta progression sera effacée.')) return; S.save = G.newSave(); persist(); applySave(); play(); };

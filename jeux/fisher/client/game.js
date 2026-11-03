@@ -1,7 +1,7 @@
 // Little Fisher : les règles (sans affichage) : zones, choix du poisson qui mord, appâts, prises, casiers, filet, plongée,
 // marché, chantier, missions, temps qui passe, sauvegarde.
 import { ISLANDS, FOSSE, OPEN_SEA, NORTH, CAVE, WORLD, FISH, RARITY, UPGRADES, VILLAGES, PEOPLE, TREASURES, DAY_SECONDS, BAITS, BAIT_SHOPS, GEAR,
-  WRECKS, RELICS, HUNTS, WONDERS, BOATS, HULL_COLORS, FLAGS, AQUARIUM } from './data.js';
+  WRECKS, RELICS, HUNTS, WONDERS, BOATS, HULL_COLORS, FLAGS, AQUARIUM, STORY, MARGOT_ROUTE, MARGOT_STOCK, CONTEST } from './data.js';
 
 export const fishById = id => FISH.find(f => f.id === id);
 export const lvl = (save, key) => UPGRADES[key].levels[save.levels[key]];
@@ -15,6 +15,7 @@ export function newSave() {
     baits: { ver: 5 }, bait: 'ver', gear: {}, traps: [],
     relics: [], wrecks: {}, hunts: {}, fog: '',   // reliques trouvées, dernier jour de fouille de chaque épave, cartes au trésor, carte explorée
     boats: ['barque'], model: 'barque', custom: { hull: 'auto', flag: 'jaune', name: 'Petit Galet', mascot: null }, aquarium: [],
+    story: 0, flags: {}, orders: { day: -1, done: [] }, contest: null, // chapitre en cours, moments vécus, commandes livrées aujourd'hui, concours
   };
 }
 // Relit une sauvegarde (ou en crée une) ; les champs ajoutés plus tard prennent leur valeur par défaut.
@@ -84,6 +85,7 @@ export function pickFish(ctx, rng = Math.random, spot = false) {
     let w = RARITY[f.rarity].weight;
     if (f.rarity !== 'commun') w *= luck * (spot ? 1.8 : 1) * (ctx.bait ? 1 : 0.6);
     if (ctx.bait && f.bait === ctx.bait) w *= 3;
+    if (ctx.bait === 'dore') w *= f.rarity === 'legende' ? 3 : f.rarity === 'rare' ? 1.5 : 1;
     return [f, w];
   });
   const total = list.reduce((a, [, w]) => a + w, 0);
@@ -232,12 +234,15 @@ export function questReady(save, q) {
   if (q.type === 'catch') return save.cargo.some(f => f.id === q.fish);
   if (q.type === 'find') return save.items.includes(q.item);
   if (q.type === 'see') return save.seen.includes(q.place);
+  if (q.type === 'legend') return save.cargo.some(f => fishById(f.id)?.rarity === 'legende');
+  if (q.type === 'explore') return explored(save) >= q.amount;
   return false;
 }
 // Rend la mission : le poisson ou l'objet est donné, la récompense versée.
 export function completeQuest(save, q) {
   if (!questReady(save, q)) return false;
   if (q.type === 'catch') { const k = save.cargo.findIndex(f => f.id === q.fish); save.cargo.splice(k, 1); }
+  if (q.type === 'legend') { const k = save.cargo.findIndex(f => fishById(f.id)?.rarity === 'legende'); save.cargo.splice(k, 1); }
   if (q.type === 'find') save.items = save.items.filter(i => i !== q.item);
   save.quests[q.id] = true;
   save.money += q.reward;
@@ -293,6 +298,114 @@ export function releaseAquarium(save, k) { return save.aquarium.splice(k, 1).len
 // Records : le plus grand de chaque espèce pêchée, du plus impressionnant (par rapport à sa taille maximale) au moins
 export const trophies = save => Object.entries(save.catalog).map(([id, c]) => ({ f: fishById(id), best: c.best, count: c.count }))
   .filter(t => t.f).sort((a, b) => b.best / b.f.size[1] - a.best / a.f.size[1]);
+
+// ---------- L'histoire ----------
+export const chapter = save => STORY[save.story] ?? null;
+// L'objectif du chapitre est-il atteint ? (les « talk » se valident en parlant à l'habitant)
+export function chapterReady(save) {
+  const c = chapter(save); if (!c) return false;
+  const g = c.goal;
+  if (g.type === 'wreck') return g.wreck in save.wrecks;
+  if (g.type === 'relic') return save.relics.includes(g.relic);
+  if (g.type === 'upgrade') return save.levels[g.key] >= g.level;
+  if (g.type === 'see') return save.seen.includes(g.place);
+  if (g.type === 'event') return !!save.flags[g.event];
+  if (g.type === 'catch') return !!save.catalog[g.fish];
+  return false;
+}
+// Termine le chapitre en cours (récompense, relique) ; renvoie le chapitre terminé.
+export function finishChapter(save) {
+  const c = chapter(save); if (!c) return null;
+  save.story++; save.money += c.reward;
+  if (c.relic && !save.relics.includes(c.relic)) save.relics.push(c.relic);
+  return c;
+}
+// Parler à un habitant fait avancer l'histoire si c'est lui qu'on cherchait
+export const storyTalk = (save, who) => { const c = chapter(save); return c?.goal.type === 'talk' && c.goal.who === who ? finishChapter(save) : null; };
+
+// ---------- Commandes du jour (chaque village de marché, renouvelées chaque matin) ----------
+function seeded(n) { let a = n | 0; return () => { a = a + 0x6D2B79F5 | 0; let t = Math.imul(a ^ a >>> 15, 1 | a); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }; }
+const ORDER_ZONES = { port: ['cote'], corail: ['recif', 'cote'], station: ['glace', 'large'], heron: ['mangrove', 'large'] };
+export function ordersOf(save, village) {
+  const zones = ORDER_ZONES[village]; if (!zones) return [];
+  const rng = seeded(save.days * 977 + village.length * 131 + village.charCodeAt(0));
+  const pool = FISH.filter(f => f.rarity !== 'legende' && f.zones.some(z => zones.includes(z)));
+  return [0, 1].map(k => {
+    const f = pool[Math.floor(rng() * pool.length)], count = f.rarity === 'commun' ? 2 + Math.floor(rng() * 2) : 1;
+    return { id: `${save.days}-${village}-${k}`, fish: f.id, count, pay: Math.round(f.price * count * 2 + 15) };
+  });
+}
+export function deliverOrder(save, o) {
+  if (save.orders.day !== save.days) save.orders = { day: save.days, done: [] };
+  if (save.orders.done.includes(o.id)) return 'Déjà livrée';
+  const have = save.cargo.filter(f => f.id === o.fish).length;
+  if (have < o.count) return `Il t’en faut ${o.count} (tu en as ${have})`;
+  for (let k = 0; k < o.count; k++) save.cargo.splice(save.cargo.findIndex(f => f.id === o.fish), 1);
+  save.orders.done.push(o.id); save.money += o.pay; save.earned += o.pay;
+  return null;
+}
+export const orderDone = (save, o) => save.orders.day === save.days && save.orders.done.includes(o.id);
+
+// ---------- Margot, Edmond le collectionneur, Barnabé le cartographe ----------
+export const margotAt = save => MARGOT_ROUTE[save.days % MARGOT_ROUTE.length];
+export function buyFromMargot(save, k, rng = Math.random) {
+  const it = MARGOT_STOCK[k];
+  if (save.money < it.cost) return { error: `Il te manque ${it.cost - save.money} pièces` };
+  if (it.kind === 'relic') {
+    const left = Object.keys(RELICS).filter(r => !save.relics.includes(r) && r !== 'statue' && r !== 'coupe');
+    if (!left.length) return { error: 'Tu as déjà toutes ses reliques' };
+    save.money -= it.cost; const r = left[Math.floor(rng() * left.length)]; save.relics.push(r); return { relic: r };
+  }
+  if (it.kind === 'map') { const h = buyMap(save, rng, it.cost); return h ? { map: h } : { error: 'Tu as déjà toutes les cartes' }; }
+  save.money -= it.cost; save.baits[it.id] = (save.baits[it.id] ?? 0) + (BAITS[it.id].pack); if (!save.bait) save.bait = it.id;
+  return { bait: it.id };
+}
+// Le collectionneur paie le double pour un poisson rare ou légendaire
+export const collectorPrice = f => (['rare', 'legende'].includes(fishById(f.id)?.rarity) ? f.price * 2 : 0);
+export function sellToCollector(save, k) {
+  const f = save.cargo[k], p = f && collectorPrice(f);
+  if (!p) return 0;
+  save.cargo.splice(k, 1); save.money += p; save.earned += p; save.sold++;
+  return p;
+}
+// Une carte au trésor pas encore commencée (cartographe ou Margot)
+export function buyMap(save, rng = Math.random, cost = 160) {
+  const left = Object.keys(HUNTS).filter(h => !save.hunts[h]);
+  if (!left.length || save.money < cost) return null;
+  save.money -= cost; const h = left[Math.floor(rng() * left.length)]; startHunt(save, h);
+  return h;
+}
+
+// ---------- Le concours du dimanche ----------
+export const isSunday = save => save.days % 7 === 6;
+const RARE_BONUS = { commun: 1, peu: 1.2, rare: 1.5, legende: 2 };
+// Score d'une prise : sa taille par rapport au plus grand de son espèce, plus pour les rares
+export const contestScore = (f, size) => Math.round(size / f.size[1] * 100 * RARE_BONUS[f.rarity]);
+export function startContest(save, rng = Math.random) {
+  if (!isSunday(save)) return 'Le concours, c’est le dimanche !';
+  if (save.contest?.day === save.days) return 'Tu as déjà participé aujourd’hui.';
+  const rivals = CONTEST.rivals.slice().sort(() => rng() - 0.5).slice(0, 3).map(name => ({ name, score: 70 + Math.floor(rng() * 70) }));
+  save.contest = { day: save.days, until: now(save) + CONTEST.hours / 24, best: 0, fish: null, rivals, done: false };
+  return null;
+}
+export const contestOn = save => !!save.contest && !save.contest.done && now(save) < save.contest.until;
+export function contestCatch(save, f, size) {
+  if (!contestOn(save)) return false;
+  const sc = contestScore(f, size);
+  if (sc <= save.contest.best) return false;
+  save.contest.best = sc; save.contest.fish = f.id;
+  return true;
+}
+// Fin du concours : classement et prix (place 1 : la coupe en plus)
+export function endContest(save) {
+  const c = save.contest; if (!c || c.done) return null;
+  c.done = true;
+  const board = [...c.rivals, { name: 'Toi', score: c.best, me: true }].sort((a, b) => b.score - a.score);
+  const place = board.findIndex(b => b.me) + 1, prize = c.best ? CONTEST.prizes[place - 1] ?? 0 : 0;
+  save.money += prize;
+  if (place === 1 && c.best && !save.relics.includes('coupe')) save.relics.push('coupe');
+  return { board, place, prize };
+}
 
 // ---------- Épaves (au grappin) ----------
 export const wreckNear = (x, z, r = 14) => WRECKS.find(w => Math.hypot(w.x - x, w.z - z) < r) ?? null;

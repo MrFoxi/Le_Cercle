@@ -1,10 +1,10 @@
 // Little Fisher : les fenêtres. Village (marché, boutique d'appâts et de plongée, chantier naval, habitants), cale, carnet, carte.
 import { S, persist, dressBoat } from './state.js';
 import * as G from './game.js';
-import { FISH, UPGRADES, VILLAGES, ZONE_SHORT, TREASURES, PEOPLE, BAITS, BAIT_SHOPS, GEAR, FIGHTS, WONDERS, RELICS, HUNTS, BOATS, HULL_COLORS, FLAGS, AQUARIUM, RARITY } from './data.js';
+import { FISH, UPGRADES, VILLAGES, ZONE_SHORT, TREASURES, PEOPLE, BAITS, BAIT_SHOPS, GEAR, FIGHTS, WONDERS, RELICS, HUNTS, BOATS, HULL_COLORS, FLAGS, AQUARIUM, RARITY, STORY, MARGOT_STOCK, CONTEST } from './data.js';
 import { fishImage } from './fishart.js';
 import { SFX } from './audio.js';
-import { toast, coins, rarityTag, gain, renderMap } from './hud.js';
+import { toast, coins, rarityTag, gain, renderMap, showDialog, DAYS } from './hud.js';
 import { $, $$, esc } from '/shared/party.js';
 
 const WHEN = { jour: 'le jour', nuit: 'la nuit (lanterne ou appât lumineux)', crepuscule: 'à l’aube et au crépuscule', toujours: 'à toute heure' };
@@ -29,22 +29,29 @@ let vTab = 'market';
 export function openVillage(id) {
   const v = VILLAGES[id];
   $('#vName').textContent = `⚓ ${v.name}`;
-  const tabs = [v.market && ['market', '🐟 Marché'], (BAIT_SHOPS[id] || Object.values(GEAR).some(g => g.shop === id)) && ['bait', '🪱 Boutique'], v.shop && ['shop', '🛠️ Chantier naval'], id === 'port' && ['house', '🏠 Maison'], ['people', '👋 Habitants']].filter(Boolean);
+  const tabs = [v.market && ['market', '🐟 Marché'], (BAIT_SHOPS[id] || Object.values(GEAR).some(g => g.shop === id)) && ['bait', '🪱 Boutique'], v.shop && ['shop', '🛠️ Chantier naval'], id === 'port' && ['house', '🏠 Maison'], G.margotAt(S.save) === id && ['margot', '🧺 Margot'], ['people', '👋 Habitants']].filter(Boolean);
   if (!tabs.some(([t]) => t === vTab)) vTab = tabs[0][0];
   $('#vTabs').innerHTML = tabs.map(([t, l]) => `<button class="${t === vTab ? 'on' : ''}" data-tab="${t}">${l}</button>`).join('');
   $('#vTabs').onclick = e => { const b = e.target.closest('[data-tab]'); if (b) { vTab = b.dataset.tab; openVillage(id); } };
   if (S.panel !== 'village') openPanel('village');
-  ({ market: renderMarket, bait: renderBaitShop, shop: renderShop, house: renderHouse, people: renderPeople })[vTab](id);
+  ({ market: renderMarket, bait: renderBaitShop, shop: renderShop, house: renderHouse, margot: renderMargot, people: renderPeople })[vTab](id);
 }
 const money = () => `<div class="sum"><span>Ton argent : <b>${coins(S.save.money)}</b></span></div>`;
 function renderMarket(id) {
   const s = S.save;
   const rows = s.cargo.map((f, k) => { const d = G.fishById(f.id); return `<li><img src="${fishImage(d)}" alt=""><div class="grow"><b>${esc(d.name)}</b> ${rarityTag(d)}<small>${f.size} cm${G.isFresh(s, f) ? ' · 🧊 très frais (+15 %)' : ''}</small></div><span class="price">${coins(G.priceAt(f, id, s))}</span><button class="small ghost" data-sell="${k}">Vendre</button></li>`; });
   const total = s.cargo.reduce((a, f) => a + G.priceAt(f, id, s), 0);
-  $('#vBody').innerHTML = `${VILLAGES[id].market > 1 ? '<p class="hint">Ici, on paie 10 % de plus qu’à Port-Galet.</p>' : ''}
+  const orders = G.ordersOf(s, id), rare = s.cargo.map((f, k) => [f, k]).filter(([f]) => G.collectorPrice(f));
+  const ordersHtml = orders.length ? `<h3>📋 Commandes du jour</h3><ul class="list">${orders.map((o, k) => { const f = G.fishById(o.fish), done = G.orderDone(s, o), have = s.cargo.filter(x => x.id === o.fish).length;
+    return `<li class="order"><img src="${fishImage(f, !s.catalog[f.id])}" alt=""><div class="grow"><b>${o.count} × ${esc(f.name)}</b><small>${done ? '✓ Livrée, merci !' : `tu en as ${have} · payé ${coins(o.pay)} (le double)`}</small></div>${done ? '' : `<button class="small primary" data-order="${k}" ${have < o.count ? 'disabled' : ''}>Livrer</button>`}</li>`; }).join('')}</ul>` : '';
+  const collector = id === 'port' && rare.length ? `<h3>🎩 Edmond, le collectionneur</h3><p class="hint">Il paie le double pour les poissons rares et légendaires.</p><ul class="list">${rare.map(([f, k]) => `<li><img src="${fishImage(G.fishById(f.id))}" alt=""><div class="grow"><b>${esc(G.fishById(f.id).name)}</b><small>${f.size} cm</small></div><button class="small primary" data-collect="${k}">${coins(G.collectorPrice(f))}</button></li>`).join('')}</ul>` : '';
+  $('#vBody').innerHTML = `${VILLAGES[id].market > 1 ? `<p class="hint">Ici, on paie ${Math.round((VILLAGES[id].market - 1) * 100)} % de plus qu’à Port-Galet.</p>` : ''}${ordersHtml}${collector}${orders.length || collector ? '<h3>🐟 Marché</h3>' : ''}
     ${rows.length ? `<ul class="list">${rows.join('')}</ul>` : '<p class="empty">Ta cale est vide. Va pêcher !</p>'}
     <div class="sum"><span>Ton argent : <b>${coins(s.money)}</b></span>${rows.length ? `<button class="primary" id="sellAll">Tout vendre · ${coins(total)}</button>` : ''}</div>`;
   $('#vBody').onclick = e => {
+    const o = e.target.closest('[data-order]'), c = e.target.closest('[data-collect]');
+    if (o) { const err = G.deliverOrder(s, orders[+o.dataset.order]); if (err) return toast(err); gain(orders[+o.dataset.order].pay); toast(`📋 Commande livrée : <b>+${coins(orders[+o.dataset.order].pay)}</b>`); persist(); return renderMarket(id); }
+    if (c) { const p = G.sellToCollector(s, +c.dataset.collect); gain(p); toast(`🎩 Edmond : « Splendide ! » <b>+${coins(p)}</b>`); persist(); return renderMarket(id); }
     const b = e.target.closest('[data-sell]');
     if (b) gain(G.sell(s, id, +b.dataset.sell));
     if (e.target.id === 'sellAll') gain(G.sell(s, id));
@@ -97,11 +104,19 @@ function renderPeople(id) {
     const q = G.questOf(s, p), done = p.quests.filter(x => s.quests[x.id]).length;
     const quest = q ? `<div class="quest">📜 ${esc(q.text)} <b>(+${coins(q.reward)})</b><br>${G.questReady(s, q) ? `<button class="small primary" data-quest="${p.id}">${q.type === 'catch' ? 'Donner le poisson' : q.type === 'find' ? 'Rendre l’objet' : 'C’est fait !'}</button>` : `<small>${q.type === 'sell' ? `Vendus : ${Math.min(s.sold, q.count)}/${q.count}` : 'En cours…'}</small>`}</div>`
       : `<div class="quest done">Merci pour tout, l’ami ! (${done}/${p.quests.length} missions)</div>`;
-    return `<li class="person"><span class="face">${p.face}</span><div class="grow"><b>${esc(p.name)}</b> <small>${esc(p.role)}</small><q>${esc(p.hello)}</q>${quest}</div></li>`;
+    const c = G.chapter(s), listen = c?.goal.type === 'talk' && c.goal.who === p.id ? `<button class="small primary" data-listen="${p.id}">🗨️ Écouter (${esc(c.title)})</button>` : '';
+    const carto = p.cartographer ? `<div class="quest">🗺️ Cartes au trésor : ${coins(160)} <button class="small ghost" data-map ${s.money < 160 || Object.keys(HUNTS).every(h => s.hunts[h]) ? 'disabled' : ''}>Acheter</button></div>` : '';
+    return `<li class="person"><span class="face">${p.face}</span><div class="grow"><b>${esc(p.name)}</b> <small>${esc(p.role)}</small><q>${esc(p.hello)}</q>${listen}${quest}${carto}</div></li>`;
   });
+  if (id === 'port') folks.unshift(`<li class="person"><span class="face">🏆</span><div class="grow"><b>Le concours du dimanche</b> <small>Port-Galet</small><q>Chaque dimanche, ${CONTEST.hours} heures pour pêcher la plus belle prise (la taille compte, et les rares rapportent plus).</q>
+    ${G.isSunday(s) ? (s.contest?.day === s.days ? `<div class="quest done">${G.contestOn(s) ? `En cours : ${s.contest.best} points.` : 'Fini pour aujourd’hui.'}</div>` : '<button class="small primary" data-contest>Participer !</button>') : `<div class="quest done">Prochain concours : dimanche (aujourd’hui : ${DAYS[s.days % 7].toLowerCase()}).</div>`}</div></li>`);
   $('#vBody').innerHTML = `<ul class="list">${folks.join('')}</ul>
     <div class="waits"><span class="hint">⏳ Attendre au port jusqu’à :</span>${[['l’aube', 0.25], ['midi', 0.5], ['le soir', 0.78], ['la nuit', 0.95]].map(([l, t]) => `<button class="small ghost" data-wait="${t}">${l}</button>`).join('')}</div>`;
   $('#vBody').onclick = e => {
+    const l = e.target.closest('[data-listen]');
+    if (l) { const p = PEOPLE.find(x => x.id === l.dataset.listen), c = G.storyTalk(s, p.id); if (c) { persist(); showDialog(p.face, p.name, `Chapitre ${s.story} · ${c.title}`, `${c.say}\n\n+${c.reward} 🪙`); gain(c.reward); } return renderPeople(id); }
+    if (e.target.closest('[data-map]')) { const h = G.buyMap(s); if (h) { SFX.treasure(); toast(`🗺️ <b>${esc(HUNTS[h].name)}</b> : « ${esc(HUNTS[h].clue)} »`, 9000); persist(); } return renderPeople(id); }
+    if (e.target.closest('[data-contest]')) { const err = G.startContest(s); if (err) return toast(err); SFX.horn(); toast(`🏆 C’est parti ! ${CONTEST.hours} heures pour pêcher ta plus belle prise.`, 6000); persist(); return renderPeople(id); }
     const w = e.target.closest('[data-wait]');
     if (w) { G.waitUntil(s, +w.dataset.wait); toast(`⏳ Il est ${G.clock(s.time)}${s.traps.some(t => G.trapReady(s, t)) ? ' · tes casiers sont pleins !' : ''}.`); persist(); return; }
     const b = e.target.closest('[data-quest]'); if (!b) return;
@@ -138,6 +153,23 @@ function renderPaint(id, sub) {
     if (subTab(e, id)) return;
     const h = e.target.closest('[data-hull]'), f = e.target.closest('[data-flag]'), m = e.target.closest('[data-mascot]');
     if (h) apply('hull', h.dataset.hull); if (f) apply('flag', f.dataset.flag); if (m) apply('mascot', m.dataset.mascot || null);
+  };
+}
+
+/* ---------------- Margot, la marchande ambulante ---------------- */
+function renderMargot(id) {
+  const s = S.save;
+  $('#vBody').innerHTML = `<div class="person row" style="align-items:flex-start"><span class="face" style="font-size:2.4rem">🧕</span><div class="grow"><b>Margot</b> <small class="hint">Marchande ambulante</small><q>Bonjour, bonjour ! Demain je serai ailleurs, alors profites-en.</q></div></div>
+    <ul class="list">${MARGOT_STOCK.map((it, k) => { const b = it.kind === 'bait' && BAITS[it.id];
+      return `<li><span style="font-size:1.8rem">${b ? b.icon : it.kind === 'relic' ? '🏺' : '🗺️'}</span><div class="grow"><b>${b ? esc(b.name) : it.kind === 'relic' ? 'Relique mystère' : 'Carte au trésor'}</b><small>${esc(b ? b.desc : it.desc)}${b ? ` · par ${b.pack}` : ''}</small></div><button class="small primary" data-margot="${k}" ${s.money < it.cost ? 'disabled' : ''}>${coins(it.cost)}</button></li>`; }).join('')}</ul>${money()}`;
+  $('#vBody').onclick = e => {
+    const b = e.target.closest('[data-margot]'); if (!b) return;
+    const r = G.buyFromMargot(s, +b.dataset.margot);
+    if (r.error) return toast(r.error);
+    SFX.coin(); persist();
+    if (r.relic) toast(`🏺 Une relique : <b>${RELICS[r.relic].icon} ${esc(RELICS[r.relic].name)}</b> !`);
+    if (r.map) toast(`🗺️ <b>${esc(HUNTS[r.map].name)}</b> : « ${esc(HUNTS[r.map].clue)} »`, 9000);
+    renderMargot(id);
   };
 }
 
@@ -211,6 +243,13 @@ function renderBookOther(tab) {
   if (tab === 'relics') $('#bookBody').innerHTML = `<p class="hint">Trouvées en fouillant les épaves (grappin) et en creusant les trésors enterrés.</p><ul class="list">${Object.entries(RELICS).map(([k, r]) => s.relics.includes(k)
     ? `<li><span style="font-size:1.8rem">${r.icon}</span><div class="grow"><b>${esc(r.name)}</b><small>${esc(r.desc)}</small></div></li>`
     : `<li><span style="font-size:1.8rem;filter:grayscale(1);opacity:.35">${r.icon}</span><div class="grow"><b>???</b><small>Pas encore trouvée.</small></div></li>`).join('')}</ul>`;
+  if (tab === 'story') {
+    const c = G.chapter(s);
+    $('#bookBody').innerHTML = `<p class="hint">Le mystère du Léviathan, chapitre par chapitre.</p><ul class="list story">${STORY.map((ch, k) => k < s.story
+      ? `<li class="done"><span style="font-size:1.6rem">✅</span><div class="grow"><b>${k + 1}. ${esc(ch.title)}</b><small>${esc(ch.say)}</small></div></li>`
+      : k === s.story ? `<li><span style="font-size:1.6rem">📍</span><div class="grow"><b>${k + 1}. ${esc(ch.title)}</b><small>${esc(ch.task)}</small></div></li>`
+      : `<li><span style="font-size:1.6rem;opacity:.35">🔒</span><div class="grow"><b>${k + 1}. ???</b></div></li>`).join('')}</ul>${c ? '' : '<p class="empty">🐉 Tu as percé le mystère de l’archipel. Bravo !</p>'}`;
+  }
   if (tab === 'maps') { const list = Object.entries(HUNTS).filter(([id]) => s.hunts[id]);
     $('#bookBody').innerHTML = list.length ? `<ul class="list">${list.map(([id, h]) => `<li><span style="font-size:1.8rem">${s.hunts[id] === 'trouve' ? '✅' : '📜'}</span><div class="grow"><b>${esc(h.name)}</b><small>${s.hunts[id] === 'trouve' ? 'Trésor trouvé !' : `« ${esc(h.clue)} » — approche de la plage et appuie sur E quand la croix rouge apparaît.`}</small></div></li>`).join('')}</ul>`
       : '<p class="empty">Aucune carte au trésor pour l’instant. Certaines bouteilles à la mer en cachent…</p>'; }
@@ -220,7 +259,7 @@ function renderBookOther(tab) {
 let bookSel = null, bookTab = 'fish';
 export function renderBook() {
   const s = S.save;
-  const tabs = [['fish', `🐟 Poissons ${G.catalogCount(s)}/${FISH.length}`], ['wonders', `✨ Merveilles ${G.wondersSeen(s).length}/${WONDERS.length}`], ['relics', `🏺 Reliques ${s.relics.length}/${Object.keys(RELICS).length}`], ['maps', `📜 Cartes au trésor`]];
+  const tabs = [['fish', `🐟 Poissons ${G.catalogCount(s)}/${FISH.length}`], ['wonders', `✨ Merveilles ${G.wondersSeen(s).length}/${WONDERS.length}`], ['relics', `🏺 Reliques ${s.relics.length}/${Object.keys(RELICS).length}`], ['maps', `📜 Cartes au trésor`], ['story', `📖 Histoire ${Math.min(S.save.story, STORY.length)}/${STORY.length}`]];
   $('#bookCount').innerHTML = `<span class="tabs" id="bookTabs">${tabs.map(([t, l]) => `<button class="small ${t === bookTab ? 'on' : ''}" data-btab="${t}">${l}</button>`).join('')}</span>`;
   $('#bookTabs').onclick = e => { const b = e.target.closest('[data-btab]'); if (b) { bookTab = b.dataset.btab; renderBook(); } };
   if (bookTab !== 'fish') return renderBookOther(bookTab);

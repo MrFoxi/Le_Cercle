@@ -36,6 +36,7 @@
       <span class="pill" id="hMoney" title="Ton argent">🪙 0</span>
       <span class="pill" id="hCargo" title="Ta cale">🐟 0/6</span>
       <button class="pill btn" id="hBait" title="Appât (B pour changer)">🪱 5</button>
+      <span class="pill" id="hContest" hidden></span>
     </div>
     <div class="pills right">
       <span class="pill" id="hClock" title="Heure et météo">☀️ 07:00</span>
@@ -76,6 +77,15 @@
       <p id="cInfo"></p>
       <p class="hint" id="cDesc"></p>
       <button class="primary" id="cOk">Super !</button>
+    </div>
+  </div>
+
+  <!-- Dialogue (histoire, concours) -->
+  <div id="dialog" class="overlay" hidden>
+    <div class="card dialogCard">
+      <div class="who"><span id="dFace"></span><div><b id="dName"></b><small id="dRole"></small></div></div>
+      <p id="dText"></p>
+      <button class="primary" id="dOk">Continuer</button>
     </div>
   </div>
 

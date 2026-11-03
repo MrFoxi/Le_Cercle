@@ -196,7 +196,40 @@ export function buildDecor({ root, scene, heightAt, waveAt, shoreFrom, rng, obst
     anim.push((dt, t) => { if (g.visible) sp.material.opacity = 0.5 + Math.sin(t * 4) * 0.4; });
   }
 
+  /* ----- Le Léviathan : une ombre immense qui passe sous le bateau (une seule fois, pendant l'histoire) ----- */
+  const levTex = (() => { const c = document.createElement('canvas'); c.width = 64; c.height = 256; const g = c.getContext('2d'); g.filter = 'blur(6px)'; g.fillStyle = 'rgba(4,14,26,1)';
+    g.beginPath(); g.ellipse(32, 90, 20, 80, 0, 0, 7); g.fill(); g.beginPath(); g.moveTo(32, 160); g.lineTo(10, 245); g.lineTo(54, 245); g.fill(); return new THREE.CanvasTexture(c); })();
+  const lev = new THREE.Mesh(new THREE.PlaneGeometry(14, 56).rotateX(-Math.PI / 2), new THREE.MeshBasicMaterial({ map: levTex, transparent: true, opacity: 0, depthWrite: false }));
+  lev.renderOrder = 2; lev.visible = false; root.add(lev);
+  const eyes = new THREE.Group(); for (const s of [-1, 1]) { const e = new THREE.Mesh(new THREE.SphereGeometry(0.5, 8, 6), new THREE.MeshBasicMaterial({ color: '#dff6ff' })); e.position.set(s * 3, 0, -16); eyes.add(e); } lev.add(eyes);
+  let levT = -1, levFrom = null;
+  anim.push((dt, t) => {
+    if (levT < 0) return;
+    levT += dt; const k = levT / 9;
+    if (k >= 1) { levT = -1; lev.visible = false; return; }
+    lev.visible = true;
+    lev.position.set(levFrom.x - 60 + k * 120, waveAt(levFrom.x, levFrom.z, t).h - 0.2, levFrom.z + Math.sin(k * 3) * 6); lev.rotation.y = -Math.PI / 2;
+    lev.material.opacity = Math.sin(k * Math.PI) * 0.7; eyes.visible = k > 0.35 && k < 0.6;
+  });
+
+  /* ----- Margot : sa barque-boutique, amarrée au ponton du village du jour ----- */
+  const margot = new THREE.Group();
+  {
+    const hull = new THREE.Mesh(new THREE.BoxGeometry(2.6, 1, 6), mat('#8a5ab0')); hull.position.y = 0.2; margot.add(hull);
+    for (const [x, z] of [[-1, -2], [1, -2], [-1, 2], [1, 2]]) { const p = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.06, 2.4, 5), mat('#5a4030')); p.position.set(x, 1.8, z); margot.add(p); }
+    for (let k = 0; k < 6; k++) { const s = new THREE.Mesh(new THREE.BoxGeometry(2.4, 0.08, 0.72), mat(k % 2 ? '#ffffff' : '#ff7a59')); s.position.set(0, 3.05, -1.8 + k * 0.72); margot.add(s); }
+    const body = new THREE.Mesh(new THREE.CylinderGeometry(0.42, 0.52, 1.4, 8), mat('#2fb3a6')); body.position.set(0, 1.4, 0.6); margot.add(body);
+    const head = new THREE.Mesh(new THREE.SphereGeometry(0.4, 10, 8), mat('#f1c9a5', { flatShading: false })); head.position.set(0, 2.4, 0.6); margot.add(head);
+    const hat = new THREE.Mesh(new THREE.ConeGeometry(0.7, 0.5, 12), mat('#f2c14e')); hat.position.set(0, 2.85, 0.6); margot.add(hat);
+    for (let k = 0; k < 5; k++) { const c = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.4, 0.5), mat(['#c8645a', '#e0b23c', '#5a8ab0', '#7a9a52', '#d08a4a'][k])); c.position.set(-0.8 + (k % 3) * 0.8, 0.9, -1.8 + Math.floor(k / 3) * 0.7); margot.add(c); }
+    margot.traverse(o => { if (o.isMesh) o.castShadow = true; });
+    margot.visible = false; root.add(margot);
+  }
+
   return {
+    leviathan(x, z) { levT = 0; levFrom = { x, z }; },
+    setMargot(dock) { margot.visible = !!dock; if (dock) { margot.position.set(dock.x - Math.sin(dock.heading) * 10 + Math.cos(dock.heading) * 3, 0, dock.z - Math.cos(dock.heading) * 10 - Math.sin(dock.heading) * 3); margot.rotation.y = dock.heading; } },
+    margotGroup: margot,
     huntSpots,
     setHunt: (id, on) => { if (marks[id]) marks[id].g.visible = on; },
     // la neige tombe autour de la caméra près des Glaciers

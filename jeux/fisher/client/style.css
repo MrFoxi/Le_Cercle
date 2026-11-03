@@ -96,6 +96,17 @@ button.small { padding: 6px 12px; font-size: .88rem; }
 .quest.done { opacity: .6; }
 .waits { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 12px; }
 
+/* Dialogue */
+#dialog { z-index: 20; } /* au-dessus des fenêtres de village */
+.dialogCard { width: min(520px, 100%); animation: pop .35s cubic-bezier(.3, 1.6, .5, 1); }
+.dialogCard .who { display: flex; gap: 12px; align-items: center; margin-bottom: 8px; }
+.dialogCard .who span { font-size: 2.6rem; }
+.dialogCard .who small { display: block; color: var(--muted); }
+.dialogCard p { font-size: 1.05rem; line-height: 1.5; white-space: pre-line; }
+#hContest { background: #fff3c4; }
+.story li.done b { color: var(--lagoon); }
+.order { display: flex; gap: 10px; align-items: center; }
+
 /* Carnet */
 .bookGrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 10px; }
 .fishCard { background: #fff; border-radius: 14px; padding: 8px; text-align: center; box-shadow: inset 0 0 0 2px var(--line); cursor: pointer; border: 0; display: block; width: 100%; font: inherit; color: inherit; }

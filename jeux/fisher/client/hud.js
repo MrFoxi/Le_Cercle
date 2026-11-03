@@ -37,8 +37,16 @@ export function showCatch(f, res, how = '') {
   $('#catch').hidden = false;
   if (G.cargoFull(S.save)) setTimeout(() => toast('Ta cale est pleine : direction le marché !'), 600);
 }
-export const catchOpen = () => !$('#catch').hidden;
-export function closeCatch() { $('#catch').hidden = true; }
+export const catchOpen = () => !$('#catch').hidden || !$('#dialog').hidden;
+// Une bulle de dialogue (histoire, concours) ; onClose quand on la ferme
+let dialogDone = null;
+export function showDialog(face, name, role, text, onClose = null) {
+  $('#dFace').textContent = face; $('#dName').textContent = name; $('#dRole').textContent = role; $('#dText').textContent = text;
+  $('#dialog').hidden = false; dialogDone = onClose;
+}
+export function closeDialog() { $('#dialog').hidden = true; const f = dialogDone; dialogDone = null; f?.(); }
+export const DAYS = ['Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi', 'Dimanche'];
+export function closeCatch() { if (!$('#dialog').hidden) return closeDialog(); $('#catch').hidden = true; }
 
 export function updateHud(hint) {
   const s = S.save;
@@ -47,7 +55,10 @@ export function updateHud(hint) {
   $('#hBait').textContent = baitLabel();
   const p = G.period(s.time), w = S.W.kind;
   const icon = w === 'pluie' ? '🌧️' : w === 'brume' ? '🌫️' : p === 'nuit' ? '🌙' : p === 'crepuscule' ? '🌅' : w === 'nuageux' ? '⛅' : '☀️';
-  $('#hClock').textContent = `${icon} ${G.clock(s.time)}`; $('#hClock').title = `${WEATHER[w]} · jour ${s.days + 1}`;
+  $('#hClock').textContent = `${icon} ${G.clock(s.time)}`; $('#hClock').title = `${WEATHER[w]} · ${DAYS[s.days % 7]} (jour ${s.days + 1})`;
+  const on = G.contestOn(s);
+  $('#hContest').hidden = !on;
+  if (on) { const left = Math.max(0, (s.contest.until - G.now(s)) * 24 * 60); $('#hContest').textContent = `🏆 ${Math.floor(left / 60)} h ${String(Math.floor(left % 60)).padStart(2, '0')} · ${s.contest.best} pts`; }
   if ($('#hint').innerHTML !== hint) $('#hint').innerHTML = hint;
 }
 

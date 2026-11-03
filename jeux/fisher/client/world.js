@@ -689,12 +689,13 @@ export function createWorld(renderer, scene, { low = false } = {}) {
     for (const f of anim) f(dt, time, night);
     skyU.uAurora.value = night * (1 - sstep(350, 700, Math.hypot(focus.x - 120, focus.z + 930))) * (weather === 'clair' ? 1 : 0.25) * (under ? 0 : 1);
     decor.update(dt, time, night, focus, camera, under);
+    const m = decor.margotGroup; if (m.visible) m.position.y = waveAt(m.position.x, m.position.z, time).h;
   }
 
   return {
     heightAt, waveAt, docks, obstacles, people, treasures, spots: spotMeshes, update, state, sunDir,
     hideTreasure: id => { const g = treasures.get(id); if (g) g.visible = false; },
     setUnder: (on, isDeep = false) => { under = on; deep = on && isDeep; },
-    huntSpots: decor.huntSpots, setHunt: decor.setHunt,
+    huntSpots: decor.huntSpots, setHunt: decor.setHunt, leviathan: decor.leviathan, setMargot: decor.setMargot,
   };
 }

@@ -70,6 +70,7 @@ export function collectTrap() {
   sync(); SFX.splash(); splashAt({ x: t.x, y: 0, z: t.z }, 1.5);
   if (!got.length) toast('Le casier était vide… pas de chance !');
   else {
+    for (const g of got) S.onCatch(g.f, g);
     toast(`🦀 Dans le casier : ${got.map(g => `<b>${esc(g.f.name)}</b> (${g.fish.size} cm)`).join(', ')}`, 6000);
     jumpFish(got[0].f, { x: t.x, y: 0, z: t.z });
     const first = got.find(g => g.first);
@@ -104,7 +105,7 @@ export function updateTraps(dt) {
       if (G.cargoFull(S.save)) toast('🥅 Le filet déborde : ta cale est pleine.');
       else {
         const f = G.netCatch(G.zoneAt(S.B.x, S.B.z));
-        if (f) { const res = G.landFish(S.save, f); SFX.plop(); toast(`🥅 Le filet a remonté : <b>${esc(f.name)}</b> (${res.fish.size} cm)${res.first ? ' · ✨ nouvelle espèce !' : ''}`); gain(0); persist(); }
+        if (f) { const res = G.landFish(S.save, f); S.onCatch(f, res); SFX.plop(); toast(`🥅 Le filet a remonté : <b>${esc(f.name)}</b> (${res.fish.size} cm)${res.first ? ' · ✨ nouvelle espèce !' : ''}`); gain(0); persist(); }
       }
     }
   }

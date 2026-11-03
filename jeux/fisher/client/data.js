@@ -219,6 +219,7 @@ export const BAITS = {
   calmar: { name: 'Lamelles de calmar', icon: '🦑', pack: 5, cost: 20, desc: 'Pour les gros : mérou, congre, espadon…' },
   lumineux: { name: 'Appât lumineux', icon: '✨', pack: 5, cost: 25, desc: 'Brille dans le noir : les poissons de nuit mordent même sans lanterne.' },
   leurre: { name: 'Leurre argenté', icon: '🎏', pack: 1, cost: 90, forever: true, desc: 'Ne s’use jamais. Les chasseurs (maquereau, bar, thon) ne lui résistent pas.' },
+  dore: { name: 'Appât doré', icon: '🌟', pack: 3, cost: 140, desc: 'Vendu par Margot seulement : les poissons rares mordent bien plus, les légendaires trois fois plus.' },
 };
 export const BAIT_SHOPS = { port: ['ver', 'calmar', 'leurre'], corail: ['crevette', 'lumineux', 'calmar'] };
 export const GEAR = {
@@ -329,6 +330,16 @@ export const PEOPLE = [
       { id: 'archer', text: 'Attrape un Poisson-archer, celui qui crache sur les insectes !', type: 'catch', fish: 'archer', reward: 70, done: 'Il m’a craché dessus, le coquin. Merci !' },
       { id: 'tarpon', text: 'Le Tarpon argenté saute au crépuscule. Personne ici n’en a jamais sorti un.', type: 'catch', fish: 'tarpon', reward: 260, done: 'Un vrai miroir volant ! Tu es le roi de la mangrove.' },
     ] },
+  { id: 'edmond', name: 'Edmond', role: 'Collectionneur', village: 'port', face: '🎩', collector: true,
+    hello: 'Ah, un pêcheur ! Je collectionne les créatures rares. Montrez-moi vos plus belles prises : je les paie le double du marché.',
+    quests: [
+      { id: 'collection', text: 'Un poisson légendaire, n’importe lequel. Pour ma collection personnelle.', type: 'legend', reward: 600, done: 'Fa-bu-leux. Je vais lui construire une vitrine rien qu’à lui.' },
+    ] },
+  { id: 'barnabe', name: 'Barnabé', role: 'Vieux cartographe', village: 'phare', face: '🧓', cartographer: true,
+    hello: 'J’ai dessiné toutes les côtes de l’archipel… et quelques cartes que je ne montre pas à tout le monde. Pour quelques pièces, peut-être.',
+    quests: [
+      { id: 'carto', text: 'Explore la moitié de l’archipel (regarde ta carte) et viens me raconter.', type: 'explore', amount: 0.5, reward: 250, done: 'Tu as l’œil d’un vrai navigateur. Tiens, pour tes prochaines expéditions.' },
+    ] },
   { id: 'anselme', name: 'Anselme', role: 'Gardien du phare', village: 'phare', face: '🧑‍✈️',
     hello: 'Peu de bateaux viennent jusqu’ici. Les nuits de brume, des lueurs montent de l’eau… et les nuits d’orage, du côté de la Fosse, quelque chose d’énorme.',
     quests: [
@@ -370,6 +381,8 @@ export const RELICS = {
   couronne: { name: 'Couronne engloutie', icon: '👑', desc: 'Celle du Roi des Sardines ? Personne ne sait.' },
   carte: { name: 'Carte des étoiles', icon: '🗺️', desc: 'Les constellations des marins d’autrefois.' },
   perle: { name: 'Perle noire', icon: '⚫', desc: 'Grosse comme une bille, et d’un noir profond.' },
+  coupe: { name: 'Coupe du concours', icon: '🏆', desc: 'Gagnée au grand concours de pêche du dimanche.' },
+  statue: { name: 'Écaille du Léviathan', icon: '🐉', desc: 'Une écaille d’argent grande comme un bouclier, offerte par le gardien de l’archipel.' },
 };
 // Épaves : on les fouille au grappin, une fois par jour ; la première fouille donne leur relique.
 export const WRECKS = [
@@ -401,3 +414,33 @@ export const WONDERS = [
 ];
 
 export const DAY_SECONDS = 600; // une journée dure 10 minutes
+
+// ---------- L'histoire : le mystère du Léviathan ----------
+// goal : talk (écouter un habitant), wreck (fouiller une épave), relic (avoir une relique), upgrade (niveau d'amélioration),
+// see (voir un lieu), event (vivre un moment précis), catch (avoir pêché une espèce).
+export const STORY = [
+  { id: 'c1', title: 'Les récits de Gustave', goal: { type: 'talk', who: 'gustave' }, task: 'Va écouter Gustave, à Port-Galet.',
+    say: 'Le Léviathan ? Je l’ai vu une fois, petit. Une nuit d’orage, au large de la Fosse. Un dos d’argent long comme dix bateaux… Le capitaine du Neptune l’a vu aussi. Son navire repose à la Baie des Naufrages : son journal doit y être encore.', reward: 50 },
+  { id: 'c2', title: 'Le journal du Neptune', goal: { type: 'wreck', wreck: 'neptune' }, task: 'Fouille l’épave du Neptune, à la Baie des Naufrages (il faut un grappin).',
+    say: 'Dans la cabine du capitaine, une page rongée par le sel : « Il ne monte que les nuits d’orage, au-dessus de la Fosse. Il suit les étoiles… La carte des étoiles est restée sur l’Étoile des abysses. »', reward: 100 },
+  { id: 'c3', title: 'La carte des étoiles', goal: { type: 'relic', relic: 'carte' }, task: 'Retrouve la Carte des étoiles dans l’épave de l’Étoile des abysses, au bord de la Fosse.',
+    say: 'Sur la carte, une constellation en forme de poisson pointe droit sur la Fosse. Une annotation : « Demander à la savante du nord, elle comprend les orages. »', reward: 150 },
+  { id: 'c4', title: 'L’avis de la savante', goal: { type: 'talk', who: 'lena' }, task: 'Montre la carte à Léna, à la Station Boréale.',
+    say: 'Fascinant… Les orages chauffent l’eau de surface, et les grands animaux des profondeurs remontent respirer. Si ton Léviathan existe, c’est là qu’il faut l’attendre. Mais il te faudra la meilleure canne qui soit.', reward: 150 },
+  { id: 'c5', title: 'La canne de légende', goal: { type: 'upgrade', key: 'canne', level: 3 }, task: 'Fais fabriquer la Canne de légende par Joseph, au chantier de Port-Galet.', say: 'Joseph a tendu la ligne en riant : « Avec ça, tu pourrais pêcher la lune. »', reward: 200 },
+  { id: 'c6', title: 'La nuit d’orage', goal: { type: 'event', event: 'leviathan' }, task: 'Attends une nuit d’orage (ou de forte pluie) au-dessus de la Fosse, avec un appât de calmar.',
+    say: 'Un éclair… et sous le bateau, une ombre immense passe lentement. Deux yeux d’argent te regardent, puis disparaissent. Il est là. Lance ta ligne !', reward: 200 },
+  { id: 'c7', title: 'Le gardien de l’archipel', goal: { type: 'catch', fish: 'leviathan' }, task: 'Attrape le Léviathan d’argent… puis va raconter tout ça à Anselme, au phare.',
+    say: 'Anselme a longtemps regardé la mer. « Tu sais, il ne fait de mal à personne. Il garde l’archipel depuis toujours. » Le lendemain, une écaille d’argent t’attendait sur le ponton.', reward: 1000, relic: 'statue', end: true },
+];
+
+// ---------- Margot, la marchande ambulante (un village différent chaque jour) ----------
+export const MARGOT_ROUTE = ['port', 'corail', 'station', 'heron', 'phare'];
+export const MARGOT_STOCK = [
+  { kind: 'bait', id: 'dore', cost: 140 },
+  { kind: 'bait', id: 'lumineux', cost: 22 },
+  { kind: 'relic', cost: 900, desc: 'Une relique au hasard parmi celles que tu n’as pas.' },
+  { kind: 'map', cost: 220, desc: 'Une carte au trésor que tu n’as pas encore.' },
+];
+// Le grand concours du dimanche (un jour sur sept) à Port-Galet
+export const CONTEST = { hours: 6, prizes: [300, 150, 75], rivals: ['Lucie', 'Kaï', 'Tibo', 'Gustave', 'Inès'] };

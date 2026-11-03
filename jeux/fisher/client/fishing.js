@@ -91,6 +91,7 @@ function reelPress() {
 }
 function landed() {
   const f = F.fish, res = G.landFish(S.save, f);
+  S.onCatch(f, res);
   jumpFish(f, bobber.position.clone());
   SFX.catch(f.rarity === 'rare' || f.rarity === 'legende');
   stop();

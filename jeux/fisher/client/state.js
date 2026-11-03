@@ -13,6 +13,7 @@ export const S = {
   amp: 1,                              // hauteur des vagues (plus fortes sous la pluie)
   keys: new Set(), touch: { x: 0, y: 0 },
   scene: null, camera: null, world: null, boat: null,
+  onCatch: () => {},                   // appelé à chaque prise (canne, casier, filet, plongée) : concours
 };
 export function persist() {
   if (S.mode !== 'title') S.save.boat = { x: S.B.x, z: S.B.z, heading: S.B.heading };

@@ -1,7 +1,7 @@
 // Tests de Little Fisher : le contenu se tient (chaque poisson peut mordre quelque part, missions et trésors liés),
 // et la boucle de jeu marche : pêcher, remplir la cale, vendre, améliorer, rendre des missions, sauvegarder.
 import assert from 'node:assert';
-import { FISH, SPOTS, PEOPLE, TREASURES, UPGRADES, ZONES, BAITS, FIGHTS, ISLANDS, WONDERS, WRECKS, HUNTS, RELICS, CAVE, VILLAGES } from './client/data.js';
+import { FISH, SPOTS, PEOPLE, TREASURES, UPGRADES, ZONES, BAITS, FIGHTS, ISLANDS, WONDERS, WRECKS, HUNTS, RELICS, CAVE, VILLAGES, STORY, MARGOT_ROUTE } from './client/data.js';
 import * as G from './client/game.js';
 
 // Chaque espèce s'attrape d'une façon : à la canne (meilleur équipement, à une heure et par un temps donnés), au casier ou en plongée.
@@ -148,4 +148,38 @@ assert(G.trophies(fr)[0].f.id === 'thon');
 // Sous-marin : seulement en eau profonde, au large ou dans la Fosse.
 fr.gear.sousmarin = true;
 assert(G.canSub(fr, 'fosse', 60) && !G.canSub(fr, 'cote', 60) && !G.canSub(fr, 'large', 10));
+// L'histoire : chaque chapitre renvoie à des choses qui existent ; on la déroule jusqu'au bout.
+for (const c of STORY) {
+  const g = c.goal;
+  if (g.type === 'talk') assert(PEOPLE.some(p => p.id === g.who), c.id);
+  if (g.type === 'wreck') assert(WRECKS.some(w => w.id === g.wreck), c.id);
+  if (g.type === 'relic') assert(RELICS[g.relic], c.id);
+  if (g.type === 'catch') assert(G.fishById(g.fish), c.id);
+}
+const st = G.newSave();
+assert(!G.storyTalk(st, 'lena') && G.storyTalk(st, 'gustave')?.id === 'c1');
+assert(!G.chapterReady(st)); st.wrecks.neptune = 0; assert(G.chapterReady(st) && G.finishChapter(st).id === 'c2');
+st.relics.push('carte'); G.finishChapter(st); G.storyTalk(st, 'lena'); st.levels.canne = 3; G.finishChapter(st);
+st.flags.leviathan = true; assert(G.chapterReady(st)); G.finishChapter(st);
+st.catalog.leviathan = { count: 1, best: 500 }; assert(G.finishChapter(st).end && st.relics.includes('statue') && G.chapter(st) === null);
+// Commandes du jour : toujours les mêmes pour un jour donné, payées double, livrées une seule fois.
+const os = G.newSave(), orders = G.ordersOf(os, 'port');
+assert.deepStrictEqual(G.ordersOf(os, 'port'), orders); assert.strictEqual(G.ordersOf(os, 'phare').length, 0);
+const o = orders[0]; assert.match(G.deliverOrder(os, o), /Il t’en faut/);
+for (let k = 0; k < o.count; k++) G.landFish(os, G.fishById(o.fish));
+const m0 = os.money; assert.strictEqual(G.deliverOrder(os, o), null); assert(os.money === m0 + o.pay && G.orderDone(os, o) && G.deliverOrder(os, o));
+os.days++; assert.notDeepStrictEqual(G.ordersOf(os, 'port').map(x => x.id), orders.map(x => x.id));
+// Margot change de village chaque jour ; le collectionneur paie le double des rares seulement ; le cartographe vend des cartes.
+assert.deepStrictEqual([0, 1, 2].map(d => { os.days = d; return G.margotAt(os); }), MARGOT_ROUTE.slice(0, 3));
+G.landFish(os, G.fishById('sardine')); G.landFish(os, G.fishById('thon'));
+assert.strictEqual(G.sellToCollector(os, os.cargo.findIndex(f => f.id === 'sardine')), 0);
+assert(G.sellToCollector(os, os.cargo.findIndex(f => f.id === 'thon')) > 0);
+os.money = 5000; const h = G.buyMap(os); assert(h && os.hunts[h] === 'actif');
+assert(G.buyFromMargot(os, 0).bait === 'dore' && os.baits.dore === 3);
+// Le concours du dimanche : meilleur score gardé, prix et coupe à la première place.
+const cs = G.newSave();
+assert.match(G.startContest(cs), /dimanche/); cs.days = 6;
+assert.strictEqual(G.startContest(cs, () => 0), null);
+assert(G.contestCatch(cs, G.fishById('thon'), 200) && !G.contestCatch(cs, G.fishById('sardine'), 10));
+const res = G.endContest(cs); assert(res.place === 1 && res.prize === 300 && cs.relics.includes('coupe'));
 console.log('Tests de Little Fisher : OK');

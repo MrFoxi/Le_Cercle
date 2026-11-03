@@ -234,6 +234,7 @@ function updateShot(dt) {
 function caught(F) {
   S.scene.remove(F.m);
   const res = G.landFish(S.save, F.f);
+  S.onCatch(F.f, res);
   SFX.catch(F.f.rarity === 'rare');
   if (res.first) showCatch(F.f, res, D.sub ? '🟡 Attrapé en sous-marin' : '🤿 Pêché au harpon');
   else toast(`🎯 <b>${esc(F.f.name)}</b> (${res.fish.size} cm)${res.record ? ' · 🏆 record !' : ''}`);
