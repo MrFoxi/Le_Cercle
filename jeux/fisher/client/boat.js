@@ -115,30 +115,35 @@ export function buildBoat() {
   };
 }
 
-// Sillage : des taches d'écume laissées derrière le bateau, qui s'élargissent et s'effacent.
+// Sillage en V : de l'écume part des deux côtés de la proue et s'écarte, plus une traînée derrière l'hélice.
 export function createWake(scene) {
-  const N = 90, geo = new THREE.CircleGeometry(1, 14); geo.rotateX(-Math.PI / 2);
-  const m = new THREE.InstancedMesh(geo, new THREE.MeshBasicMaterial({ color: '#ffffff', transparent: true, opacity: 0.22, depthWrite: false }), N);
+  const N = 160, geo = new THREE.CircleGeometry(1, 12); geo.rotateX(-Math.PI / 2);
+  const m = new THREE.InstancedMesh(geo, new THREE.MeshBasicMaterial({ color: '#ffffff', transparent: true, opacity: 0.3, depthWrite: false }), N);
   m.frustumCulled = false; m.renderOrder = 1; scene.add(m);
-  const items = Array.from({ length: N }, () => ({ x: 0, z: 0, age: 9, s: 1 }));
+  const items = Array.from({ length: N }, () => ({ x: 0, z: 0, vx: 0, vz: 0, age: 9, s: 1, life: 2 }));
   const o = new THREE.Object3D();
   let next = 0, acc = 0;
+  const emit = (x, z, vx, vz, s, life) => { const it = items[next]; next = (next + 1) % N; Object.assign(it, { x, z, vx, vz, s, life, age: 0 }); };
   return {
     update(dt, x, z, heading, speed, waveH) {
-      acc += dt * Math.min(1, speed / 4);
-      if (speed > 1.2 && acc > 0.09) {
+      const fx = Math.sin(heading), fz = Math.cos(heading), rx = -fz, rz = fx;
+      acc += dt;
+      if (speed > 1.2 && acc > 0.06) {
         acc = 0;
-        for (const side of [-1, 1]) {
-          const it = items[next]; next = (next + 1) % N;
-          it.x = x - Math.sin(heading) * 3.3 + Math.cos(heading) * side * 0.8; it.z = z - Math.cos(heading) * 3.3 - Math.sin(heading) * side * 0.8;
-          it.age = 0; it.s = 0.35 + speed * 0.015;
+        const k = Math.min(1, speed / 20);
+        for (const side of [-1, 1]) { // les deux bras du V, poussés vers l'extérieur
+          const bx = x + fx * 2.2 + rx * side * 1.2, bz = z + fz * 2.2 + rz * side * 1.2, out = 1.5 + speed * 0.12;
+          emit(bx, bz, rx * side * out, rz * side * out, 0.3 + k * 0.25, 2.6);
         }
+        emit(x - fx * 3.4, z - fz * 3.4, 0, 0, 0.4 + k * 0.5, 1.8); // remous de l'hélice
       }
-      for (let k = 0; k < N; k++) {
-        const it = items[k]; it.age += dt;
-        const life = Math.max(0, 1 - it.age / 2.4);
-        o.position.set(it.x, waveH(it.x, it.z) + 0.12, it.z); o.scale.setScalar(life > 0 ? it.s * (1 + it.age * 0.9) * Math.min(1, life * 2.5) : 0.0001);
-        o.updateMatrix(); m.setMatrixAt(k, o.matrix);
+      for (let n = 0; n < N; n++) {
+        const it = items[n]; it.age += dt;
+        const life = Math.max(0, 1 - it.age / it.life);
+        it.x += it.vx * dt; it.z += it.vz * dt; it.vx *= Math.exp(-dt * 0.8); it.vz *= Math.exp(-dt * 0.8);
+        o.position.set(it.x, waveH(it.x, it.z) + 0.1, it.z);
+        o.scale.set(1, 1, 1).multiplyScalar(life > 0 ? it.s * (1 + it.age * 1.1) * Math.min(1, life * 2.2) : 0.0001);
+        o.updateMatrix(); m.setMatrixAt(n, o.matrix);
       }
       m.instanceMatrix.needsUpdate = true;
     },

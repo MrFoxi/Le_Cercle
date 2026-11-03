@@ -57,12 +57,14 @@ function mulberry(a) { return () => { a |= 0; a = a + 0x6D2B79F5 | 0; let t = Ma
 const PAL = {
   sand: new THREE.Color('#f1dca2'), wetSand: new THREE.Color('#d8bf86'), grass: new THREE.Color('#7fbf5a'), grass2: new THREE.Color('#5d9d48'),
   forest: new THREE.Color('#3f7d43'), rock: new THREE.Color('#9a9488'), rock2: new THREE.Color('#78736a'), cliff: new THREE.Color('#b9b1a3'),
-  tropic: new THREE.Color('#9bd06a'), seabed: new THREE.Color('#5ba79a'),
+  tropic: new THREE.Color('#9bd06a'), seabed: new THREE.Color('#3f8f8a'), lagoon: new THREE.Color('#f4e6b8'),
 };
+const CORALS = ['#ff8a8a', '#ffb35c', '#c27be0', '#ff6fa8', '#ffd36b'].map(c => new THREE.Color(c));
 
 /* ---------------- Le monde ---------------- */
-export function createWorld(renderer, scene) {
+export function createWorld(renderer, scene, { low = false } = {}) {
   const rng = mulberry(20261103);
+  const uTime = { value: 0 }; // horloge partagée par l'eau, les reflets du fond et la végétation
   const root = new THREE.Group(); scene.add(root);
   const anim = []; // fonctions (dt, t, night) appelées à chaque image
 
@@ -70,7 +72,7 @@ export function createWorld(renderer, scene) {
   const hemi = new THREE.HemisphereLight('#cfe9ff', '#5d7d5a', 0.9);
   const sun = new THREE.DirectionalLight('#fff3df', 2.4);
   sun.castShadow = true;
-  sun.shadow.mapSize.set(2048, 2048);
+  sun.shadow.mapSize.set(low ? 1024 : 2048, low ? 1024 : 2048);
   Object.assign(sun.shadow.camera, { left: -70, right: 70, top: 70, bottom: -70, near: 1, far: 600 });
   sun.shadow.bias = -0.0005; sun.shadow.normalBias = 0.04;
   scene.add(hemi, sun, sun.target);
@@ -78,10 +80,35 @@ export function createWorld(renderer, scene) {
 
   /* ----- Relief des îles ----- */
   const groundMat = new THREE.MeshStandardMaterial({ vertexColors: true, flatShading: true, roughness: 0.95 });
+  // sous l'eau : le fond prend une teinte bleu-vert et des reflets de lumière dansent dessus
+  groundMat.onBeforeCompile = sh => {
+    sh.uniforms.uTime = uTime;
+    sh.vertexShader = 'varying vec3 vWorld;\n' + sh.vertexShader.replace('#include <begin_vertex>', '#include <begin_vertex>\n  vWorld = (modelMatrix * vec4(transformed, 1.0)).xyz;');
+    sh.fragmentShader = `uniform float uTime; varying vec3 vWorld;
+      float caustic(vec2 p, float t) {
+        vec2 i = p; float c = 1.0;
+        for (int n = 0; n < 4; n++) {
+          float tt = t * (1.0 - 3.5 / float(n + 1));
+          i = p + vec2(cos(tt - i.x) + sin(tt + i.y), sin(tt - i.y) + cos(tt + i.x));
+          c += 1.0 / length(vec2(p.x / (sin(i.x + tt) / 0.005), p.y / (cos(i.y + tt) / 0.005)));
+        }
+        c = 1.17 - pow(c / 4.0, 1.4);
+        return pow(abs(c), 8.0);
+      }\n` + sh.fragmentShader.replace('#include <fog_fragment>', `
+      float under = smoothstep(0.1, -1.2, vWorld.y);
+      float c = caustic(mod(vWorld.xz * 0.22, 6.2831), uTime * 0.6);
+      gl_FragColor.rgb = mix(gl_FragColor.rgb, gl_FragColor.rgb * vec3(0.62, 0.9, 0.95), under * 0.55);
+      gl_FragColor.rgb += vec3(0.75, 0.95, 1.0) * clamp(c, 0.0, 1.4) * under * smoothstep(-14.0, -1.5, vWorld.y) * 0.32;
+      #include <fog_fragment>`);
+  };
   const tmp = new THREE.Color();
   function colorAt(i, x, z, h, slope) {
     const n = noise(x * 0.15, z * 0.15);
-    if (h < -0.3) return tmp.copy(PAL.seabed).lerp(PAL.wetSand, sstep(-3, -0.3, h));
+    if (h < -0.3) { // fond : sable clair près du bord, plus sombre au large, coraux dans le lagon
+      tmp.copy(PAL.seabed).lerp(i.kind === 'tropical' ? PAL.lagoon : PAL.wetSand, sstep(-11, -0.5, h));
+      if (i.kind === 'tropical' && h > -7 && h < -1 && n > 0.6) tmp.lerp(CORALS[Math.floor(hash(x * 0.3, z * 0.3) * CORALS.length)], 0.75);
+      return tmp;
+    }
     if (h < 1.6 || (i.kind === 'tropical' && h < 3.2)) return tmp.copy(PAL.sand).lerp(PAL.wetSand, 0.3 * n);
     if (i.kind === 'roche' || slope > 1.1) return tmp.copy(h > 12 ? PAL.cliff : PAL.rock).lerp(PAL.rock2, n * 0.6);
     if (i.kind === 'tropical') return tmp.copy(PAL.tropic).lerp(PAL.grass2, n * 0.5);
@@ -89,7 +116,7 @@ export function createWorld(renderer, scene) {
     return tmp.copy(PAL.grass).lerp(PAL.rock, 0.3 + n * 0.4);
   }
   for (const i of ISLANDS) {
-    const size = i.r * 2.6, seg = Math.min(110, Math.round(size / 2.2));
+    const size = i.r * 3.2, seg = Math.min(130, Math.round(size / 2.2)); // assez large pour que le fond visible sous l'eau ne s'arrête pas net
     const geo = new THREE.PlaneGeometry(size, size, seg, seg);
     geo.rotateX(-Math.PI / 2);
     const pos = geo.attributes.position;
@@ -126,7 +153,7 @@ export function createWorld(renderer, scene) {
 
   /* ----- L'océan ----- */
   const U = {
-    uTime: { value: 0 }, uDepth: { value: depthTex }, uSpan: { value: SPAN },
+    uTime, uDepth: { value: depthTex }, uSpan: { value: SPAN }, uSkyTop: { value: new THREE.Color() },
     uDeep: { value: new THREE.Color() }, uShallow: { value: new THREE.Color() }, uSky: { value: new THREE.Color() },
     uSunDir: { value: new THREE.Vector3(0, 1, 0) }, uSunColor: { value: new THREE.Color() }, uFogColor: { value: new THREE.Color() },
     uFogDensity: { value: 0.0011 }, uNight: { value: 0 }, uGlint: { value: 1 }, uAmp: { value: 1 },
@@ -151,7 +178,7 @@ export function createWorld(renderer, scene) {
       }`,
     fragmentShader: /* glsl */`
       uniform sampler2D uDepth; uniform float uSpan, uTime, uFogDensity, uNight, uGlint, uAmp;
-      uniform vec3 uDeep, uShallow, uSky, uSunDir, uSunColor, uFogColor;
+      uniform vec3 uDeep, uShallow, uSky, uSkyTop, uSunDir, uSunColor, uFogColor;
       varying vec3 vPos; varying vec3 vNormal;
       float hash(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
       float noise(vec2 p) { vec2 i = floor(p), f = fract(p), u = f * f * (3.0 - 2.0 * f);
@@ -167,7 +194,8 @@ export function createWorld(renderer, scene) {
         vec3 n = normalize(vNormal + vec3(r1, 0.0, r2) * 0.22);
         vec3 v = normalize(cameraPosition - vPos);
         float fres = pow(1.0 - max(dot(n, v), 0.0), 4.0);
-        col = mix(col, uSky, clamp(fres * 0.75, 0.0, 0.8));
+        vec3 rsky = mix(uSky, uSkyTop, pow(max(reflect(-v, n).y, 0.0), 0.6)); // le ciel qui se reflète
+        col = mix(col, rsky, clamp(fres * 0.85, 0.0, 0.85));
         // soleil (ou lune) : un reflet net et des paillettes
         vec3 rf = reflect(-v, n);
         float s = max(dot(rf, uSunDir), 0.0);
@@ -178,16 +206,20 @@ export function createWorld(renderer, scene) {
         float lines = smoothstep(0.82, 0.9, sin(depth * 2.4 - uTime * 1.5 + noise(vPos.xz * 0.15) * 6.0) * 0.5 + 0.5) * (1.0 - smoothstep(0.5, 4.5, depth));
         float crest = smoothstep(0.74, 0.8, noise(vPos.xz * 0.7 + uTime * 0.4)) * smoothstep(0.32, 0.48, vPos.y) * 0.35 * clamp(uAmp - 1.0, 0.0, 1.0); // moutons d'écume quand le vent souffle
         col = mix(col, vec3(0.96, 0.98, 1.0) * (1.0 - uNight * 0.65), clamp(max(shore, lines * 0.75) + crest, 0.0, 1.0) * 0.9);
-        float dist = length(cameraPosition - vPos);
-        col = mix(col, uFogColor, 1.0 - exp(-uFogDensity * uFogDensity * dist * dist));
-        gl_FragColor = vec4(col, 1.0);
+        float dist = length(cameraPosition - vPos), fogK = 1.0 - exp(-uFogDensity * uFogDensity * dist * dist);
+        col = mix(col, uFogColor, fogK);
+        // eau claire : on voit le fond là où c'est peu profond
+        float alpha = mix(0.16, 1.0, smoothstep(0.0, 9.0, depth));
+        alpha = max(alpha, max(clamp(max(shore, lines * 0.75), 0.0, 1.0) * 0.9, fres * 0.55));
+        gl_FragColor = vec4(col, mix(alpha, 1.0, fogK));
         #include <tonemapping_fragment>
         #include <colorspace_fragment>
       }`,
   });
   const waterGeo = new THREE.PlaneGeometry(SPAN, SPAN, 300, 300); waterGeo.rotateX(-Math.PI / 2);
+  waterMat.transparent = true;
   const water = new THREE.Mesh(waterGeo, waterMat);
-  water.frustumCulled = false;
+  water.frustumCulled = false; water.renderOrder = -1; // dessinée avant les autres objets transparents (écume, remous)
   root.add(water);
 
   /* ----- Ciel, étoiles, nuages ----- */
@@ -244,7 +276,23 @@ export function createWorld(renderer, scene) {
     root.add(m); return m;
   }
   const vcolor = (geo, hex) => { const c = new THREE.Color(hex), a = new Float32Array(geo.attributes.position.count * 3); for (let k = 0; k < a.length; k += 3) a.set([c.r, c.g, c.b], k); geo.setAttribute('color', new THREE.BufferAttribute(a, 3)); return geo; };
-  const plantMat = new THREE.MeshStandardMaterial({ vertexColors: true, flatShading: true, roughness: 0.9 });
+  // Végétation qui ondule au vent : le haut des plantes bouge, le pied reste fixe.
+  function sway(mat, amp, from) {
+    mat.onBeforeCompile = sh => {
+      sh.uniforms.uTime = uTime;
+      sh.vertexShader = 'uniform float uTime;\n' + sh.vertexShader.replace('#include <begin_vertex>', `#include <begin_vertex>
+        vec3 ip = vec3(0.0);
+        #ifdef USE_INSTANCING
+        ip = instanceMatrix[3].xyz;
+        #endif
+        float sw = max(0.0, position.y - ${from.toFixed(2)}); sw *= sw;
+        transformed.x += sin(uTime * 1.4 + ip.x * 0.13 + ip.z * 0.07) * ${amp.toFixed(4)} * sw;
+        transformed.z += cos(uTime * 1.1 + ip.x * 0.05 + ip.z * 0.11) * ${(amp * 0.7).toFixed(4)} * sw;`);
+    };
+    mat.customProgramCacheKey = () => `sway${amp}${from}`;
+    return mat;
+  }
+  const plantMat = sway(new THREE.MeshStandardMaterial({ vertexColors: true, flatShading: true, roughness: 0.9 }), 0.0028, 1);
   // pin : un tronc et trois étages
   const pineGeo = mergeGeometries([
     vcolor(new THREE.CylinderGeometry(0.35, 0.5, 3, 6).translate(0, 1.5, 0), '#6b4a2f'),
@@ -367,7 +415,8 @@ export function createWorld(renderer, scene) {
       const lamp = cyl(1.4, 1.4, 2.4, new THREE.MeshStandardMaterial({ color: '#fff4c2', emissive: '#ffd36b', emissiveIntensity: 0.4, transparent: true, opacity: 0.9 }), 0, 21, 0, 12, tower);
       const cap = new THREE.Mesh(new THREE.ConeGeometry(1.9, 2, 12), red); cap.position.y = 23.2; tower.add(cap);
       // les faisceaux qui tournent la nuit
-      const beamMat = new THREE.MeshBasicMaterial({ color: '#fff3c4', transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide, fog: false });
+      const fadeTex = (() => { const c = document.createElement('canvas'); c.width = 4; c.height = 128; const g = c.getContext('2d'), gr = g.createLinearGradient(0, 0, 0, 128); gr.addColorStop(0, '#fff'); gr.addColorStop(1, '#000'); g.fillStyle = gr; g.fillRect(0, 0, 4, 128); return new THREE.CanvasTexture(c); })();
+      const beamMat = new THREE.MeshBasicMaterial({ color: '#fff3c4', alphaMap: fadeTex, transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide, fog: false }); // s'estompe vers le bout
       const beams = new THREE.Group(); beams.position.y = 21;
       for (const k of [0, Math.PI]) { const c = new THREE.Mesh(new THREE.ConeGeometry(9, 160, 20, 1, true).translate(0, -80, 0), beamMat); c.rotation.set(0, k, Math.PI / 2 - 0.04); beams.add(c); }
       tower.add(beams); root.add(tower);
@@ -413,6 +462,32 @@ export function createWorld(renderer, scene) {
   instanced(palmGeo, plantMat, palms.map(p => ({ ...p, c: undefined })));
   instanced(bushGeo, new THREE.MeshStandardMaterial({ color: '#ffffff', flatShading: true, roughness: 0.9, vertexColors: false }), bushes.map(b => ({ ...b })));
   instanced(rockGeo, rockMat, rocks);
+  // Herbes hautes et fleurs dans les prés
+  {
+    const blades = [];
+    for (let k = 0; k < 6; k++) {
+      const a = k / 6 * Math.PI * 2 + 0.3, lean = 0.18 + (k % 3) * 0.08, h = 0.55 + (k % 2) * 0.3;
+      const g = new THREE.BufferGeometry().setAttribute('position', new THREE.Float32BufferAttribute([-0.06, 0, 0, 0.06, 0, 0, lean, h, 0], 3));
+      g.setAttribute('color', new THREE.Float32BufferAttribute([0.22, 0.42, 0.18, 0.22, 0.42, 0.18, 0.62, 0.82, 0.38], 3));
+      g.setAttribute('normal', new THREE.Float32BufferAttribute([0, 1, 0, 0, 1, 0, 0, 1, 0], 3));
+      blades.push(g.rotateY(a).translate(Math.cos(a) * 0.08, 0, Math.sin(a) * 0.08));
+    }
+    const grassMat = sway(new THREE.MeshStandardMaterial({ vertexColors: true, side: THREE.DoubleSide, roughness: 1 }), 0.35, 0);
+    const grass = [], flowers = [], FLOWER = ['#ffffff', '#ffe066', '#ff8fb1', '#b48cff', '#ff6b5a'].map(c => new THREE.Color(c));
+    const max = low ? 2500 : 9000;
+    for (const i of ISLANDS) {
+      if (!['foret', 'tropical', 'phare', 'rocher'].includes(i.kind)) continue;
+      const n = Math.min(max - grass.length, Math.round(i.r * i.r * (i.kind === 'foret' ? 0.5 : 0.3)));
+      for (let k = 0; k < n * 2 && grass.length < max; k++) {
+        const a = rng() * Math.PI * 2, d = Math.sqrt(rng()) * i.r * 1.05, x = i.x + Math.cos(a) * d, z = i.z + Math.sin(a) * d, h = heightAt(x, z);
+        if (h < (i.kind === 'tropical' ? 3.4 : 1.8) || h > 18 || slopeAt(x, z) > 2.2 || !free(x, z, 1)) continue;
+        grass.push({ x, y: h - 0.1, z, s: 0.8 + rng() * 0.8, ry: rng() * 6, c: new THREE.Color().setHSL(0.24 + rng() * 0.08, 0.5, 0.75 + rng() * 0.25) });
+        if (i.kind === 'foret' && h < 13 && rng() < 0.12) flowers.push({ x: x + 0.2, y: h + 0.45, z, s: 0.8 + rng() * 0.6, c: FLOWER[Math.floor(rng() * FLOWER.length)] });
+      }
+    }
+    instanced(mergeGeometries(blades), grassMat, grass, false);
+    instanced(new THREE.IcosahedronGeometry(0.13, 0), sway(new THREE.MeshStandardMaterial({ color: '#ffffff', roughness: 0.6, emissive: '#222222' }), 0.35, -0.6), flowers, false);
+  }
   // les rochers à fleur d'eau bloquent le bateau
   for (const r of rocks) if (r.y < 0) obstacles.push({ ax: r.x, az: r.z, bx: r.x, bz: r.z, w: r.s * 0.9 });
 
@@ -517,8 +592,8 @@ export function createWorld(renderer, scene) {
     U.uGlint.value = 1 - wet * 0.7 - mist * 0.6;
     blend('deep', night, dusk, U.uDeep.value); blend('shallow', night, dusk, U.uShallow.value);
     U.uDeep.value.lerp(GREY.clone().multiplyScalar(0.35), wet * 0.35); U.uShallow.value.lerp(GREY.clone().multiplyScalar(0.6), wet * 0.3);
-    U.uSky.value.copy(skyU.uHorizon.value);
-    U.uNight.value = night; U.uAmp.value = 1 + wet * 0.9; U.uTime.value = time;
+    U.uSky.value.copy(skyU.uHorizon.value); U.uSkyTop.value.copy(skyU.uTop.value);
+    U.uNight.value = night; U.uAmp.value = 1 + wet * 0.9; uTime.value = time;
     // brouillard : plus épais sous la pluie, dans la brume et près de la limite du monde
     const edge = sstep(WORLD - 220, WORLD + 40, Math.max(Math.abs(focus.x), Math.abs(focus.z)));
     const fog = 0.0011 + wet * 0.0012 + mist * 0.0075 + edge * 0.012;

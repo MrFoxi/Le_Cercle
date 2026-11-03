@@ -2,6 +2,7 @@
 // habitants), cale, carnet, carte, trésors, heure et météo, sauvegarde dans le navigateur.
 import * as THREE from 'three';
 import { createWorld } from './world.js';
+import { createPost } from './post.js';
 import { buildBoat, createWake } from './boat.js';
 import { fishImage } from './fishart.js';
 import { startAudio, ambience, SFX, toggleMute, isMuted } from './audio.js';
@@ -10,17 +11,20 @@ import * as G from './game.js';
 import { $, $$, esc, store } from '/shared/party.js';
 
 const params = new URLSearchParams(location.search);
+// Qualité : « haute » (effets, ombres fines, herbe dense) ou « basse » (téléphones, petits ordinateurs)
+const LOW = (store.get('fisher-quality') || (matchMedia('(pointer: coarse)').matches ? 'basse' : 'haute')) === 'basse';
 
 /* ---------------- Rendu ---------------- */
 const renderer = new THREE.WebGLRenderer({ canvas: $('#view'), antialias: true, powerPreference: 'high-performance' });
-renderer.setPixelRatio(Math.min(devicePixelRatio, 1.75));
+renderer.setPixelRatio(Math.min(devicePixelRatio, LOW ? 1 : 1.75));
 renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
 renderer.toneMappingExposure = 1.05;
 const scene = new THREE.Scene();
 const camera = new THREE.PerspectiveCamera(55, 1, 0.5, 6000);
-function resize() { renderer.setSize(innerWidth, innerHeight, false); camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix(); }
+let post = null;
+function resize() { renderer.setSize(innerWidth, innerHeight, false); post?.setSize(innerWidth, innerHeight); camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix(); }
 addEventListener('resize', resize); resize();
 
 let world, boat, wake;
@@ -120,6 +124,8 @@ $('#bMap').onclick = () => togglePanel('map');
 $('#minimap').onclick = () => togglePanel('map');
 $('#bMute').onclick = () => { $('#bMute').textContent = toggleMute() ? '🔇' : '🔊'; };
 $('#bMute').textContent = isMuted() ? '🔇' : '🔊';
+$('#bQuality').textContent = LOW ? '⚙️ léger' : '⚙️';
+$('#bQuality').onclick = () => { if (mode === 'sail') persist(); store.set('fisher-quality', LOW ? 'haute' : 'basse'); location.reload(); };
 
 /* ---------------- Village : accoster, marché, chantier, habitants ---------------- */
 const nearDock = () => world.docks.find(d => Math.hypot(d.x - B.x, d.z - B.z) < 18);
@@ -547,7 +553,8 @@ function frame(now) {
     const near = Math.max(0, 1 - Math.min(...ISLANDS.map(i => Math.hypot(i.x - B.x, i.z - B.z) - i.r)) / 120);
     ambience(dt, { speed: Math.abs(B.speed), throttle: inp.throttle ?? 0, weather: W.kind, night: world.state.night > 0.5, nearLand: near, docked: !!B.docked });
   }
-  renderer.render(scene, camera);
+  post.setMood(world.state.night);
+  post.render();
 }
 
 /* ---------------- Démarrage ---------------- */
@@ -572,7 +579,8 @@ $('#playBtn').onclick = play;
 $('#newBtn').onclick = () => { if (!confirm('Recommencer une nouvelle partie ? Ta progression sera effacée.')) return; save = G.newSave(); persist(); applySave(); play(); };
 
 setTimeout(() => {
-  world = createWorld(renderer, scene);
+  world = createWorld(renderer, scene, { low: LOW });
+  post = createPost(renderer, scene, camera, LOW); resize();
   boat = buildBoat(); scene.add(boat.group);
   boat.group.traverse(o => { if (o.isMesh) o.castShadow = true; });
   wake = createWake(scene);
