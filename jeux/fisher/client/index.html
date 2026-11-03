@@ -1,0 +1,90 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Little Fisher</title>
+  <link rel="icon" href="favicon.svg" type="image/svg+xml">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+  <script type="importmap">{ "imports": { "three": "/vendor/three/build/three.module.js", "three/addons/": "/vendor/three/addons/" } }</script>
+  <script type="module" src="main.js"></script>
+</head>
+<body>
+  <canvas id="view" aria-label="L'archipel"></canvas>
+  <div id="loading">Chargement de l’archipel…</div>
+
+  <!-- Écran titre -->
+  <section id="title" class="screen" hidden>
+    <a class="back" href="../">← Le Cercle</a>
+    <div class="titleBox">
+      <h1>Little <span>Fisher</span></h1>
+      <p class="tagline">Ton petit bateau, un archipel à explorer, et des poissons plein le carnet.</p>
+      <div class="row center">
+        <button class="primary big" id="playBtn">⛵ Prendre la mer</button>
+        <button class="ghost" id="newBtn" hidden>Nouvelle partie</button>
+      </div>
+      <p class="keys"><b>ZQSD</b> ou flèches : naviguer · <b>Espace</b> : pêcher · <b>E</b> : accoster · <b>I</b> cale · <b>C</b> carnet · <b>M</b> carte</p>
+    </div>
+  </section>
+
+  <!-- Interface en mer -->
+  <div id="hud" hidden>
+    <div class="pills left">
+      <span class="pill" id="hMoney" title="Ton argent">🪙 0</span>
+      <span class="pill" id="hCargo" title="Ta cale">🐟 0/6</span>
+    </div>
+    <div class="pills right">
+      <span class="pill" id="hClock" title="Heure et météo">☀️ 07:00</span>
+      <button class="pill btn" id="bInv" title="Cale (I)">🎒</button>
+      <button class="pill btn" id="bBook" title="Carnet de pêche (C)">📖</button>
+      <button class="pill btn" id="bMap" title="Carte (M)">🗺️</button>
+      <button class="pill btn" id="bMute" title="Son">🔊</button>
+    </div>
+    <div id="place"><b></b><small></small></div>
+    <canvas id="minimap" width="300" height="300"></canvas>
+    <div id="hint"></div>
+    <div id="bite">!</div>
+    <div id="reel" hidden>
+      <canvas id="reelCanvas" width="320" height="320"></canvas>
+      <p id="reelText">Appuie quand l’aiguille est dans le vert !</p>
+    </div>
+    <ul id="toasts" aria-live="polite"></ul>
+    <div id="touch" hidden>
+      <div id="stick"><i></i></div>
+      <div class="tbtns">
+        <button id="tFish">🎣</button>
+        <button id="tAct">⚓</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Prise -->
+  <div id="catch" class="overlay" hidden>
+    <div class="card catchCard">
+      <p class="tag" id="cTag"></p>
+      <img id="cImg" alt="">
+      <h2 id="cName"></h2>
+      <p id="cInfo"></p>
+      <p class="hint" id="cDesc"></p>
+      <button class="primary" id="cOk">Super !</button>
+    </div>
+  </div>
+
+  <!-- Village -->
+  <div id="village" class="overlay" hidden>
+    <div class="card panel">
+      <header><h2 id="vName"></h2><button class="ghost small" data-close>⛵ Larguer les amarres</button></header>
+      <nav class="tabs" id="vTabs"></nav>
+      <div id="vBody"></div>
+    </div>
+  </div>
+
+  <!-- Cale, carnet, carte -->
+  <div id="inv" class="overlay" hidden><div class="card panel"><header><h2>🎒 Ta cale</h2><button class="ghost small" data-close>Fermer</button></header><div id="invBody"></div></div></div>
+  <div id="book" class="overlay" hidden><div class="card panel wide"><header><h2>📖 Carnet de pêche <small id="bookCount"></small></h2><button class="ghost small" data-close>Fermer</button></header><div id="bookBody"></div></div></div>
+  <div id="map" class="overlay" hidden><div class="card panel wide"><header><h2>🗺️ L’archipel</h2><button class="ghost small" data-close>Fermer</button></header><canvas id="mapCanvas" width="900" height="900"></canvas><p class="hint" id="mapHint"></p></div></div>
+</body>
+</html>
