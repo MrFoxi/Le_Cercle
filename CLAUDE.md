@@ -25,7 +25,8 @@ textes, commentaires, messages de commit (`Feat : …` / `Fix : …`).
 
 - Code partagé serveur + navigateur : script classique UMD (`window.X` ou `require`, ex. `chute/client/sim.js`,
   `prophunt/client/map.js`). Le serveur ne charge pas les modules ESM du client (Render) : Top Formula recopie donc
-  ses temps minimaux dans `formula/server/game.js` (un test vérifie qu'ils correspondent).
+  ses temps minimaux dans `formula/server/game.js`, et Little Fisher ses tailles de poissons dans `fisher/server/sizes.js`
+  (un test vérifie qu'ils correspondent).
 - Côté navigateur : modules ESM, Three.js via l'importmap `/vendor/three/...`. Little District : `styles.js?quartier=<id>`
   charge l'apparence d'un quartier précis (utilisé par Prop Hunt).
 - Positions temps réel : le navigateur déplace son personnage et envoie sa position ; le serveur contrôle (pas de

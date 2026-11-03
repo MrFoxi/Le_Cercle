@@ -26,4 +26,5 @@ export const waveH = (x, z) => S.world.waveAt(x, z, S.time, S.amp).h;
 export function dressBoat() {
   S.boat.setStyle(S.save.model, S.save.custom, { colors: HULL_COLORS, flags: FLAGS, relics: RELICS });
   S.boat.setLevels(S.save.levels);
+  S.onDress?.(); // à plusieurs : les autres voient mon bateau changer
 }

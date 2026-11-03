@@ -15,6 +15,7 @@ import * as Fishing from './fishing.js';
 import * as Traps from './traps.js';
 import * as Dive from './dive.js';
 import { createWildlife } from './wildlife.js';
+import * as Net from './net.js';
 import { updateFx, splashAt } from './fx.js';
 import { $, store } from '/shared/party.js';
 
@@ -114,9 +115,22 @@ S.onCatch = (f, res) => {
   if (W.kind === 'orage') s.flags.stormCatch = true;
   if (G.contestCatch(s, f, res.fish.size)) setTimeout(() => toast(`🏆 Nouveau meilleur score au concours : <b>${s.contest.best} points</b> (${esc(f.name)})`), 400);
   // record personnel : on l'envoie au classement mondial de l'espèce
+  Net.sendCatch(f, res.fish.size);
   if ((res.first || res.record) && pseudo()) sendRecord(pseudo(), f.id, res.fish.size).then(r => { if (r?.improved && r.place) setTimeout(() => toast(`🌍 <b>${r.place === 1 ? 'Record du monde' : `${r.place}e au classement mondial`}</b> : ${esc(f.name)} de ${res.fish.size} cm !`, 6000), 1200); });
 };
 const pseudo = () => ($('#pseudo').value.trim() || store.get('fisher-pseudo') || '').slice(0, 20);
+
+/* ---------------- À plusieurs ---------------- */
+S.onDress = () => Net.sendBoat();
+const needPseudo = () => { if (pseudo()) return false; toast('Choisis d’abord un nom de pêcheur'); if (S.mode === 'title') { closePanel(); $('#pseudo').focus(); } return true; };
+const openMulti = () => { Net.connect(() => { if (S.mode === 'title') play(); closePanel(); }); S.panel = null; openPanel('multi'); };
+$('#multiBtn').onclick = openMulti;
+$('#hRoom').onclick = openMulti;
+$('#mCreate').onclick = () => !needPseudo() && Net.create(pseudo(), $('#mPrivate').checked);
+$('#mJoin').onsubmit = e => { e.preventDefault(); if (!needPseudo()) Net.join(pseudo(), $('#mCode').value.trim().toUpperCase()); };
+$('#roomList').onclick = e => { const b = e.target.closest('[data-room]'); if (b && !needPseudo()) Net.join(pseudo(), b.dataset.room); };
+$('#mCopy').onclick = () => { navigator.clipboard?.writeText(Net.roomLink()); toast('🔗 Lien copié : envoie-le à tes amis !'); };
+$('#mLeave').onclick = () => { Net.leave(); closePanel(); toast('Tu as quitté l’archipel partagé.'); };
 $('#pseudo').value = store.get('fisher-pseudo') || store.get('pseudo') || '';
 $('#pseudo').oninput = e => store.set('fisher-pseudo', e.target.value.trim().slice(0, 20));
 
@@ -336,7 +350,11 @@ function frame(now) {
   requestAnimationFrame(frame);
   const dt = Math.min(0.05, (now - last) / 1000); last = now; S.time += dt;
   const s = S.save, playing = (S.mode === 'sail' || S.mode === 'dive') && !S.panel && !catchOpen();
-  if (playing || S.mode === 'title') {
+  if (Net.Net.on) { // à plusieurs : l'heure et la météo viennent du salon
+    const t = Net.timeOfDay(); if (t < s.time - 0.5) s.days++; s.time = t;
+    if (W.kind !== Net.Net.room.weather) { W.kind = Net.Net.room.weather; if (S.mode === 'sail' && W.kind !== 'clair') toast({ nuageux: '⛅ Les nuages arrivent.', pluie: '🌧️ Il se met à pleuvoir…', orage: '⛈️ Un orage éclate !', brume: '🌫️ La brume se lève.' }[W.kind]); }
+    W.left = 999;
+  } else if (playing || S.mode === 'title') {
     if (G.tick(s, dt) && S.mode !== 'title') toast(`☀️ Jour ${s.days + 1}${s.traps.some(t => G.trapReady(s, t)) ? ' · tes casiers sont pleins' : ''}.`);
     if ((W.left -= dt) < 0) {
       const night = G.period(s.time) === 'nuit', r = Math.random();
@@ -363,6 +381,7 @@ function frame(now) {
   Fishing.updateFishing(dt);
   Traps.updateTraps(dt);
   Dive.updateDive(dt);
+  Net.update(dt, Fishing.busy());
   updateFx(dt);
   // les animaux, les autres bateaux ; les merveilles « vivantes »
   const life = wildlife.update(dt, S.time, S.world.state.night);
@@ -445,5 +464,6 @@ setTimeout(() => {
   requestAnimationFrame(frame);
   if (params.has('debug')) window.lf = { S, get save() { return S.save; }, B, F: Fishing.F, W, get world() { return S.world; }, get boat() { return S.boat; }, cam, camera, play, openPanel, setTime: t => (S.save.time = t), fishAction, interact, Dive, Traps, get wildlife() { return wildlife; } };
   if (params.has('play')) play();
+  if (params.get('salon')) { $('#mCode').value = params.get('salon').toUpperCase(); openMulti(); } // lien d'invitation
 }, 30);
 addEventListener('beforeunload', () => S.mode !== 'title' && persist());

@@ -9,6 +9,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="style.css">
+  <script src="/socket.io/socket.io.js"></script>
   <script type="importmap">{ "imports": { "three": "/vendor/three/build/three.module.js", "three/addons/": "/vendor/three/addons/" } }</script>
   <script type="module" src="main.js"></script>
 </head>
@@ -25,6 +26,7 @@
       <label class="pseudo">Ton nom de pêcheur <input id="pseudo" maxlength="20" autocomplete="nickname" placeholder="Pseudo (pour le classement mondial)"></label>
       <div class="row center">
         <button class="primary big" id="playBtn">⛵ Prendre la mer</button>
+        <button class="ghost" id="multiBtn">👥 Avec des amis</button>
         <button class="ghost" id="newBtn" hidden>Nouvelle partie</button>
       </div>
       <p class="keys"><b>ZQSD</b> ou flèches : naviguer · <b>Espace</b> : pêcher · <b>E</b> : accoster · <b>B</b> appât · <b>T</b> casier · <b>N</b> filet · <b>H</b> plonger · <b>I</b> cale · <b>C</b> carnet · <b>M</b> carte</p>
@@ -38,6 +40,7 @@
       <span class="pill" id="hCargo" title="Ta cale">🐟 0/6</span>
       <button class="pill btn" id="hBait" title="Appât (B pour changer)">🪱 5</button>
       <span class="pill" id="hContest" hidden></span>
+      <button class="pill btn" id="hRoom" hidden title="Ton archipel partagé"></button>
     </div>
     <div class="pills right">
       <span class="pill" id="hClock" title="Heure et météo">☀️ 07:00</span>
@@ -48,6 +51,7 @@
       <button class="pill btn" id="bMute" title="Son">🔊</button>
       <button class="pill btn" id="bQuality" title="Graphismes : beaux ou légers (pour les petits appareils)">⚙️</button>
     </div>
+    <div id="netLabels" aria-hidden="true"></div>
     <div id="place"><b></b><small></small></div>
     <canvas id="minimap" width="300" height="300"></canvas>
     <div id="hint"></div>
@@ -108,6 +112,21 @@
       <div id="vBody"></div>
     </div>
   </div>
+
+  <!-- À plusieurs -->
+  <div id="multi" class="overlay" hidden><div class="card panel"><header><h2>👥 Avec des amis</h2><button class="ghost small" data-close>Fermer</button></header>
+    <div id="multiOut">
+      <p class="hint">Partagez un archipel : vous vous voyez naviguer, l’heure et la météo sont les mêmes pour tous, et les belles prises sont annoncées. Chacun garde sa propre partie (argent, carnet, bateau).</p>
+      <div class="row"><button class="primary" id="mCreate">Créer un archipel</button><label class="row" style="font-weight:500"><input type="checkbox" id="mPrivate" style="width:auto"> privé (seulement avec le code)</label></div>
+      <form id="mJoin" class="row" style="margin-top:12px"><input id="mCode" maxlength="6" placeholder="CODE" autocomplete="off" style="flex:1;min-width:120px;font:600 1.1rem var(--font);padding:9px 12px;border-radius:12px;border:2px solid var(--line);text-transform:uppercase;letter-spacing:.2em"><button class="ghost">Rejoindre</button></form>
+      <h3>Archipels publics</h3><ul class="list" id="roomList"><li class="empty">Connexion…</li></ul>
+    </div>
+    <div id="multiIn" hidden>
+      <p>Code de l’archipel : <b id="multiCode" style="letter-spacing:.15em"></b> <button class="small ghost" id="mCopy">🔗 Copier le lien</button></p>
+      <ul class="list" id="multiPlayers"></ul>
+      <div class="sum"><button class="ghost" id="mLeave">Quitter l’archipel</button></div>
+    </div>
+  </div></div>
 
   <!-- Cale, carnet, carte -->
   <div id="inv" class="overlay" hidden><div class="card panel"><header><h2>🎒 Ta cale</h2><button class="ghost small" data-close>Fermer</button></header><div id="invBody"></div></div></div>

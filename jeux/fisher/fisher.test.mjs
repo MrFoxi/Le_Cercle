@@ -5,6 +5,7 @@ import { FISH, SPOTS, PEOPLE, TREASURES, UPGRADES, ZONES, BAITS, FIGHTS, ISLANDS
 import * as G from './client/game.js';
 import { createRequire } from 'node:module';
 const SIZES = createRequire(import.meta.url)('./server/sizes.js');
+const NET = createRequire(import.meta.url)('./server/game.js');
 
 // Chaque espèce s'attrape d'une façon : à la canne (meilleur équipement, à une heure et par un temps donnés), au casier ou en plongée.
 const TIMES = [0.1, 0.27, 0.5, 0.79], WEATHERS = ['clair', 'pluie', 'brume'];
@@ -195,4 +196,15 @@ assert.deepStrictEqual(G.checkAchievements(ac).map(a => a.id), ['premiere']);
 assert.deepStrictEqual(G.checkAchievements(ac), []);
 ac.flags.stormCatch = true; assert.deepStrictEqual(G.checkAchievements(ac).map(a => a.id), ['orage']);
 assert.strictEqual(new Set(G.ACHIEVEMENTS.map(a => a.id)).size, G.ACHIEVEMENTS.length);
+// À plusieurs : pseudos uniques, allure du bateau contrôlée, heure du jour commune, météo qui change, messages vérifiés.
+let clockNow = 1000; const room = new NET.Room('ABCDE', () => 0.5, false, () => clockNow);
+room.addPlayer('Ana'); assert.throws(() => room.addPlayer('Ana'), /déjà pris/);
+assert.throws(() => room.setBoat('Ana', { model: 'paquebot' }), /inconnu/);
+room.setBoat('Ana', { model: 'voilier', hull: 'or', flag: 'pirate', name: 'La Perle', coque: 2, moteur: 9, lanterne: 1 });
+assert.deepStrictEqual(room.get('Ana').boat, { ...NET.DEFAULT_BOAT, model: 'voilier', hull: 'or', flag: 'pirate', name: 'La Perle', coque: 2, lanterne: 1 }); // moteur 9 refusé
+assert.strictEqual(room.timeOfDay(), 0.3); clockNow += 300000; assert.strictEqual(room.timeOfDay(), 0.8); // une demi-journée en 5 minutes
+const w0 = room.weather; room.timeout(); assert(room.weather !== w0 && room.deadline > clockNow);
+const v = room.viewFor('Ana'); assert(v.players[0].boat.name === 'La Perle' && v.weather === room.weather && v.dayMs === 600000);
+assert(NET.validPos([10, 20, 1.5, 12, 0]) && !NET.validPos([1e6, 0, 0, 0, 0]) && !NET.validPos([1, 2, 3]));
+assert(NET.validCatch({ fish: 'thon', size: 150 }) && !NET.validCatch({ fish: 'thon', size: 900 }) && !NET.validCatch({ fish: 'licorne', size: 10 }));
 console.log('Tests de Little Fisher : OK');

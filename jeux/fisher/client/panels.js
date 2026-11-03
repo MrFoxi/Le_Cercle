@@ -10,7 +10,7 @@ import { $, $$, esc } from '/shared/party.js';
 const WHEN = { jour: 'le jour', nuit: 'la nuit (lanterne ou appât lumineux)', crepuscule: 'à l’aube et au crépuscule', toujours: 'à toute heure' };
 
 export function openPanel(id) {
-  for (const o of ['village', 'inv', 'book', 'map']) $(`#${o}`).hidden = o !== id;
+  for (const o of ['village', 'inv', 'book', 'map', 'multi']) $(`#${o}`).hidden = o !== id;
   S.panel = id; S.keys.clear(); SFX.open();
   ({ inv: renderInv, book: renderBook, map: renderMap })[id]?.();
 }
