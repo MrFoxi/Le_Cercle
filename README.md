@@ -61,41 +61,58 @@ Tests du moteur de règles : `npm test`.
 3. Runtime **Node**, Build command `npm install`, Start command `npm start`.
 4. Render fournit la variable `PORT`, le serveur l'utilise automatiquement.
 
-Tout est en mémoire : un redémarrage du service efface les lobbys et les jetons.
+Les salons sont en mémoire : un redémarrage du service les efface. Les classements et l'activité de l'accueil sont gardés dans Upstash Redis (variables `UPSTASH_REDIS_REST_URL` et `UPSTASH_REDIS_REST_TOKEN`), ou dans `data/` en local.
 
-## Fichiers
+## Organisation
 
-- `server.js` : serveur unique (Express + Socket.io), route `/health`, lobbys du 7,5 sur le canal Socket.io `/7-5`.
-- `game.js` : moteur de règles du 7,5 (points, tours, défis, paiements, rotation du banquier, temps de jeu).
-- `test.js` : tests lancés par `npm test`.
-- `public/index.html` : page d'accueil qui liste les projets.
-- `public/7-5/` : client du 7,5 (HTML/CSS/JS).
-- `lib/rooms.js` : salons temps réel communs aux jeux multijoueurs (code, lobby public ou privé, reconnexion par jeton, spectateurs, chat). Un jeu fournit sa classe `Room` et la liste de ses actions ; si la `Room` a un `deadline`, sa méthode `timeout()` est appelée à l’heure dite (étapes chronométrées).
-- `solar/` : Solar Explorer : `game.js` (pilotes, catalogue de personnalisation, heure commune, événements en direct, validation des messages), `server.js` (canal `/solar`, relais des positions, pings et émotes) ; client dans `public/solar/` :
+Un dossier par jeu dans `jeux/<jeu>/`, trouvé tout seul par `server.js` :
+
+- `client/` : ce que voit le navigateur, servi à l'adresse `/<jeu>/` (et le code partagé avec le serveur : physique, cartes, circuits) ;
+- `server/server.js` (jeux en ligne) : branché sur le canal Socket.io `/<jeu>` ;
+- `server/api.js` (classements…) : servi sur `/api/<jeu>` ;
+- `<jeu>.test.js` (ou `.mjs`) : ses tests.
+
+Le reste :
+
+- `server.js` : démarre le site, branche chaque jeu, `/health`, `/api/online`, `/api/activity`.
+- `site/` : la page d'accueil (`index.html`) et les aperçus des jeux (`previews/`).
+- `lib/rooms.js` : salons temps réel communs (code, salon public ou privé, reconnexion par jeton, spectateurs, chat). Un jeu fournit sa classe `Room` et la liste de ses actions ; si la `Room` a un `deadline`, sa méthode `timeout()` est appelée à l’heure dite.
+- `lib/store.js` (stockage durable), `lib/activity.js` (bandeau d’activité de l’accueil).
+- `npm test` lance tous les fichiers `*.test.*` (`node --test`).
+
+### Détail par jeu
+
+- `jeux/7-5/` : Le Cercle du 7,5 : `server/game.js` (points, tours, défis, paiements, rotation du banquier, temps de jeu), `server/server.js` (ses propres tables, plus anciennes que `lib/rooms.js`).
+- `jeux/solar/server/` : Solar Explorer : `game.js` (pilotes, catalogue de personnalisation, heure commune, événements en direct, validation des messages), `server.js` (canal `/solar`, relais des positions, pings et émotes) ; client dans `jeux/solar/client/` :
   - `world.js` (astres et orbites, collisions, relief, zones, comètes, météorites), `textures.js` (textures dessinées par le code), `shadows.js` (éclipses et ombre des anneaux) ;
   - `ships.js` (vaisseaux, peintures, traînées), `fx.js` (feux d’artifice, ondes de choc, éclairs), `audio.js` (sons, musique, voix) ;
   - `progress.js` (journal, points, déblocages, titres), `facts.js` (fiches du journal), `main.js` (vol, caméra, multijoueur, interface, cartes) ;
-  - tests dans `test-solar.js`. Three.js est servi depuis `node_modules` sur `/vendor/three/`.
-- `golf/` : Mini-golf : `game.js` (salon, réglages, modes, tours, pénalités, paris, robots, trou du jour), `bot.js` (robot : meilleur tir sur une grille, avec la vraie physique), `server.js` (canal `/golf`, émotes) ; partagés avec le navigateur dans `public/golf/` : `physics.js` (physique), `holes.js` (trous, miroirs, parcours, chaos : ajouter un trou = ajouter un objet à `HOLES`), `looks.js` (personnalisation, succès) ; client : `render.js` (dessin), `audio.js` (sons, musique), `profile.js` (points et succès dans le navigateur), `client.js` (écrans) ; tests dans `test-golf.js` (dont un robot qui vérifie que chaque trou peut se terminer).
-- `pinball/api.js` : classement mondial du flipper ; jeu dans `public/pinball/` : `physics.js` (physique 2D dans le plan de la table, 600 pas par seconde, rampes en 3D), `tables.js` (géométrie, règles et missions : une table = un objet, sur une ossature commune), `game.js` (règles), `render.js` (scène 3D, lumières, particules, écran du fronton), `audio.js`, `main.js` (menu, commandes, interface, progression) ; tests dans `test-pinball.mjs`.
-- `mines/api.js` : classement mondial du Démineur Rogue ; jeu dans `public/mines/` : `board.js` (grille, génération résoluble, solveur), `run.js` (partie : niveaux, améliorations, pouvoirs, boutique, événements, boss), `main.js` (écrans, commandes, animations, sons, progression) ; tests dans `test-mines.mjs`.
-- `strategy/` : Strategy Club : `game.js` (salon : places humain ou robot, prêt, pendule, coups validés par les règles, marquage au go, revanche), `bot-worker.js` (un robot réfléchit dans un thread à part), `server.js` (canal `/strategy`) ; partagés avec le navigateur dans `public/strategy/` : `games/*.js` (règles d’un jeu : `init`, `moves`, `play`, `over`, `notation`, `evaluate` ; ajouter un jeu = un fichier ici, une ligne dans `GAMES` et une fiche dans `INFO` du client), `ai.js` (robots : alpha-bêta pour échecs, dames et shogi, Monte-Carlo pour le go) ; client : `boards.js` (plateaux, animations), `client.js` (écrans) ; tests dans `test-strategy.js` (comptages de référence « perft » des quatre jeux, cas particuliers, salon, robot).
-- `bataille/` : Bataille navale : `game.js` (flottes, tirs, capacités, ce que chacun a le droit de voir), `server.js` (canal `/bataille`) ; client dans `public/bataille/`, tests dans `test-bataille.js`.
-- `imposteur/` : L’Imposteur : `words.js` (paires de mots par catégorie : en ajouter une = une ligne), `game.js` (rôles, tours d’indices, vote et revote, Mr. White, victoires, cartes filtrées pour chaque joueur), `server.js` (canal `/imposteur`), `engine.js` (les mêmes règles servies au navigateur sur `/imposteur/engine.js` pour le mode un seul appareil) ; client dans `public/imposteur/` (`client.js` en ligne, `solo.js` un seul appareil, `ui.js` affichage commun), tests dans `test-imposteur.js`.
-- `size/` : Size It Up : `objects.js` (objets et dimensions réelles), `game.js` (paires, score), `api.js` (API `/api/size` : les vraies tailles ne sont envoyées qu’après validation) ; client dans `public/size/`, tests dans `test-size.js`.
-- `p4/` : règles du Puissance 4 (`game.js`) et branchement sur `lib/rooms.js` (`server.js`, canal `/p4`) ; client dans `public/p4/`, tests dans `test-p4.js`.
-- `cote/` : serveur du Demi-Cercle : `game.js` (règles, barème, rôles, thèmes, position secrète filtrée), `themes.js` (68 thèmes en 5 catégories : en ajouter un = l’ajouter à la liste de sa catégorie), `server.js` (salons à code, reconnexion par jeton, canal Socket.io `/cote`).
-- `public/cote/` : client du Demi-Cercle (`dial.js` : le demi-cercle interactif et la roue de révélation, `client.js` : écrans et thèmes).
-- `test-cote.js` : tests du Demi-Cercle (lancés aussi par `npm test`).
-- `public/pays/` : quiz « Trouve le pays » :
+  - tests dans `jeux/solar/solar.test.js`. Three.js est servi depuis `node_modules` sur `/vendor/three/`.
+- `jeux/golf/server/` : Mini-golf : `game.js` (salon, réglages, modes, tours, pénalités, paris, robots, trou du jour), `bot.js` (robot : meilleur tir sur une grille, avec la vraie physique), `server.js` (canal `/golf`, émotes) ; partagés avec le navigateur dans `jeux/golf/client/` : `physics.js` (physique), `holes.js` (trous, miroirs, parcours, chaos : ajouter un trou = ajouter un objet à `HOLES`), `looks.js` (personnalisation, succès) ; client : `render.js` (dessin), `audio.js` (sons, musique), `profile.js` (points et succès dans le navigateur), `client.js` (écrans) ; tests dans `jeux/golf/golf.test.js` (dont un robot qui vérifie que chaque trou peut se terminer).
+- `jeux/pinball/server/api.js` : classement mondial du flipper ; jeu dans `jeux/pinball/client/` : `physics.js` (physique 2D dans le plan de la table, 600 pas par seconde, rampes en 3D), `tables.js` (géométrie, règles et missions : une table = un objet, sur une ossature commune), `game.js` (règles), `render.js` (scène 3D, lumières, particules, écran du fronton), `audio.js`, `main.js` (menu, commandes, interface, progression) ; tests dans `jeux/pinball/pinball.test.mjs`.
+- `jeux/mines/server/api.js` : classement mondial du Démineur Rogue ; jeu dans `jeux/mines/client/` : `board.js` (grille, génération résoluble, solveur), `run.js` (partie : niveaux, améliorations, pouvoirs, boutique, événements, boss), `main.js` (écrans, commandes, animations, sons, progression) ; tests dans `jeux/mines/mines.test.mjs`.
+- `jeux/strategy/server/` : Strategy Club : `game.js` (salon : places humain ou robot, prêt, pendule, coups validés par les règles, marquage au go, revanche), `bot-worker.js` (un robot réfléchit dans un thread à part), `server.js` (canal `/strategy`) ; partagés avec le navigateur dans `jeux/strategy/client/` : `games/*.js` (règles d’un jeu : `init`, `moves`, `play`, `over`, `notation`, `evaluate` ; ajouter un jeu = un fichier ici, une ligne dans `GAMES` et une fiche dans `INFO` du client), `ai.js` (robots : alpha-bêta pour échecs, dames et shogi, Monte-Carlo pour le go) ; client : `boards.js` (plateaux, animations), `client.js` (écrans) ; tests dans `jeux/strategy/strategy.test.js` (comptages de référence « perft » des quatre jeux, cas particuliers, salon, robot).
+- `jeux/bataille/server/` : Bataille navale : `game.js` (flottes, tirs, capacités, ce que chacun a le droit de voir), `server.js` (canal `/bataille`) ; client dans `jeux/bataille/client/`, tests dans `jeux/bataille/bataille.test.js`.
+- `jeux/imposteur/server/` : L’Imposteur : `words.js` (paires de mots par catégorie : en ajouter une = une ligne), `game.js` (rôles, tours d’indices, vote et revote, Mr. White, victoires, cartes filtrées pour chaque joueur), `server.js` (canal `/imposteur`), `engine.js` (les mêmes règles servies au navigateur sur `/imposteur/engine.js` pour le mode un seul appareil) ; client dans `jeux/imposteur/client/` (`client.js` en ligne, `solo.js` un seul appareil, `ui.js` affichage commun), tests dans `jeux/imposteur/imposteur.test.js`.
+- `jeux/size/server/` : Size It Up : `objects.js` (objets et dimensions réelles), `game.js` (paires, score), `api.js` (API `/api/size` : les vraies tailles ne sont envoyées qu’après validation) ; client dans `jeux/size/client/`, tests dans `jeux/size/size.test.js`.
+- `jeux/p4/server/` : règles du Puissance 4 (`game.js`) et branchement sur `lib/rooms.js` (`server.js`, canal `/p4`) ; client dans `jeux/p4/client/`, tests dans `jeux/p4/p4.test.js`.
+- `jeux/cote/server/` : serveur du Demi-Cercle : `game.js` (règles, barème, rôles, thèmes, position secrète filtrée), `themes.js` (68 thèmes en 5 catégories : en ajouter un = l’ajouter à la liste de sa catégorie), `server.js` (salons à code, reconnexion par jeton, canal Socket.io `/cote`).
+- `jeux/cote/client/` : client du Demi-Cercle (`dial.js` : le demi-cercle interactif et la roue de révélation, `client.js` : écrans et thèmes).
+- `jeux/cote/cote.test.js` : tests du Demi-Cercle (lancés aussi par `npm test`).
+- `jeux/pays/client/` : quiz « Trouve le pays » :
   - `quiz.js` (règles, questions, score), `map.js` (carte d3 : frontières, zoom, clics), `stats.js` (records et paramètres dans le navigateur), `main.js` (écrans) ;
   - `countries.json` : frontières Natural Earth 1:50m (197 pays + territoires), générées par `scripts/build-countries.mjs`.
-- `test-pays.mjs` : tests du quiz et des données de la carte (lancés aussi par `npm test`).
+- `jeux/pays/pays.test.mjs` : tests du quiz et des données de la carte (lancés aussi par `npm test`).
+- `jeux/formula/` : Top Formula : `client/tracks.js` (circuits, relief), `physics.js` (conduite), `ai.js` (robots), `render.js` + `car.js` + `decor.js` + `fx.js` + `textures.js` (rendu), `main.js` (menus, course, multijoueur) ; `server/game.js` (salons), `server/api.js` (records).
+- `jeux/chute/`, `jeux/neon/`, `jeux/prophunt/` : Chute Libre, Sillage Néon, Prop Hunt : `server/game.js` (règles, robots), `server/server.js` ; côté client `main.js` (écrans, partie) et `render.js` ; partagés : `client/sim.js` (Chute), `client/map.js` (Prop Hunt, avec les modèles de Little District).
+- `jeux/district/` : Little District (solo) : `client/sim.js` (économie), `models.js` et `styles.js` (bâtiments, décor, quartiers), `world.js`, `land.js`, `layouts.js`, `people.js`, `life.js`, `main.js`.
 
 Pour régénérer la carte (rarement utile) : `node scripts/build-countries.mjs`.
 
-## Ajouter un projet
+## Ajouter un jeu
 
-1. Mettre ses fichiers dans `public/<nom-du-projet>/` : il sera servi à l'adresse `/<nom-du-projet>/`.
-2. S'il a besoin de temps réel, lui donner son propre canal : `sockets.of('/<nom-du-projet>')` dans `server.js`, `io('/<nom-du-projet>')` côté client.
-3. Ajouter sa carte dans `public/index.html`.
+1. Créer `jeux/<nom>/client/` avec son `index.html` : il est servi à l'adresse `/<nom>/`.
+2. En ligne : `jeux/<nom>/server/server.js` qui exporte `nsp => …` (souvent `lib/rooms.js` + une classe `Room`) ; côté navigateur, `io('/<nom>')`.
+3. Ajouter ses tests dans `jeux/<nom>/<nom>.test.js`, sa carte dans `site/index.html` et son aperçu dans `site/previews/<nom>.jpg`.
+
+Rien à modifier dans `server.js` ni dans `package.json`.

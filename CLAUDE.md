@@ -1,0 +1,37 @@
+# Le Cercle : carte du dépôt
+
+Site de mini-jeux (Express + Socket.io + Three.js), déployé sur Render depuis `main`. Tout est en français :
+textes, commentaires, messages de commit (`Feat : …` / `Fix : …`).
+
+## Où est quoi
+
+- `jeux/<jeu>/` : un dossier par jeu, trouvé tout seul par `server.js` (rien à y ajouter pour un nouveau jeu) :
+  - `client/` : servi sur `/<jeu>/` ; contient aussi le code partagé avec le serveur (physique, cartes, circuits) ;
+  - `server/server.js` : canal Socket.io `/<jeu>` (jeux en ligne) ; `server/api.js` : `/api/<jeu>` (classements) ;
+  - `<jeu>.test.js` / `.mjs` : ses tests.
+- `lib/rooms.js` : salons communs (codes, public/privé, reconnexion par jeton, spectateurs, chat). Un jeu fournit `Room`
+  (players, spectators, get, spectator, taken, addPlayer, addSpectator, removePlayer, removeSpectator, viewFor, summary?)
+  et ses actions ; `room.deadline` + `room.timeout()` pour les étapes chronométrées ; `room.notify()`, `room.emit()`
+  (volatile) et `room.send()` (fiable) sont posés par `lib/rooms.js`.
+- `lib/store.js` : stockage durable (Upstash Redis en ligne, `data/*.json` en local). `lib/activity.js` : bandeau de l'accueil.
+- `site/index.html` : accueil (tableau `GAMES`, `PSEUDO_KEYS`) ; `site/previews/<jeu>.jpg` : aperçus.
+- `jeux/7-5/server/server.js` : seul jeu qui n'utilise pas `lib/rooms.js` (plus ancien).
+
+## Conventions
+
+- Code partagé serveur + navigateur : script classique UMD (`window.X` ou `require`, ex. `chute/client/sim.js`,
+  `prophunt/client/map.js`). Le serveur ne charge pas les modules ESM du client (Render) : Top Formula recopie donc
+  ses temps minimaux dans `formula/server/game.js` (un test vérifie qu'ils correspondent).
+- Côté navigateur : modules ESM, Three.js via l'importmap `/vendor/three/...`. Little District : `styles.js?quartier=<id>`
+  charge l'apparence d'un quartier précis (utilisé par Prop Hunt).
+- Positions temps réel : le navigateur déplace son personnage et envoie sa position ; le serveur contrôle (pas de
+  téléportation) et tranche (dalles, collisions, tirs). Sillage Néon est entièrement calculé par le serveur.
+
+## Commandes
+
+- `npm start` : site sur http://localhost:3000 ; `npm test` : tous les tests (`node --test`, ~30 s).
+- Un seul jeu : `node --test jeux/<jeu>/`.
+
+## Avant de finir un changement
+
+Tests verts, puis `git add . && git commit -m "Feat : …" && git push` (le dépôt est déployé automatiquement).

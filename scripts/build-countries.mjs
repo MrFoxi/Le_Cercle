@@ -1,4 +1,4 @@
-// Génère public/pays/countries.json (TopoJSON compact) depuis Natural Earth 1:50m.
+// Génère jeux/pays/client/countries.json (TopoJSON compact) depuis Natural Earth 1:50m.
 // À relancer seulement pour mettre à jour la carte : node scripts/build-countries.mjs
 import { writeFileSync } from 'node:fs';
 import { topology } from 'topojson-server';
@@ -36,7 +36,7 @@ for (const g of geoms) delete g.properties.admin;
 
 topo = presimplify(topo);
 topo = quantize(simplify(topo, quantile(topo, 0.35)), 1e5);
-writeFileSync(new URL('../public/pays/countries.json', import.meta.url), JSON.stringify(topo));
+writeFileSync(new URL('../jeux/pays/client/countries.json', import.meta.url), JSON.stringify(topo));
 
 const quiz = geoms.filter(g => g.properties.q);
 console.log(`${geoms.length} territoires, dont ${quiz.length} pays à trouver`);
