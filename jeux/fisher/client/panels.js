@@ -243,6 +243,9 @@ function renderBookOther(tab) {
   if (tab === 'relics') $('#bookBody').innerHTML = `<p class="hint">Trouvées en fouillant les épaves (grappin) et en creusant les trésors enterrés.</p><ul class="list">${Object.entries(RELICS).map(([k, r]) => s.relics.includes(k)
     ? `<li><span style="font-size:1.8rem">${r.icon}</span><div class="grow"><b>${esc(r.name)}</b><small>${esc(r.desc)}</small></div></li>`
     : `<li><span style="font-size:1.8rem;filter:grayscale(1);opacity:.35">${r.icon}</span><div class="grow"><b>???</b><small>Pas encore trouvée.</small></div></li>`).join('')}</ul>`;
+  if (tab === 'ach') $('#bookBody').innerHTML = `<ul class="list">${G.ACHIEVEMENTS.map(a => s.achievements.includes(a.id)
+    ? `<li><span style="font-size:1.8rem">${a.icon}</span><div class="grow"><b>${esc(a.name)}</b><small>${esc(a.desc)}</small></div><small>✓</small></li>`
+    : `<li><span style="font-size:1.8rem;filter:grayscale(1);opacity:.35">${a.icon}</span><div class="grow"><b>${esc(a.name)}</b><small>${esc(a.desc)}</small></div></li>`).join('')}</ul>`;
   if (tab === 'story') {
     const c = G.chapter(s);
     $('#bookBody').innerHTML = `<p class="hint">Le mystère du Léviathan, chapitre par chapitre.</p><ul class="list story">${STORY.map((ch, k) => k < s.story
@@ -255,11 +258,23 @@ function renderBookOther(tab) {
       : '<p class="empty">Aucune carte au trésor pour l’instant. Certaines bouteilles à la mer en cachent…</p>'; }
 }
 
+/* ---------------- Classement mondial (plus grosses prises par espèce) ---------------- */
+const topCache = new Map();
+export function worldTop(fish) {
+  if (!topCache.has(fish)) topCache.set(fish, fetch(`/api/fisher/board?fish=${fish}`).then(r => (r.ok ? r.json() : [])).catch(() => []));
+  return topCache.get(fish);
+}
+export function sendRecord(name, fish, size) {
+  topCache.delete(fish);
+  return fetch('/api/fisher/board', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name, fish, size }) })
+    .then(r => (r.ok ? r.json() : null)).catch(() => null);
+}
+
 /* ---------------- Carnet ---------------- */
 let bookSel = null, bookTab = 'fish';
 export function renderBook() {
   const s = S.save;
-  const tabs = [['fish', `🐟 Poissons ${G.catalogCount(s)}/${FISH.length}`], ['wonders', `✨ Merveilles ${G.wondersSeen(s).length}/${WONDERS.length}`], ['relics', `🏺 Reliques ${s.relics.length}/${Object.keys(RELICS).length}`], ['maps', `📜 Cartes au trésor`], ['story', `📖 Histoire ${Math.min(S.save.story, STORY.length)}/${STORY.length}`]];
+  const tabs = [['fish', `🐟 Poissons ${G.catalogCount(s)}/${FISH.length}`], ['wonders', `✨ Merveilles ${G.wondersSeen(s).length}/${WONDERS.length}`], ['relics', `🏺 Reliques ${s.relics.length}/${Object.keys(RELICS).length}`], ['maps', `📜 Cartes au trésor`], ['story', `📖 Histoire ${Math.min(S.save.story, STORY.length)}/${STORY.length}`], ['ach', `🏅 Succès ${S.save.achievements.length}/${G.ACHIEVEMENTS.length}`]];
   $('#bookCount').innerHTML = `<span class="tabs" id="bookTabs">${tabs.map(([t, l]) => `<button class="small ${t === bookTab ? 'on' : ''}" data-btab="${t}">${l}</button>`).join('')}</span>`;
   $('#bookTabs').onclick = e => { const b = e.target.closest('[data-btab]'); if (b) { bookTab = b.dataset.btab; renderBook(); } };
   if (bookTab !== 'fish') return renderBookOther(bookTab);
@@ -271,7 +286,8 @@ export function renderBook() {
     ${sel.bait ? `<dt>Appât</dt><dd>${BAITS[sel.bait].icon} ${esc(BAITS[sel.bait].name)}</dd>` : ''}
     ${sel.zones.length && FIGHTS[sel.fight] ? `<dt>Combat</dt><dd>${esc(FIGHTS[sel.fight])}</dd>` : ''}
     ${sel.minRod ? `<dt>Canne</dt><dd>${esc(UPGRADES.canne.levels[sel.minRod].name)} au moins</dd>` : ''}
-    <dt>Valeur</dt><dd>environ ${coins(sel.price)}</dd>${c ? `<dt>Attrapés</dt><dd>${c.count} · record ${c.best} cm</dd>` : ''}</dl></div></div>` : '<p class="hint">Touche une espèce pour voir où, quand et avec quel appât la pêcher.</p>';
+    <dt>Valeur</dt><dd>environ ${coins(sel.price)}</dd>${c ? `<dt>Attrapés</dt><dd>${c.count} · record ${c.best} cm</dd>` : ''}<dt>🌍 Monde</dt><dd id="worldTop">…</dd></dl></div></div>` : '<p class="hint">Touche une espèce pour voir où, quand et avec quel appât la pêcher.</p>';
   $('#bookBody').innerHTML = detail + `<div class="bookGrid">${FISH.map(f => { const k = s.catalog[f.id]; return `<button class="fishCard ${k ? '' : 'unknown'}" data-fish="${f.id}"><img src="${fishImage(f, !k)}" alt=""><b>${k ? esc(f.name) : '???'}</b>${rarityTag(f)}</button>`; }).join('')}</div>`;
   $('#bookBody').onclick = e => { const b = e.target.closest('[data-fish]'); if (b) { bookSel = b.dataset.fish; renderBook(); $('#book .panel').scrollTop = 0; } };
+  if (sel) worldTop(sel.id).then(list => { const el = $('#worldTop'); if (el) el.innerHTML = list.length ? list.slice(0, 5).map((e, k) => `${k + 1}. ${esc(e.name)} · ${e.size} cm`).join('<br>') : 'Personne encore : à toi !'; });
 }

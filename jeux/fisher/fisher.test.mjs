@@ -3,6 +3,8 @@
 import assert from 'node:assert';
 import { FISH, SPOTS, PEOPLE, TREASURES, UPGRADES, ZONES, BAITS, FIGHTS, ISLANDS, WONDERS, WRECKS, HUNTS, RELICS, CAVE, VILLAGES, STORY, MARGOT_ROUTE } from './client/data.js';
 import * as G from './client/game.js';
+import { createRequire } from 'node:module';
+const SIZES = createRequire(import.meta.url)('./server/sizes.js');
 
 // Chaque espèce s'attrape d'une façon : à la canne (meilleur équipement, à une heure et par un temps donnés), au casier ou en plongée.
 const TIMES = [0.1, 0.27, 0.5, 0.79], WEATHERS = ['clair', 'pluie', 'brume'];
@@ -182,4 +184,15 @@ assert.match(G.startContest(cs), /dimanche/); cs.days = 6;
 assert.strictEqual(G.startContest(cs, () => 0), null);
 assert(G.contestCatch(cs, G.fishById('thon'), 200) && !G.contestCatch(cs, G.fishById('sardine'), 10));
 const res = G.endContest(cs); assert(res.place === 1 && res.prize === 300 && cs.relics.includes('coupe'));
+// Le serveur (classement mondial) connaît les mêmes espèces, tailles et noms que le jeu.
+assert.deepStrictEqual(Object.keys(SIZES).sort(), FISH.map(f => f.id).sort());
+for (const f of FISH) assert.deepStrictEqual(SIZES[f.id], [...f.size, f.name], f.id);
+// Succès : rien au départ ; la première prise débloque « Première prise » une seule fois.
+const ac = G.newSave();
+assert.deepStrictEqual(G.checkAchievements(ac), []);
+G.landFish(ac, G.fishById('sardine'));
+assert.deepStrictEqual(G.checkAchievements(ac).map(a => a.id), ['premiere']);
+assert.deepStrictEqual(G.checkAchievements(ac), []);
+ac.flags.stormCatch = true; assert.deepStrictEqual(G.checkAchievements(ac).map(a => a.id), ['orage']);
+assert.strictEqual(new Set(G.ACHIEVEMENTS.map(a => a.id)).size, G.ACHIEVEMENTS.length);
 console.log('Tests de Little Fisher : OK');

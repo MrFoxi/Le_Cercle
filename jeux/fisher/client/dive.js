@@ -176,7 +176,7 @@ export function updateDive(dt) {
     if (o.open) { o.lid.rotation.x = Math.max(-1.1, o.lid.rotation.x - dt * 3); continue; }
     if (o.g.position.distanceTo(D.pos) > 1.9) continue;
     o.open = true; const money = G.oyster();
-    if (money) { o.pearl.visible = true; S.save.money += money; gain(money); SFX.treasure(); toast(`🦪 Une perle ! <b>+${money} 🪙</b>`); persist(); }
+    if (money) { o.pearl.visible = true; S.save.money += money; S.save.flags.pearl = true; gain(money); SFX.treasure(); toast(`🦪 Une perle ! <b>+${money} 🪙</b>`); persist(); }
     else { SFX.plop(); toast('🦪 Huître vide…', 1800); }
   }
   // caméra derrière le plongeur, neige marine autour

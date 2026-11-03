@@ -10,7 +10,7 @@ import { ISLANDS, UPGRADES, VILLAGES, ZONES, FOSSE, PEOPLE, HUNTS, RELICS, STORY
 import * as G from './game.js';
 import { S, persist, fwd, right, dressBoat } from './state.js';
 import { toast, banner, gain, updateHud, drawMinimap, buildMapLand, catchOpen, closeCatch, coins, baitLabel, esc, showDialog, closeDialog } from './hud.js';
-import { openPanel, closePanel, togglePanel, openVillage } from './panels.js';
+import { openPanel, closePanel, togglePanel, openVillage, sendRecord } from './panels.js';
 import * as Fishing from './fishing.js';
 import * as Traps from './traps.js';
 import * as Dive from './dive.js';
@@ -52,6 +52,8 @@ addEventListener('keydown', e => {
     if (e.code === 'KeyE' || e.code === 'KeyH') Dive.endDive();
     return;
   }
+  if (document.body.classList.contains('photo')) { if (e.code === 'Escape' || e.code === 'KeyP') photoMode(false); if (e.code === 'Space' || e.code === 'Enter') shotNext = true; return; }
+  if (e.code === 'KeyP') return photoMode(true);
   if (e.code === 'KeyI') return togglePanel('inv');
   if (e.code === 'KeyC') return togglePanel('book');
   if (e.code === 'KeyM' || e.code === 'Semicolon') return togglePanel('map');
@@ -93,10 +95,10 @@ function input() {
 }
 // Caméra : glisser pour tourner autour du bateau, molette pour zoomer
 const cam = { dist: 24, yawOff: 0, pitch: 0.4, drag: null };
-$('#view').addEventListener('pointerdown', e => { if (S.mode === 'sail' && e.pointerType === 'mouse') cam.drag = { x: e.clientX, y: e.clientY }; });
-addEventListener('pointermove', e => { if (!cam.drag) return; cam.yawOff -= (e.clientX - cam.drag.x) * 0.006; cam.pitch = Math.max(0.12, Math.min(1.1, cam.pitch + (e.clientY - cam.drag.y) * 0.004)); cam.drag = { x: e.clientX, y: e.clientY }; });
+$('#view').addEventListener('pointerdown', e => { if (S.mode === 'sail' && (e.pointerType === 'mouse' || cam.photo)) cam.drag = { x: e.clientX, y: e.clientY }; });
+addEventListener('pointermove', e => { if (!cam.drag) return; cam.yawOff -= (e.clientX - cam.drag.x) * 0.006; cam.pitch = Math.max(cam.photo ? 0.02 : 0.12, Math.min(cam.photo ? 1.45 : 1.1, cam.pitch + (e.clientY - cam.drag.y) * 0.004)); cam.drag = { x: e.clientX, y: e.clientY }; });
 addEventListener('pointerup', () => (cam.drag = null));
-$('#view').addEventListener('wheel', e => { cam.dist = Math.max(10, Math.min(60, cam.dist * (1 + Math.sign(e.deltaY) * 0.1))); e.preventDefault(); }, { passive: false });
+$('#view').addEventListener('wheel', e => { cam.dist = Math.max(cam.photo ? 5 : 10, Math.min(cam.photo ? 140 : 60, cam.dist * (1 + Math.sign(e.deltaY) * 0.1))); e.preventDefault(); }, { passive: false });
 
 $('#bInv').onclick = () => togglePanel('inv');
 $('#bBook').onclick = () => togglePanel('book');
@@ -106,7 +108,43 @@ $('#hBait').onclick = () => cycleBait();
 $('#cOk').onclick = closeCatch;
 $('#dOk').onclick = closeDialog;
 // Chaque prise compte pour le concours du dimanche
-S.onCatch = (f, res) => { if (G.contestCatch(S.save, f, res.fish.size)) setTimeout(() => toast(`🏆 Nouveau meilleur score au concours : <b>${S.save.contest.best} points</b> (${esc(f.name)})`), 400); };
+S.onCatch = (f, res) => {
+  const s = S.save;
+  if (G.period(s.time) === 'nuit') s.flags.nightCatch = true;
+  if (W.kind === 'orage') s.flags.stormCatch = true;
+  if (G.contestCatch(s, f, res.fish.size)) setTimeout(() => toast(`🏆 Nouveau meilleur score au concours : <b>${s.contest.best} points</b> (${esc(f.name)})`), 400);
+  // record personnel : on l'envoie au classement mondial de l'espèce
+  if ((res.first || res.record) && pseudo()) sendRecord(pseudo(), f.id, res.fish.size).then(r => { if (r?.improved && r.place) setTimeout(() => toast(`🌍 <b>${r.place === 1 ? 'Record du monde' : `${r.place}e au classement mondial`}</b> : ${esc(f.name)} de ${res.fish.size} cm !`, 6000), 1200); });
+};
+const pseudo = () => ($('#pseudo').value.trim() || store.get('fisher-pseudo') || '').slice(0, 20);
+$('#pseudo').value = store.get('fisher-pseudo') || store.get('pseudo') || '';
+$('#pseudo').oninput = e => store.set('fisher-pseudo', e.target.value.trim().slice(0, 20));
+
+/* ---------------- Mode photo : on cache l'interface, on cadre, on choisit un filtre, on enregistre ---------------- */
+const FILTERS = { naturel: '', vintage: 'sepia(.35) saturate(1.2) contrast(1.05) brightness(1.05)', sepia: 'sepia(.85)', noir: 'grayscale(1) contrast(1.15)', vif: 'saturate(1.6) contrast(1.08)', reve: 'saturate(1.3) hue-rotate(-12deg) brightness(1.08) blur(.4px)' };
+let photoFilter = 'naturel', shotNext = false;
+$('#photoFilters').innerHTML = Object.keys(FILTERS).map(k => `<button class="small ${k === photoFilter ? 'primary' : 'ghost'}" data-pf="${k}">${k}</button>`).join('');
+$('#photoFilters').onclick = e => { const b = e.target.closest('[data-pf]'); if (!b) return; photoFilter = b.dataset.pf; $('#view').style.filter = FILTERS[photoFilter]; for (const x of $('#photoFilters').children) x.className = `small ${x.dataset.pf === photoFilter ? 'primary' : 'ghost'}`; };
+function photoMode(on) {
+  if (on && (S.mode !== 'sail' || S.panel)) return;
+  document.body.classList.toggle('photo', on); $('#photoBar').hidden = !on;
+  $('#view').style.filter = on ? FILTERS[photoFilter] : '';
+  if (on) { S.keys.clear(); cam.photo = true; cam.pitchMax = 1.45; } else { cam.photo = false; }
+}
+$('#bPhoto').onclick = () => photoMode(true);
+$('#photoExit').onclick = () => photoMode(false);
+$('#photoShot').onclick = () => (shotNext = true);
+// Juste après le rendu de l'image : on la copie avec le filtre et un petit cadre, puis on la télécharge.
+function takePhoto() {
+  const src = renderer.domElement, W2 = src.width, H2 = src.height, pad = Math.round(W2 * 0.025), foot = Math.round(H2 * 0.08);
+  const c = document.createElement('canvas'); c.width = W2 + pad * 2; c.height = H2 + pad + foot;
+  const g = c.getContext('2d'); g.fillStyle = '#fbf7ee'; g.fillRect(0, 0, c.width, c.height);
+  g.filter = FILTERS[photoFilter] || 'none'; g.drawImage(src, pad, pad); g.filter = 'none';
+  g.fillStyle = '#1d3b4f'; g.font = `600 ${Math.round(foot * 0.38)}px Fredoka, sans-serif`; g.textBaseline = 'middle';
+  g.fillText(`Little Fisher · ${S.save.custom.name} · jour ${S.save.days + 1}, ${G.clock(S.save.time)}`, pad, H2 + pad + foot / 2);
+  const a = document.createElement('a'); a.download = `little-fisher-${Date.now()}.png`; a.href = c.toDataURL('image/png'); a.click();
+  $('#flashShot').classList.add('on'); setTimeout(() => $('#flashShot').classList.remove('on'), 60); SFX.click();
+}
 $('#bMute').onclick = () => { $('#bMute').textContent = toggleMute() ? '🔇' : '🔊'; };
 $('#bMute').textContent = isMuted() ? '🔇' : '🔊';
 $('#bQuality').textContent = LOW ? '⚙️ léger' : '⚙️';
@@ -259,6 +297,8 @@ function explore() {
   if (seasonNow !== sea) { if (seasonNow !== -1) { banner(`${SEASONS[sea].icon} ${SEASONS[sea].name}`, `Poissons de saison : ${SEASONS[sea].fish.map(id => G.fishById(id)?.name).join(', ')}`); } seasonNow = sea; S.world.setSeason(SEASONS[sea].tint); }
   // Margot change de village chaque matin
   if (margotDay !== s.days) { margotDay = s.days; S.world.setMargot(S.world.docks.find(d => d.village === G.margotAt(s))); }
+  // succès
+  for (const a of G.checkAchievements(s)) { SFX.upgrade(); toast(`🏅 Succès : <b>${a.icon} ${esc(a.name)}</b> · ${esc(a.desc)}`, 6000); persist(); }
   if (G.period(s.time) === 'nuit' && !s.levels.lanterne && s.bait !== 'lumineux' && !nightWarned) { nightWarned = true; toast('🌙 La nuit tombe. Avec une <b>lanterne</b> (chantier) ou un <b>appât lumineux</b> (Anse-Corail), les poissons de nuit viendraient mordre…', 6000); }
 }
 function questHint(place) {
@@ -341,7 +381,7 @@ function frame(now) {
     camera.lookAt(look);
   } else if (S.mode === 'sail') {
     B.camHeading += Math.atan2(Math.sin(B.heading - B.camHeading), Math.cos(B.heading - B.camHeading)) * Math.min(1, dt * 2.2);
-    if (!cam.drag && Math.abs(B.speed) > 3) cam.yawOff *= Math.exp(-dt * 0.8);
+    if (!cam.drag && !cam.photo && Math.abs(B.speed) > 3) cam.yawOff *= Math.exp(-dt * 0.8);
     const yaw = B.camHeading + Math.PI + cam.yawOff, dist = cam.dist * (Fishing.busy() ? 0.9 : 1);
     want.set(B.x + Math.sin(yaw) * Math.cos(cam.pitch) * dist, Math.sin(cam.pitch) * dist + 3, B.z + Math.cos(yaw) * Math.cos(cam.pitch) * dist);
     const ground = S.world.heightAt(want.x, want.z) + 4; if (want.y < ground) want.y = ground;
@@ -360,6 +400,7 @@ function frame(now) {
   }
   post.setMood(S.world.state.night);
   post.render();
+  if (shotNext) { shotNext = false; takePhoto(); }
 }
 
 /* ---------------- Démarrage ---------------- */
@@ -372,6 +413,7 @@ function applySave() {
 }
 function play() {
   startAudio();
+  if ($('#pseudo').value.trim()) store.set('fisher-pseudo', $('#pseudo').value.trim().slice(0, 20));
   S.mode = 'sail';
   $('#title').hidden = true; $('#hud').hidden = false; $('#touch').hidden = !coarse;
   camera.position.set(B.x - Math.sin(B.heading) * 30, 14, B.z - Math.cos(B.heading) * 30);

@@ -16,6 +16,7 @@ export function newSave() {
     relics: [], wrecks: {}, hunts: {}, fog: '',   // reliques trouvées, dernier jour de fouille de chaque épave, cartes au trésor, carte explorée
     boats: ['barque'], model: 'barque', custom: { hull: 'auto', flag: 'jaune', name: 'Petit Galet', mascot: null }, aquarium: [],
     story: 0, flags: {}, orders: { day: -1, done: [] }, contest: null, // chapitre en cours, moments vécus, commandes livrées aujourd'hui, concours
+    achievements: [],
   };
 }
 // Relit une sauvegarde (ou en crée une) ; les champs ajoutés plus tard prennent leur valeur par défaut.
@@ -407,6 +408,39 @@ export function endContest(save) {
   save.money += prize;
   if (place === 1 && c.best && !save.relics.includes('coupe')) save.relics.push('coupe');
   return { board, place, prize };
+}
+
+// ---------- Succès ----------
+const allIn = (list, have) => list.every(x => have.includes(x));
+export const ACHIEVEMENTS = [
+  { id: 'premiere', icon: '🎣', name: 'Première prise', desc: 'Attraper ton premier poisson.', ok: s => catalogCount(s) >= 1 },
+  { id: 'dix', icon: '📖', name: 'Dix espèces', desc: 'Inscrire 10 espèces au carnet.', ok: s => catalogCount(s) >= 10 },
+  { id: 'trente', icon: '📚', name: 'Naturaliste', desc: 'Inscrire 30 espèces au carnet.', ok: s => catalogCount(s) >= 30 },
+  { id: 'carnet', icon: '🏅', name: 'Le carnet complet', desc: 'Toutes les espèces de l’archipel.', ok: s => catalogCount(s) >= FISH.length },
+  { id: 'legende', icon: '⭐', name: 'Une légende', desc: 'Attraper un poisson légendaire.', ok: s => FISH.some(f => f.rarity === 'legende' && s.catalog[f.id]) },
+  { id: 'legendes', icon: '🌟', name: 'Toutes les légendes', desc: 'Attraper chaque poisson légendaire.', ok: s => FISH.filter(f => f.rarity === 'legende').every(f => s.catalog[f.id]) },
+  { id: 'casiers', icon: '🦀', name: 'Roi du casier', desc: 'Prendre chaque crustacé au casier.', ok: s => FISH.filter(f => f.trap).every(f => s.catalog[f.id]) },
+  { id: 'iles', icon: '🏝️', name: 'Tous les rivages', desc: 'Découvrir toutes les îles.', ok: s => allIn(ISLANDS.filter(i => i.name).map(i => i.id), s.seen) },
+  { id: 'merveilles', icon: '✨', name: 'Émerveillé', desc: 'Voir toutes les merveilles.', ok: s => allIn(WONDERS.map(w => w.id), s.seen) },
+  { id: 'explorateur', icon: '🗺️', name: 'Cartographe', desc: 'Explorer 60 % de la carte.', ok: s => explored(s) >= 0.6 },
+  { id: 'reliques', icon: '🏺', name: 'Antiquaire', desc: 'Réunir toutes les reliques.', ok: s => allIn(Object.keys(RELICS), s.relics) },
+  { id: 'tresors', icon: '💰', name: 'Chasseur de trésors', desc: 'Déterrer tous les trésors des cartes.', ok: s => Object.keys(HUNTS).every(h => s.hunts[h] === 'trouve') },
+  { id: 'riche', icon: '🪙', name: 'Mille pièces', desc: 'Gagner 1 000 pièces en vendant ta pêche.', ok: s => s.earned >= 1000 },
+  { id: 'fortune', icon: '💎', name: 'Fortune de mer', desc: 'Gagner 10 000 pièces.', ok: s => s.earned >= 10000 },
+  { id: 'cent', icon: '🐟', name: 'Cent poissons vendus', desc: 'Vendre 100 poissons.', ok: s => s.sold >= 100 },
+  { id: 'flotte', icon: '⛵', name: 'Armateur', desc: 'Posséder les trois bateaux.', ok: s => s.boats.length >= Object.keys(BOATS).length },
+  { id: 'aquarium', icon: '🐠', name: 'Aquariophile', desc: 'Remplir l’aquarium de la maison.', ok: s => s.aquarium.length >= AQUARIUM },
+  { id: 'nuit', icon: '🌙', name: 'Oiseau de nuit', desc: 'Pêcher en pleine nuit.', ok: s => !!s.flags.nightCatch },
+  { id: 'orage', icon: '⛈️', name: 'Pêcheur d’orage', desc: 'Attraper un poisson sous l’orage.', ok: s => !!s.flags.stormCatch },
+  { id: 'perle', icon: '🦪', name: 'Perle rare', desc: 'Trouver une perle en plongée.', ok: s => !!s.flags.pearl },
+  { id: 'champion', icon: '🏆', name: 'Champion', desc: 'Gagner le concours du dimanche.', ok: s => s.relics.includes('coupe') },
+  { id: 'gardien', icon: '🐉', name: 'Gardien de l’archipel', desc: 'Percer le mystère du Léviathan.', ok: s => s.story >= STORY.length },
+];
+// Les succès qu'on vient de débloquer (et qu'on note dans la sauvegarde)
+export function checkAchievements(save) {
+  const got = ACHIEVEMENTS.filter(a => !save.achievements.includes(a.id) && a.ok(save));
+  for (const a of got) save.achievements.push(a.id);
+  return got;
 }
 
 // ---------- Épaves (au grappin) ----------

@@ -22,6 +22,7 @@
     <div class="titleBox">
       <h1>Little <span>Fisher</span></h1>
       <p class="tagline">Ton petit bateau, un archipel à explorer, et des poissons plein le carnet.</p>
+      <label class="pseudo">Ton nom de pêcheur <input id="pseudo" maxlength="20" autocomplete="nickname" placeholder="Pseudo (pour le classement mondial)"></label>
       <div class="row center">
         <button class="primary big" id="playBtn">⛵ Prendre la mer</button>
         <button class="ghost" id="newBtn" hidden>Nouvelle partie</button>
@@ -43,6 +44,7 @@
       <button class="pill btn" id="bInv" title="Cale (I)">🎒</button>
       <button class="pill btn" id="bBook" title="Carnet de pêche (C)">📖</button>
       <button class="pill btn" id="bMap" title="Carte (M)">🗺️</button>
+      <button class="pill btn" id="bPhoto" title="Mode photo (P)">📷</button>
       <button class="pill btn" id="bMute" title="Son">🔊</button>
       <button class="pill btn" id="bQuality" title="Graphismes : beaux ou légers (pour les petits appareils)">⚙️</button>
     </div>
@@ -67,6 +69,15 @@
       </div>
     </div>
   </div>
+
+  <!-- Mode photo -->
+  <div id="photoBar" hidden>
+    <span class="hint">📷 Glisse pour tourner · molette pour zoomer</span>
+    <div class="row" id="photoFilters"></div>
+    <button class="primary" id="photoShot">📸 Prendre la photo</button>
+    <button class="ghost" id="photoExit">✕</button>
+  </div>
+  <div id="flashShot"></div>
 
   <!-- Prise -->
   <div id="catch" class="overlay" hidden>

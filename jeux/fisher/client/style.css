@@ -96,6 +96,14 @@ button.small { padding: 6px 12px; font-size: .88rem; }
 .quest.done { opacity: .6; }
 .waits { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 12px; }
 
+/* Pseudo et mode photo */
+.pseudo { display: grid; gap: 6px; max-width: 360px; margin: 0 auto 16px; color: #fff; font-weight: 600; text-shadow: 0 2px 6px rgba(14, 50, 70, .5); }
+.pseudo input { font: 600 1rem var(--font); padding: 11px 14px; border-radius: 14px; border: 0; text-align: center; color: var(--ink); }
+#photoBar { position: fixed; left: 50%; bottom: 16px; transform: translateX(-50%); z-index: 6; display: flex; gap: 10px; align-items: center; flex-wrap: wrap; justify-content: center; background: rgba(251, 245, 233, .94); padding: 10px 14px; border-radius: 18px; box-shadow: 0 6px 20px rgba(14, 40, 58, .3); max-width: 94vw; }
+body.photo #hud { display: none; }
+#flashShot { position: fixed; inset: 0; background: #fff; opacity: 0; pointer-events: none; z-index: 30; transition: opacity .5s; }
+#flashShot.on { opacity: .85; transition: none; }
+
 /* Dialogue */
 #dialog { z-index: 20; } /* au-dessus des fenêtres de village */
 .dialogCard { width: min(520px, 100%); animation: pop .35s cubic-bezier(.3, 1.6, .5, 1); }
