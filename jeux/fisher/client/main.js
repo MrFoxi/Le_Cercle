@@ -6,7 +6,7 @@ import { createWorld } from './world.js';
 import { createPost } from './post.js';
 import { buildBoat, createWake } from './boat.js';
 import { startAudio, ambience, SFX, toggleMute, isMuted } from './audio.js';
-import { ISLANDS, UPGRADES, VILLAGES, ZONES, FOSSE, PEOPLE } from './data.js';
+import { ISLANDS, UPGRADES, VILLAGES, ZONES, FOSSE, PEOPLE, HUNTS, RELICS } from './data.js';
 import * as G from './game.js';
 import { S, persist, fwd, right } from './state.js';
 import { toast, banner, gain, updateHud, drawMinimap, buildMapLand, catchOpen, closeCatch, coins, baitLabel, esc } from './hud.js';
@@ -128,6 +128,7 @@ const nearDock = () => S.world.docks.find(d => Math.hypot(d.x - B.x, d.z - B.z) 
 function interact() {
   if (!free() || Fishing.F.phase === 'reel') return;
   if (Traps.collectTrap()) return;
+  if (searchWreck() || dig()) return;
   const d = nearDock();
   if (!d) return;
   if (Math.abs(B.speed) > 6) return toast('Ralentis pour accoster');
@@ -136,6 +137,28 @@ function interact() {
   B.docked = d; B.dockAnim = 0; B.speed = 0;
   SFX.horn();
   setTimeout(() => openVillage(d.village), 450);
+}
+
+// Fouiller l'épave toute proche (grappin)
+function searchWreck() {
+  const w = G.wreckNear(B.x, B.z); if (!w) return false;
+  if (Math.abs(B.speed) > 3) { toast('Arrête-toi au-dessus de l’épave pour la fouiller.'); return true; }
+  const r = G.searchWreck(S.save, w);
+  if (r.error) { toast(r.error); return true; }
+  SFX.splash(); splashAt({ x: w.x, y: 0, z: w.z }, 1.6); gain(r.money);
+  toast(`🪝 <b>${esc(w.name)}</b> : ${r.money} 🪙${r.relic ? ` et une relique : <b>${RELICS[r.relic].icon} ${esc(RELICS[r.relic].name)}</b> !` : '.'}`, 6000);
+  if (r.relic) SFX.treasure();
+  persist(); return true;
+}
+// Creuser à l'endroit d'une carte au trésor
+const huntNear = (r = 16) => G.activeHunts(S.save).find(id => { const p = S.world.huntSpots[id].water; return Math.hypot(p.x - B.x, p.z - B.z) < r; });
+function dig() {
+  const id = huntNear(); if (!id) return false;
+  const h = G.digHunt(S.save, id);
+  S.world.setHunt(id, false); SFX.treasure(); gain(h.money);
+  banner('Trésor !', h.name);
+  toast(`⛏️ Tu débarques et tu creuses… un coffre ! <b>+${coins(h.money)}</b> et <b>${RELICS[h.relic].icon} ${esc(RELICS[h.relic].name)}</b>`, 7000);
+  persist(); return true;
 }
 
 /* ---------------- Navigation ---------------- */
@@ -199,8 +222,14 @@ function explore() {
     G.takeTreasure(s, t); S.world.hideTreasure(t.id); SFX.treasure();
     toast(`${t.kind === 'bouteille' ? '🍾' : '📦'} <b>${t.name ? esc(t.name) : t.kind === 'bouteille' ? 'Une bouteille à la mer !' : 'Un coffre !'}</b> ${esc(t.note)}${t.money ? ` <b>+${coins(t.money)}</b>` : ''}`, 7000);
     if (t.money) gain(t.money);
+    if (t.map) setTimeout(() => toast(`📜 <b>${esc(HUNTS[t.map].name)}</b> : « ${esc(HUNTS[t.map].clue)} » (voir le carnet)`, 9000), 1200);
     persist();
   }
+  // la carte se dévoile autour du bateau ; les merveilles ; les croix des trésors quand on approche
+  G.reveal(s, B.x, B.z);
+  const w = G.wonderHere(s, B.x, B.z, { time: s.time, weather: W.kind });
+  if (w) { G.see(s, w.id); banner(`${w.icon} ${w.name}`, 'Merveille découverte !'); toast(`✨ ${esc(w.desc)}`, 6000); SFX.treasure(); questHint(w.id); persist(); }
+  for (const id of Object.keys(HUNTS)) { const p = S.world.huntSpots[id].water; S.world.setHunt(id, s.hunts[id] === 'actif' && Math.hypot(p.x - B.x, p.z - B.z) < 70); }
   if (G.period(s.time) === 'nuit' && !s.levels.lanterne && s.bait !== 'lumineux' && !nightWarned) { nightWarned = true; toast('🌙 La nuit tombe. Avec une <b>lanterne</b> (chantier) ou un <b>appât lumineux</b> (Anse-Corail), les poissons de nuit viendraient mordre…', 6000); }
 }
 function questHint(place) {
@@ -212,6 +241,9 @@ function hint() {
   const h = Fishing.hint() || Traps.hint();
   if (h) return h;
   if (B.docked) return '';
+  const wr = G.wreckNear(B.x, B.z);
+  if (wr) return S.save.gear.grappin ? `<b>E</b> : fouiller l’épave « ${esc(wr.name)} »` : `L’épave « ${esc(wr.name)} »… il faudrait un grappin (boutique de Port-Galet)`;
+  if (huntNear()) return '<b>E</b> : débarquer et creuser ici !';
   const d = nearDock(); if (d) return `<b>E</b> : accoster à ${esc(d.name)}`;
   if (Math.abs(B.speed) < 2.5) {
     const c = Fishing.castPoint(), extra = [G.trapsMax(S.save) > S.save.traps.length && '<b>T</b> casier', S.save.gear.harpon && !Dive.whyNot() && '<b>H</b> plonger'].filter(Boolean).join(' · ');

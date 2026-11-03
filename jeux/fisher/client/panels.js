@@ -1,7 +1,7 @@
 // Little Fisher : les fenêtres. Village (marché, boutique d'appâts et de plongée, chantier naval, habitants), cale, carnet, carte.
 import { S, persist } from './state.js';
 import * as G from './game.js';
-import { FISH, UPGRADES, VILLAGES, ZONE_SHORT, TREASURES, PEOPLE, BAITS, BAIT_SHOPS, GEAR, FIGHTS } from './data.js';
+import { FISH, UPGRADES, VILLAGES, ZONE_SHORT, TREASURES, PEOPLE, BAITS, BAIT_SHOPS, GEAR, FIGHTS, WONDERS, RELICS, HUNTS } from './data.js';
 import { fishImage } from './fishart.js';
 import { SFX } from './audio.js';
 import { toast, coins, rarityTag, gain, renderMap } from './hud.js';
@@ -116,8 +116,9 @@ export function renderInv() {
     <h3>Appâts <small class="hint">(touche B pour changer)</small></h3>
     <div class="row">${[...baits, null].map(b => `<button class="small ${s.bait === b ? 'primary' : 'ghost'}" data-pick="${b ?? ''}">${b ? `${BAITS[b].icon} ${esc(BAITS[b].name)} ${BAITS[b].forever ? '' : `×${s.baits[b]}`}` : '🚫 Sans appât'}</button>`).join('')}</div>
     ${items.length ? `<h3>Objets trouvés</h3><ul class="list">${items.map(t => `<li><span style="font-size:1.6rem">${t.kind === 'bouteille' ? '🍾' : '📦'}</span><div class="grow"><b>${esc(t.name)}</b><small>${esc(t.note)}</small></div></li>`).join('')}</ul>` : ''}
+    ${s.relics.length ? `<h3>Reliques</h3><div class="row">${s.relics.map(r => `<span class="pill" title="${esc(RELICS[r].desc)}">${RELICS[r].icon} ${esc(RELICS[r].name)}</span>`).join('')}</div>` : ''}
     <h3>Ton bateau</h3><ul class="list">${Object.entries(UPGRADES).filter(([k]) => s.levels[k] || ['moteur', 'cale', 'canne', 'coque'].includes(k)).map(([k, u]) => `<li><span style="font-size:1.4rem">${u.icon}</span><div class="grow"><b>${esc(G.lvl(s, k).name)}</b><small>${u.name}${k === 'casiers' ? ` · ${s.traps.length} posé(s)` : ''}</small></div></li>`).join('')}
-    ${Object.entries(GEAR).filter(([k]) => s.gear[k]).map(([, g]) => `<li><span style="font-size:1.4rem">${g.icon}</span><div class="grow"><b>${esc(g.name)}</b><small>Plongée : touche H</small></div></li>`).join('')}</ul>`;
+    ${Object.entries(GEAR).filter(([k]) => s.gear[k]).map(([k, g]) => `<li><span style="font-size:1.4rem">${g.icon}</span><div class="grow"><b>${esc(g.name)}</b><small>${k === 'harpon' ? 'Plongée : touche H' : 'Fouiller une épave : touche E'}</small></div></li>`).join('')}</ul>`;
   $('#invBody').onclick = e => {
     const b = e.target.closest('[data-release]'), p = e.target.closest('[data-pick]');
     if (b) { s.cargo.splice(+b.dataset.release, 1); SFX.splash(); }
@@ -126,11 +127,28 @@ export function renderInv() {
   };
 }
 
+/* ---------------- Carnet : merveilles, reliques, cartes au trésor ---------------- */
+function renderBookOther(tab) {
+  const s = S.save;
+  if (tab === 'wonders') $('#bookBody').innerHTML = `<p class="hint">Des lieux à voir, certains seulement à un moment précis.</p><ul class="list">${WONDERS.map(w => s.seen.includes(w.id)
+    ? `<li><span style="font-size:1.8rem">${w.icon}</span><div class="grow"><b>${esc(w.name)}</b><small>${esc(w.desc)}</small></div></li>`
+    : `<li><span style="font-size:1.8rem;filter:grayscale(1);opacity:.4">${w.icon}</span><div class="grow"><b>???</b><small>${w.when === 'nuit' ? 'Quelque part, une nuit claire…' : w.when === 'soir' ? 'Au large, à un instant précis du soir…' : 'Quelque part dans l’archipel…'}</small></div></li>`).join('')}</ul>`;
+  if (tab === 'relics') $('#bookBody').innerHTML = `<p class="hint">Trouvées en fouillant les épaves (grappin) et en creusant les trésors enterrés.</p><ul class="list">${Object.entries(RELICS).map(([k, r]) => s.relics.includes(k)
+    ? `<li><span style="font-size:1.8rem">${r.icon}</span><div class="grow"><b>${esc(r.name)}</b><small>${esc(r.desc)}</small></div></li>`
+    : `<li><span style="font-size:1.8rem;filter:grayscale(1);opacity:.35">${r.icon}</span><div class="grow"><b>???</b><small>Pas encore trouvée.</small></div></li>`).join('')}</ul>`;
+  if (tab === 'maps') { const list = Object.entries(HUNTS).filter(([id]) => s.hunts[id]);
+    $('#bookBody').innerHTML = list.length ? `<ul class="list">${list.map(([id, h]) => `<li><span style="font-size:1.8rem">${s.hunts[id] === 'trouve' ? '✅' : '📜'}</span><div class="grow"><b>${esc(h.name)}</b><small>${s.hunts[id] === 'trouve' ? 'Trésor trouvé !' : `« ${esc(h.clue)} » — approche de la plage et appuie sur E quand la croix rouge apparaît.`}</small></div></li>`).join('')}</ul>`
+      : '<p class="empty">Aucune carte au trésor pour l’instant. Certaines bouteilles à la mer en cachent…</p>'; }
+}
+
 /* ---------------- Carnet ---------------- */
-let bookSel = null;
+let bookSel = null, bookTab = 'fish';
 export function renderBook() {
   const s = S.save;
-  $('#bookCount').textContent = `${G.catalogCount(s)}/${FISH.length} espèces`;
+  const tabs = [['fish', `🐟 Poissons ${G.catalogCount(s)}/${FISH.length}`], ['wonders', `✨ Merveilles ${G.wondersSeen(s).length}/${WONDERS.length}`], ['relics', `🏺 Reliques ${s.relics.length}/${Object.keys(RELICS).length}`], ['maps', `📜 Cartes au trésor`]];
+  $('#bookCount').innerHTML = `<span class="tabs" id="bookTabs">${tabs.map(([t, l]) => `<button class="small ${t === bookTab ? 'on' : ''}" data-btab="${t}">${l}</button>`).join('')}</span>`;
+  $('#bookTabs').onclick = e => { const b = e.target.closest('[data-btab]'); if (b) { bookTab = b.dataset.btab; renderBook(); } };
+  if (bookTab !== 'fish') return renderBookOther(bookTab);
   const sel = bookSel && G.fishById(bookSel), c = sel && s.catalog[sel.id];
   const how = f => [f.zones.length && `à la canne : ${f.zones.map(z => ZONE_SHORT[z]).join(', ')}`, f.trap && `au casier : ${f.trap.map(z => ZONE_SHORT[z]).join(', ')}`, f.dive && `en plongée : ${f.dive.map(z => ZONE_SHORT[z]).join(', ')}`].filter(Boolean).join(' · ');
   const detail = sel ? `<div class="detail"><img src="${fishImage(sel, !c)}" alt=""><div><h3>${c ? esc(sel.name) : '???'} ${rarityTag(sel)}</h3>

@@ -1,7 +1,7 @@
 // Tests de Little Fisher : le contenu se tient (chaque poisson peut mordre quelque part, missions et trésors liés),
 // et la boucle de jeu marche : pêcher, remplir la cale, vendre, améliorer, rendre des missions, sauvegarder.
 import assert from 'node:assert';
-import { FISH, SPOTS, PEOPLE, TREASURES, UPGRADES, ZONES, BAITS, FIGHTS } from './client/data.js';
+import { FISH, SPOTS, PEOPLE, TREASURES, UPGRADES, ZONES, BAITS, FIGHTS, ISLANDS, WONDERS, WRECKS, HUNTS, RELICS, CAVE, VILLAGES } from './client/data.js';
 import * as G from './client/game.js';
 
 // Chaque espèce s'attrape d'une façon : à la canne (meilleur équipement, à une heure et par un temps donnés), au casier ou en plongée.
@@ -97,4 +97,33 @@ assert.strictEqual(G.newSave().boat, null); // première partie : le jeu place l
 assert.strictEqual(G.loadSave('{oups').money, 20);
 // Heure : 7 h 12 est encore l'aube, midi le jour, 19 h le crépuscule, minuit la nuit.
 assert.deepStrictEqual([G.clock(0.3), G.period(0.3), G.period(0.5), G.period(19 / 24), G.period(0)], ['07:12', 'crepuscule', 'jour', 'crepuscule', 'nuit']);
+// Exploration : la grotte a sa zone, le nord demande la coque de haute mer, missions « voir » et villages renvoient à de vrais lieux.
+assert.strictEqual(G.zoneAt(CAVE.x, CAVE.z), 'grotte');
+assert.strictEqual(G.hullNeeded(120, -860), 2);
+for (const p of PEOPLE) for (const q of p.quests) if (q.type === 'see') assert(ISLANDS.some(i => i.id === q.place) || WONDERS.some(w => w.id === q.place) || q.place === 'fosse', q.id);
+for (const v of Object.values(VILLAGES)) assert(ISLANDS.some(i => i.id === v.island && i.dock), v.name);
+for (const w of WRECKS) assert(RELICS[w.relic], w.id);
+for (const h of Object.values(HUNTS)) assert(RELICS[h.relic] && ISLANDS.some(i => i.id === h.island), h.name);
+assert(TREASURES.filter(t => t.map).every(t => HUNTS[t.map]));
+// Épave : il faut le grappin ; la première fouille donne sa relique ; une seule fouille par jour.
+const ws = G.newSave(), wreck = WRECKS[0];
+assert(G.searchWreck(ws, wreck).error); ws.gear.grappin = true;
+const first = G.searchWreck(ws, wreck, () => 0.5);
+assert(first.relic === wreck.relic && ws.relics.includes(wreck.relic));
+assert(G.searchWreck(ws, wreck).error); ws.days++;
+assert(!G.searchWreck(ws, wreck, () => 0.5).error);
+assert.strictEqual(G.wreckNear(wreck.x + 5, wreck.z), wreck);
+// Carte au trésor : la bouteille lance la chasse, on creuse une seule fois.
+const bottle = TREASURES.find(t => t.map === 'h1');
+G.takeTreasure(ws, bottle); assert.deepStrictEqual(G.activeHunts(ws), ['h1']);
+const before2 = ws.money; assert(G.digHunt(ws, 'h1') && ws.money > before2 && !G.digHunt(ws, 'h1') && ws.relics.includes(HUNTS.h1.relic));
+// Merveilles : les aurores seulement la nuit par temps clair ; le rayon vert au large au coucher du soleil.
+const aurore = WONDERS.find(w => w.id === 'aurore');
+assert.strictEqual(G.wonderHere(ws, aurore.x, aurore.z, { time: 0.5, weather: 'clair' }), null);
+assert.strictEqual(G.wonderHere(ws, aurore.x, aurore.z, { time: 0.02, weather: 'clair' })?.id, 'aurore');
+assert.strictEqual(G.wonderHere(ws, 300, 300, { time: 18.6 / 24, weather: 'clair' })?.id, 'rayonvert');
+// Brouillard de la carte : on découvre autour du bateau, pas ailleurs.
+const fs = G.newSave();
+assert(G.reveal(fs, 0, 0) && !G.reveal(fs, 0, 0));
+assert(G.explored(fs) > 0 && G.explored(fs) < 0.05);
 console.log('Tests de Little Fisher : OK');

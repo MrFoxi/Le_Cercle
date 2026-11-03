@@ -1,6 +1,7 @@
 // Little Fisher : les règles (sans affichage) : zones, choix du poisson qui mord, appâts, prises, casiers, filet, plongée,
 // marché, chantier, missions, temps qui passe, sauvegarde.
-import { ISLANDS, FOSSE, OPEN_SEA, WORLD, FISH, RARITY, UPGRADES, VILLAGES, PEOPLE, TREASURES, DAY_SECONDS, BAITS, BAIT_SHOPS, GEAR } from './data.js';
+import { ISLANDS, FOSSE, OPEN_SEA, NORTH, CAVE, WORLD, FISH, RARITY, UPGRADES, VILLAGES, PEOPLE, TREASURES, DAY_SECONDS, BAITS, BAIT_SHOPS, GEAR,
+  WRECKS, RELICS, HUNTS, WONDERS } from './data.js';
 
 export const fishById = id => FISH.find(f => f.id === id);
 export const lvl = (save, key) => UPGRADES[key].levels[save.levels[key]];
@@ -12,6 +13,7 @@ export function newSave() {
     catalog: {}, quests: {}, seen: ['port'], treasures: [], sold: 0, earned: 0,
     time: 0.3, days: 0, boat: null, // null : au ponton de Port-Galet ; on part à 7 h du matin
     baits: { ver: 5 }, bait: 'ver', gear: {}, traps: [],
+    relics: [], wrecks: {}, hunts: {}, fog: '',   // reliques trouvées, dernier jour de fouille de chaque épave, cartes au trésor, carte explorée
   };
 }
 // Relit une sauvegarde (ou en crée une) ; les champs ajoutés plus tard prennent leur valeur par défaut.
@@ -27,6 +29,7 @@ export function loadSave(text) {
 const dist = (x, z, p) => Math.hypot(x - p.x, z - p.z);
 // Les eaux où l'on se trouve : celles de l'île la plus proche, sinon le large (ou la Fosse).
 export function zoneAt(x, z) {
+  if (dist(x, z, CAVE) < CAVE.r) return 'grotte';
   if (dist(x, z, FOSSE) < FOSSE.r) return 'fosse';
   let best = null, bd = Infinity;
   for (const i of ISLANDS) { const d = dist(x, z, i) - i.r; if (d < bd) { bd = d; best = i; } }
@@ -35,7 +38,7 @@ export function zoneAt(x, z) {
 // Coque nécessaire pour naviguer ici (Infinity : la brume, on ne passe pas).
 export function hullNeeded(x, z) {
   if (Math.abs(x) > WORLD || Math.abs(z) > WORLD) return Infinity;
-  if (dist(x, z, FOSSE) < FOSSE.r + 40) return 2;
+  if (dist(x, z, FOSSE) < FOSSE.r + 40 || z < NORTH) return 2;
   return Math.hypot(x, z) > OPEN_SEA ? 1 : 0;
 }
 
@@ -242,7 +245,70 @@ export function takeTreasure(save, t) {
   save.treasures.push(t.id);
   if (t.money) save.money += t.money;
   if (t.item) save.items.push(t.item);
+  if (t.map) startHunt(save, t.map);
   return true;
 }
 export const treasuresLeft = save => TREASURES.filter(t => !save.treasures.includes(t.id));
 export const catalogCount = save => Object.keys(save.catalog).length;
+
+// ---------- Épaves (au grappin) ----------
+export const wreckNear = (x, z, r = 14) => WRECKS.find(w => Math.hypot(w.x - x, w.z - z) < r) ?? null;
+// Fouille : la première fois, la relique de l'épave ; ensuite un peu d'argent, parfois une relique au hasard. Une fois par jour.
+export function searchWreck(save, w, rng = Math.random) {
+  if (!save.gear.grappin) return { error: 'Il te faut un grappin (boutique de Port-Galet).' };
+  if (save.wrecks[w.id] === save.days) return { error: 'Tu as déjà fouillé cette épave aujourd’hui. Reviens demain !' };
+  const first = !(w.id in save.wrecks);
+  save.wrecks[w.id] = save.days;
+  let relic = first ? w.relic : null;
+  if (!relic && rng() < 0.12) { const left = Object.keys(RELICS).filter(r => !save.relics.includes(r)); relic = left.length ? left[Math.floor(rng() * left.length)] : null; }
+  if (relic && save.relics.includes(relic)) relic = null;
+  if (relic) save.relics.push(relic);
+  const money = 10 + Math.floor(rng() * 50) + (first ? 40 : 0);
+  save.money += money;
+  return { money, relic };
+}
+
+// ---------- Cartes au trésor ----------
+// L'endroit exact : sur la plage de l'île, dans la direction indiquée (calculé avec le relief, fourni par le monde).
+export function startHunt(save, id) { if (save.hunts[id]) return false; save.hunts[id] = 'actif'; return true; }
+export const activeHunts = save => Object.keys(save.hunts).filter(h => save.hunts[h] === 'actif');
+export function digHunt(save, id) {
+  if (save.hunts[id] !== 'actif') return null;
+  const h = HUNTS[id];
+  save.hunts[id] = 'trouve'; save.money += h.money;
+  if (!save.relics.includes(h.relic)) save.relics.push(h.relic);
+  return h;
+}
+
+// ---------- Merveilles ----------
+// La merveille visible ici et maintenant (pas encore vue), ou null.
+export function wonderHere(save, x, z, ctx) {
+  for (const w of WONDERS) {
+    if (save.seen.includes(w.id)) continue;
+    if (w.zone ? zoneAt(x, z) !== w.zone : Math.hypot(w.x - x, w.z - z) > w.r) continue;
+    const h = ((ctx.time % 1) + 1) % 1 * 24;
+    if (w.when === 'nuit' && period(ctx.time) !== 'nuit') continue;
+    if (w.when === 'soir' && !(h >= 18.4 && h < 18.9)) continue;   // juste au coucher du soleil
+    if (w.weather && ctx.weather !== w.weather) continue;
+    return w;
+  }
+  return null;
+}
+export const wondersSeen = save => WONDERS.filter(w => save.seen.includes(w.id));
+
+// ---------- Carte explorée (brouillard) ----------
+// La carte est découpée en 64 × 64 cases ; une case vue reste découverte.
+export const FOG_N = 64, FOG_SPAN = 2300;
+export function reveal(save, x, z, radius = 190) {
+  if (save.fog.length !== FOG_N * FOG_N) save.fog = '0'.repeat(FOG_N * FOG_N);
+  const cell = FOG_SPAN / FOG_N, cx = (x / FOG_SPAN + 0.5) * FOG_N, cz = (z / FOG_SPAN + 0.5) * FOG_N, rc = radius / cell;
+  let s = save.fog, changed = false;
+  for (let r = Math.floor(cz - rc); r <= Math.ceil(cz + rc); r++) for (let c = Math.floor(cx - rc); c <= Math.ceil(cx + rc); c++) {
+    if (r < 0 || c < 0 || r >= FOG_N || c >= FOG_N || Math.hypot(c + 0.5 - cx, r + 0.5 - cz) > rc) continue;
+    const k = r * FOG_N + c;
+    if (s[k] === '0') { s = s.slice(0, k) + '1' + s.slice(k + 1); changed = true; }
+  }
+  save.fog = s;
+  return changed;
+}
+export const explored = save => (save.fog.match(/1/g)?.length ?? 0) / (FOG_N * FOG_N);

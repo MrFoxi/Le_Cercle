@@ -2,7 +2,8 @@
 // villages, phare, bouées, remous de pêche, trésors et mouettes. Le relief sert aussi aux collisions du bateau.
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
-import { ISLANDS, SPOTS, TREASURES, FOSSE, OPEN_SEA, WORLD, VILLAGES } from './data.js';
+import { ISLANDS, SPOTS, TREASURES, FOSSE, OPEN_SEA, WORLD, VILLAGES, CAVE } from './data.js';
+import { buildDecor } from './decor.js';
 
 /* ---------------- Bruit et relief ---------------- */
 const hash = (x, z) => { const s = Math.sin(x * 127.1 + z * 311.7) * 43758.5453; return s - Math.floor(s); };
@@ -27,6 +28,13 @@ function islandHeight(i, x, z) {
     case 'tropical': return -2.5 + 4.2 * sstep(0, 0.22, q) + 11 * sstep(0.4, 0.95, q) * (0.4 + n);
     case 'roche': return -4 + 38 * sstep(0.02, 0.13, q) + 26 * sstep(0.25, 1, q) * n;
     case 'phare': return -3 + 11 * sstep(0, 0.28, q) + 5 * n * q;
+    case 'volcan': return -3 + 4 * sstep(0, 0.08, q) + 62 * Math.pow(sstep(0.05, 1, q), 1.4) - (q > 0.86 ? (q - 0.86) / 0.14 * 24 : 0) + 5 * n * q; // cône et cratère
+    case 'glace': return -4 + 14 * sstep(0.02, 0.12, q) + 22 * sstep(0.3, 1, q) * (0.6 + 0.6 * n);
+    case 'banc': return -2.5 + 3.4 * sstep(0, 0.5, q) + 1.2 * n * q;                                    // banc de sable à fleur d'eau
+    case 'mangrove': { // îlots plats découpés par des chenaux
+      const ch = 1 - sstep(0.03, 0.1, Math.abs(noise(x * 0.018 + 3, z * 0.018 + 7) - 0.5));
+      return -2.2 + 3.4 * sstep(0.04, 0.35, q) - ch * 4 * sstep(0, 0.2, q);
+    }
     default: return -3 + 11 * sstep(0, 0.5, q) * (0.5 + 0.9 * n);
   }
 }
@@ -58,6 +66,8 @@ const PAL = {
   sand: new THREE.Color('#f1dca2'), wetSand: new THREE.Color('#d8bf86'), grass: new THREE.Color('#7fbf5a'), grass2: new THREE.Color('#5d9d48'),
   forest: new THREE.Color('#3f7d43'), rock: new THREE.Color('#9a9488'), rock2: new THREE.Color('#78736a'), cliff: new THREE.Color('#b9b1a3'),
   tropic: new THREE.Color('#9bd06a'), seabed: new THREE.Color('#3f8f8a'), lagoon: new THREE.Color('#f4e6b8'),
+  ash: new THREE.Color('#2e2a28'), basalt: new THREE.Color('#4a403a'), ember: new THREE.Color('#7a3a26'),
+  snow: new THREE.Color('#f4f8fc'), ice: new THREE.Color('#bfe0f0'), mud: new THREE.Color('#6a6248'), mangrove: new THREE.Color('#4f7a3a'),
 };
 const CORALS = ['#ff8a8a', '#ffb35c', '#c27be0', '#ff6fa8', '#ffd36b'].map(c => new THREE.Color(c));
 
@@ -110,7 +120,10 @@ export function createWorld(renderer, scene, { low = false } = {}) {
       if (i.kind === 'tropical' && h > -7 && h < -1 && n > 0.6) tmp.lerp(CORALS[Math.floor(hash(x * 0.3, z * 0.3) * CORALS.length)], 0.75);
       return tmp;
     }
-    if (h < 1.6 || (i.kind === 'tropical' && h < 3.2)) return tmp.copy(PAL.sand).lerp(PAL.wetSand, 0.3 * n);
+    if (i.kind === 'volcan') return tmp.copy(h < 2.5 ? PAL.ash : PAL.basalt).lerp(PAL.ember, h > 40 ? 0.6 * n : 0.15 * n);
+    if (i.kind === 'glace') return h < 1.4 ? tmp.copy(PAL.rock).lerp(PAL.ice, 0.4) : slope > 1.3 ? tmp.copy(PAL.ice).lerp(PAL.snow, n * 0.4) : tmp.copy(PAL.snow).lerp(PAL.ice, n * 0.25);
+    if (i.kind === 'mangrove') return tmp.copy(h < 0.6 ? PAL.mud : PAL.mangrove).lerp(PAL.grass2, n * 0.4);
+    if (h < 1.6 || (i.kind === 'tropical' && h < 3.2) || i.kind === 'banc') return tmp.copy(PAL.sand).lerp(PAL.wetSand, 0.3 * n);
     if (i.kind === 'roche' || slope > 1.1) return tmp.copy(h > 12 ? PAL.cliff : PAL.rock).lerp(PAL.rock2, n * 0.6);
     if (i.kind === 'tropical') return tmp.copy(PAL.tropic).lerp(PAL.grass2, n * 0.5);
     if (i.kind === 'foret') return tmp.copy(h > 14 ? PAL.forest : PAL.grass).lerp(PAL.grass2, n * 0.6);
@@ -155,6 +168,7 @@ export function createWorld(renderer, scene, { low = false } = {}) {
   /* ----- L'océan ----- */
   const U = {
     uTime, uDepth: { value: depthTex }, uSpan: { value: SPAN }, uSkyTop: { value: new THREE.Color() },
+    uWarm: { value: new THREE.Vector3(-760, -600, 260) }, uCold: { value: new THREE.Vector3(120, -930, 380) }, uCave: { value: new THREE.Vector3(CAVE.x, CAVE.z, CAVE.r + 3) },
     uDeep: { value: new THREE.Color() }, uShallow: { value: new THREE.Color() }, uSky: { value: new THREE.Color() },
     uSunDir: { value: new THREE.Vector3(0, 1, 0) }, uSunColor: { value: new THREE.Color() }, uFogColor: { value: new THREE.Color() },
     uFogDensity: { value: 0.0011 }, uNight: { value: 0 }, uGlint: { value: 1 }, uAmp: { value: 1 },
@@ -180,6 +194,7 @@ export function createWorld(renderer, scene, { low = false } = {}) {
     fragmentShader: /* glsl */`
       uniform sampler2D uDepth; uniform float uSpan, uTime, uFogDensity, uNight, uGlint, uAmp;
       uniform vec3 uDeep, uShallow, uSky, uSkyTop, uSunDir, uSunColor, uFogColor;
+      uniform vec3 uWarm, uCold, uCave; // (x, z, rayon) : eaux tièdes du volcan, eaux froides du nord, grotte (à l'ombre)
       varying vec3 vPos; varying vec3 vNormal;
       float hash(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
       float noise(vec2 p) { vec2 i = floor(p), f = fract(p), u = f * f * (3.0 - 2.0 * f);
@@ -200,6 +215,8 @@ export function createWorld(renderer, scene, { low = false } = {}) {
         float depth = max(0.0, -ground);
         vec3 col = mix(uShallow, uDeep, smoothstep(0.3, 20.0, depth));
         col = mix(col, uDeep * vec3(0.4, 0.42, 0.62), smoothstep(25.0, 60.0, depth)); // la Fosse, bleu nuit
+        col = mix(col, vec3(0.42, 0.78, 0.64) * (1.0 - uNight * 0.7), (1.0 - smoothstep(uWarm.z * 0.5, uWarm.z, distance(vPos.xz, uWarm.xy))) * 0.45);
+        col = mix(col, vec3(0.16, 0.38, 0.52) * (1.0 - uNight * 0.7), (1.0 - smoothstep(uCold.z * 0.4, uCold.z, distance(vPos.xz, uCold.xy))) * 0.5);
         // petites rides qui bougent
         vec2 q = vPos.xz * 0.35;
         float r1 = noise(q + uTime * 0.35) - 0.5, r2 = noise(q * 1.9 - uTime * 0.28 + 7.0) - 0.5;
@@ -218,12 +235,14 @@ export function createWorld(renderer, scene, { low = false } = {}) {
         float lines = smoothstep(0.82, 0.9, sin(depth * 2.4 - uTime * 1.5 + noise(vPos.xz * 0.15) * 6.0) * 0.5 + 0.5) * (1.0 - smoothstep(0.5, 4.5, depth));
         float crest = smoothstep(0.74, 0.8, noise(vPos.xz * 0.7 + uTime * 0.4)) * smoothstep(0.32, 0.48, vPos.y) * 0.35 * clamp(uAmp - 1.0, 0.0, 1.0); // moutons d'écume quand le vent souffle
         col = mix(col, vec3(0.96, 0.98, 1.0) * (1.0 - uNight * 0.65), clamp(max(shore, lines * 0.75) + crest, 0.0, 1.0) * 0.9);
+        float cave = 1.0 - smoothstep(uCave.z * 0.85, uCave.z * 1.15, distance(vPos.xz, uCave.xy)); // dans la grotte : eau sombre, reflets turquoise des lucioles
+        col = mix(col, col * 0.05 + vec3(0.004, 0.05, 0.06) * (0.7 + 0.6 * noise(vPos.xz * 0.8 + uTime)), cave);
         float dist = length(cameraPosition - vPos), fogK = 1.0 - exp(-uFogDensity * uFogDensity * dist * dist);
         col = mix(col, uFogColor, fogK);
         // eau claire : on voit le fond là où c'est peu profond
         float alpha = mix(0.16, 1.0, smoothstep(0.0, 9.0, depth));
         alpha = max(alpha, max(clamp(max(shore, lines * 0.75), 0.0, 1.0) * 0.9, fres * 0.55));
-        gl_FragColor = vec4(col, mix(alpha, 1.0, fogK));
+        gl_FragColor = vec4(col, mix(mix(alpha, 1.0, cave), 1.0, fogK)); // dans la grotte, pas de fond éclairé visible
         #include <tonemapping_fragment>
         #include <colorspace_fragment>
       }`,
@@ -235,12 +254,12 @@ export function createWorld(renderer, scene, { low = false } = {}) {
   root.add(water);
 
   /* ----- Ciel, étoiles, nuages ----- */
-  const skyU = { uTop: { value: new THREE.Color() }, uHorizon: { value: new THREE.Color() }, uSunDir: { value: new THREE.Vector3() }, uSunColor: { value: new THREE.Color() }, uNight: { value: 0 }, uCloud: { value: 0 } };
+  const skyU = { uTime, uAurora: { value: 0 }, uTop: { value: new THREE.Color() }, uHorizon: { value: new THREE.Color() }, uSunDir: { value: new THREE.Vector3() }, uSunColor: { value: new THREE.Color() }, uNight: { value: 0 }, uCloud: { value: 0 } };
   const sky = new THREE.Mesh(new THREE.SphereGeometry(2400, 32, 16), new THREE.ShaderMaterial({
     uniforms: skyU, side: THREE.BackSide, depthWrite: false, fog: false,
     vertexShader: 'varying vec3 vDir; void main() { vDir = normalize(position); gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',
     fragmentShader: /* glsl */`
-      uniform vec3 uTop, uHorizon, uSunDir, uSunColor; uniform float uNight, uCloud; varying vec3 vDir;
+      uniform vec3 uTop, uHorizon, uSunDir, uSunColor; uniform float uNight, uCloud, uTime, uAurora; varying vec3 vDir;
       float hash(vec3 p) { return fract(sin(dot(p, vec3(127.1, 311.7, 74.7))) * 43758.5453); }
       void main() {
         vec3 d = normalize(vDir);
@@ -252,6 +271,11 @@ export function createWorld(renderer, scene, { low = false } = {}) {
         vec3 c = floor(d * 260.0);
         float star = step(0.9975, hash(c)) * smoothstep(0.0, 0.25, d.y) * uNight * (1.0 - uCloud);
         col += vec3(star);
+        if (uAurora > 0.01) { // aurores : des voiles verts et violets qui ondulent vers le nord
+          float a = atan(d.x, -d.z), band = sin(a * 5.0 + uTime * 0.25 + sin(a * 2.3 - uTime * 0.17) * 2.4) * 0.5 + 0.5;
+          float h = smoothstep(0.06, 0.3, d.y) * (1.0 - smoothstep(0.45, 0.85, d.y)) * smoothstep(-0.2, 0.6, -d.z);
+          col += mix(vec3(0.15, 1.0, 0.55), vec3(0.65, 0.3, 1.0), smoothstep(0.2, 0.6, d.y)) * pow(band, 3.0) * h * uAurora * 0.9;
+        }
         gl_FragColor = vec4(col, 1.0);
         #include <tonemapping_fragment>
         #include <colorspace_fragment>
@@ -383,6 +407,8 @@ export function createWorld(renderer, scene, { low = false } = {}) {
   const STYLES = {
     port: { walls: ['#f4efe4', '#f6e3b8', '#cfe4ef', '#f2c7a8', '#e8eedd'], roofs: ['#c4553b', '#a8452f', '#5c6b7a', '#d06a3f'] },
     corail: { walls: ['#e9d3a8', '#d9c08f', '#f1e4c4'], roofs: ['#c99a4a', '#b8873e', '#d7ad5c'], stilts: true },
+    station: { walls: ['#c8423a', '#e8e8e8', '#f2c14e'], roofs: ['#5c6b7a', '#7a8a96'] },
+    heron: { walls: ['#8a6a4a', '#a8845a', '#b8946a'], roofs: ['#9a8a4a', '#b8a050'], stilts: true },
   };
   for (const i of ISLANDS.filter(i => i.dock)) {
     const v = VILLAGES[i.village], s = shoreFrom(i, i.dock[0], i.dock[1]);
@@ -392,7 +418,7 @@ export function createWorld(renderer, scene, { low = false } = {}) {
     docks.push({ village: i.village, name: v.name, island: i.id, x: end.x + side.x * 7 - s.dx * 3, z: end.z + side.z * 7 - s.dz * 3, heading: Math.atan2(s.dx, s.dz) }); // proue vers le large : on repart tout droit
     const r = mulberry(i.x * 7 + i.z);
     if (STYLES[i.village]) {
-      const n = i.village === 'port' ? 11 : 6;
+      const n = i.village === 'port' ? 11 : i.village === 'station' ? 4 : 6;
       for (let k = 0; k < n; k++) {
         const a = Math.atan2(s.dz, s.dx) + (k / (n - 1) - 0.5) * (i.village === 'port' ? 1.5 : 1.1) + (r() - 0.5) * 0.12;
         const inland = 9 + (k % 2) * 9 + r() * 4, cx = i.x + Math.cos(a) * (s.d - inland), cz = i.z + Math.sin(a) * (s.d - inland);
@@ -440,7 +466,7 @@ export function createWorld(renderer, scene, { low = false } = {}) {
       anim.push((dt, t, night) => { beams.rotation.y = t * 0.8; beamMat.opacity = night * 0.16; lamp.material.emissiveIntensity = 0.4 + night * 2.6; pl.intensity = night * 120; });
     }
     // les habitants, au bout du ponton
-    const folks = { port: [['joseph', '#2f5d8a', '#3b3b3b'], ['lucie', '#e8e2d0', '#d9483b'], ['gustave', '#3f5a3c', '#2b2b2b']], corail: [['ines', '#2fa7a0', '#f2c14e'], ['kai', '#f28c38', '#3f7d43']], phare: [['anselme', '#1f2a44', '#1f2a44']] }[i.village] ?? [];
+    const folks = { port: [['joseph', '#2f5d8a', '#3b3b3b'], ['lucie', '#e8e2d0', '#d9483b'], ['gustave', '#3f5a3c', '#2b2b2b']], corail: [['ines', '#2fa7a0', '#f2c14e'], ['kai', '#f28c38', '#3f7d43']], phare: [['anselme', '#1f2a44', '#1f2a44']], station: [['lena', '#e8e8f0', '#c8423a']], heron: [['tibo', '#4f7a3a', '#c99a4a']] }[i.village] ?? [];
     folks.forEach(([id, color, hat], k) => {
       const t = 6 + k * 5, px = s.x + s.dx * t + side.x * 1.1, pz = s.z + s.dz * t + side.z * 1.1;
       const f = figure(color, hat, px, pz, Math.atan2(side.x, side.z) + Math.PI);
@@ -451,18 +477,20 @@ export function createWorld(renderer, scene, { low = false } = {}) {
   }
 
   // Arbres et rochers, une fois les villages posés
-  const pines = [], palms = [], bushes = [], rocks = [];
+  const pines = [], palms = [], bushes = [], rocks = [], snowPines = [], mangroves = [];
   for (const i of ISLANDS) {
-    const n = Math.round(i.r * i.r * (i.kind === 'foret' ? 0.05 : i.kind === 'tropical' ? 0.03 : 0.012));
+    const n = Math.round(i.r * i.r * (i.kind === 'foret' ? 0.05 : i.kind === 'tropical' ? 0.03 : i.kind === 'mangrove' ? 0.04 : 0.012));
     for (let k = 0; k < n * 3 && (pines.length + palms.length) < 2000; k++) {
       const a = rng() * Math.PI * 2, d = Math.sqrt(rng()) * i.r * 1.05, x = i.x + Math.cos(a) * d, z = i.z + Math.sin(a) * d, h = heightAt(x, z);
-      if (h < 1.2 || !free(x, z, 2.5)) continue;
+      if (h < (i.kind === 'mangrove' ? -0.8 : 1.2) || !free(x, z, 2.5)) continue;
       const sl = slopeAt(x, z), s = 0.75 + rng() * 0.6, c = new THREE.Color().setHSL(0.28 + rng() * 0.08, 0.45, 0.42 + rng() * 0.12);
       if (i.kind === 'foret' && h > 2.2 && sl < 3) pines.push({ x, y: h - 0.3, z, s, ry: rng() * 6, c });
       else if (i.kind === 'tropical' && sl < 2) (h < 6 || rng() < 0.4 ? palms : bushes).push({ x, y: h - 0.2, z, s, ry: rng() * 6, c });
       else if (i.kind === 'roche' && h > 25 && sl < 4 && rng() < 0.4) pines.push({ x, y: h - 0.3, z, s: s * 0.8, ry: rng() * 6, c });
       else if ((i.kind === 'rocher' || i.kind === 'phare') && rng() < 0.3) bushes.push({ x, y: h - 0.2, z, s: s * 0.8, ry: rng() * 6, c });
-      if ((i.kind === 'roche' || i.kind === 'rocher' || sl > 3) && rng() < 0.35) rocks.push({ x, y: h - 0.4, z, s: 1 + rng() * 2.5, rx: rng() * 3, ry: rng() * 3, c: new THREE.Color().setHSL(0.1, 0.07, 0.6 + rng() * 0.15) });
+      else if (i.kind === 'glace' && h > 6 && sl < 2.5 && rng() < 0.35) snowPines.push({ x, y: h - 0.3, z, s: s * 0.9, ry: rng() * 6 });
+      else if (i.kind === 'mangrove' && rng() < 0.7) mangroves.push({ x, y: Math.max(h, -0.4) - 0.2, z, s: 0.8 + rng() * 0.6, ry: rng() * 6 });
+      if ((i.kind === 'roche' || i.kind === 'rocher' || i.kind === 'volcan' || sl > 3) && i.kind !== 'glace' && rng() < (i.kind === 'volcan' ? 0.2 : 0.35)) rocks.push({ x, y: h - 0.4, z, s: 1 + rng() * 2.5, rx: rng() * 3, ry: rng() * 3, c: new THREE.Color().setHSL(0.1, 0.07, 0.6 + rng() * 0.15) });
     }
     // rochers à fleur d'eau autour des îles rocheuses
     if (i.kind === 'roche' || i.kind === 'rocher') for (let k = 0; k < i.r * 0.4; k++) {
@@ -474,6 +502,19 @@ export function createWorld(renderer, scene, { low = false } = {}) {
   instanced(palmGeo, plantMat, palms.map(p => ({ ...p, c: undefined })));
   instanced(bushGeo, new THREE.MeshStandardMaterial({ color: '#ffffff', flatShading: true, roughness: 0.9, vertexColors: false }), bushes.map(b => ({ ...b })));
   instanced(rockGeo, rockMat, rocks);
+  // sapins enneigés des Glaciers ; palétuviers sur leurs racines dans la mangrove
+  instanced(mergeGeometries([
+    vcolor(new THREE.CylinderGeometry(0.35, 0.5, 3, 6).translate(0, 1.5, 0), '#5a4a3a'),
+    vcolor(new THREE.ConeGeometry(2.8, 4.5, 7).translate(0, 4.2, 0), '#2f5a48'), vcolor(new THREE.ConeGeometry(2.9, 1.6, 7).translate(0, 5.6, 0), '#f4f8fc'),
+    vcolor(new THREE.ConeGeometry(2, 3.6, 7).translate(0, 6.6, 0), '#3a6a55'), vcolor(new THREE.ConeGeometry(1.4, 2, 7).translate(0, 8.4, 0), '#f4f8fc'),
+  ]), plantMat, snowPines);
+  {
+    const parts = [];
+    for (let k = 0; k < 6; k++) { const a = k / 6 * Math.PI * 2; parts.push(vcolor(new THREE.CylinderGeometry(0.08, 0.1, 2.6, 5).translate(0, 1.3, 0).rotateZ(0.55).rotateY(a).translate(Math.cos(a) * 0.9, -0.2, Math.sin(a) * 0.9), '#6a5238')); }
+    parts.push(vcolor(new THREE.CylinderGeometry(0.22, 0.3, 3, 6).translate(0, 3, 0), '#6a5238'));
+    parts.push(vcolor(new THREE.IcosahedronGeometry(2.4, 0).scale(1.2, 0.75, 1.2).translate(0, 5.2, 0), '#3f7a3a'), vcolor(new THREE.IcosahedronGeometry(1.7, 0).translate(1.2, 5.9, 0.6), '#4f8a44'));
+    instanced(mergeGeometries(parts.map(g => (g.index ? g.toNonIndexed() : g))), plantMat, mangroves); // même format pour toutes les pièces
+  }
   // Herbes hautes et fleurs dans les prés
   {
     const blades = [];
@@ -557,6 +598,8 @@ export function createWorld(renderer, scene, { low = false } = {}) {
     g.position.set(t.x, 0, t.z); root.add(g); treasures.set(t.id, g);
     anim.push((dt, tt) => { if (!g.visible) return; const w = waveAt(t.x, t.z, tt); g.position.y = w.h + 0.1; g.rotation.y = tt * 0.3; sp.material.opacity = 0.55 + Math.sin(tt * 4 + t.x) * 0.35; sp.scale.setScalar(4 + Math.sin(tt * 3) * 1); });
   }
+
+  const decor = buildDecor({ root, scene, heightAt, waveAt, shoreFrom, rng, obstacles, anim, box, cyl, uTime, low, sparkTex: () => sparkTex });
 
   /* ----- Mouettes ----- */
   const gullMat = new THREE.MeshStandardMaterial({ color: '#ffffff', side: THREE.DoubleSide, flatShading: true });
@@ -644,11 +687,14 @@ export function createWorld(renderer, scene, { low = false } = {}) {
       const f = Math.sin(time * 6 + gl.ph) * 0.5; gl.l.rotation.z = f; gl.r.rotation.z = -f;
     }
     for (const f of anim) f(dt, time, night);
+    skyU.uAurora.value = night * (1 - sstep(350, 700, Math.hypot(focus.x - 120, focus.z + 930))) * (weather === 'clair' ? 1 : 0.25) * (under ? 0 : 1);
+    decor.update(dt, time, night, focus, camera, under);
   }
 
   return {
     heightAt, waveAt, docks, obstacles, people, treasures, spots: spotMeshes, update, state, sunDir,
     hideTreasure: id => { const g = treasures.get(id); if (g) g.visible = false; },
     setUnder: on => { under = on; },
+    huntSpots: decor.huntSpots, setHunt: decor.setHunt,
   };
 }

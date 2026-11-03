@@ -1,7 +1,7 @@
 // Little Fisher : l'interface en mer. Messages, nom des lieux, argent, cale, heure, appât, carte de la prise, mini-carte et carte.
 import { S } from './state.js';
 import * as G from './game.js';
-import { RARITY, ISLANDS, SPOTS, FOSSE, OPEN_SEA, BAITS } from './data.js';
+import { RARITY, ISLANDS, SPOTS, FOSSE, OPEN_SEA, BAITS, WRECKS, WONDERS, HUNTS } from './data.js';
 import { fishImage } from './fishart.js';
 import { SFX } from './audio.js';
 import { $, esc } from '/shared/party.js';
@@ -87,8 +87,24 @@ export function renderMap() {
   label(s.seen.includes('fosse') ? 'La Fosse' : '? ? ?', ...toMap(FOSSE.x, FOSSE.z + 10, N), '#4b2a8a');
   for (const d of S.world.docks) { const [x, y] = toMap(d.x, d.z, N); g.font = '20px sans-serif'; g.fillText('⚓', x, y + 7); g.font = '600 18px Fredoka, sans-serif'; }
   for (const t of s.traps) trapDot(g, ...toMap(t.x, t.z, N), G.trapReady(s, t), 5);
+  const open = (x, z) => { const c = Math.floor((x / G.FOG_SPAN + 0.5) * G.FOG_N), r = Math.floor((z / G.FOG_SPAN + 0.5) * G.FOG_N); return s.fog[r * G.FOG_N + c] === '1'; };
+  g.font = '18px sans-serif';
+  for (const w of WRECKS) if (open(w.x, w.z)) { const [x, y] = toMap(w.x, w.z, N); g.fillText('🪝', x, y + 6); }
+  for (const w of WONDERS) if (w.x != null && s.seen.includes(w.id)) { const [x, y] = toMap(w.x, w.z, N); g.fillText(w.icon, x, y + 6); }
+  for (const id of G.activeHunts(s)) { // zone approximative du trésor
+    const p = S.world.huntSpots[id].land, [x, y] = toMap(p.x + 25, p.z - 20, N);
+    g.strokeStyle = '#d23b32'; g.lineWidth = 3; g.setLineDash([6, 5]); g.beginPath(); g.arc(x, y, 70 / MAP_SPAN * N, 0, 7); g.stroke(); g.setLineDash([]);
+    g.fillStyle = '#d23b32'; g.font = '700 16px Fredoka, sans-serif'; g.fillText('✕ ?', x, y + 5); g.font = '18px sans-serif';
+  }
+  // brouillard : ce qu'on n'a jamais vu reste blanc comme une carte vierge
+  if (s.fog.length === G.FOG_N * G.FOG_N) {
+    const f = document.createElement('canvas'); f.width = f.height = G.FOG_N;
+    const fg = f.getContext('2d'), img = fg.createImageData(G.FOG_N, G.FOG_N);
+    for (let k = 0; k < s.fog.length; k++) if (s.fog[k] === '0') img.data.set([238, 226, 200, 245], k * 4);
+    fg.putImageData(img, 0, 0); g.imageSmoothingEnabled = true; g.drawImage(f, 0, 0, N, N);
+  }
   arrow(g, ...toMap(S.B.x, S.B.z, N), S.B.heading, 14);
-  $('#mapHint').innerHTML = `Pointillés jaunes : la haute mer (il faut la <b>coque renforcée</b>) · violets : <b>la Fosse</b> (coque de haute mer) · cercles blancs : des remous où les poissons rares mordent plus${s.traps.length ? ' · ronds orange : tes casiers (verts quand ils sont pleins)' : ''}. ${G.treasuresLeft(s).length} trésors flottent encore quelque part…`;
+  $('#mapHint').innerHTML = `Exploré : <b>${Math.round(G.explored(s) * 100)} %</b> de la carte · Pointillés jaunes : la haute mer (il faut la <b>coque renforcée</b>) · violets : <b>la Fosse</b> et le grand nord (coque de haute mer) · 🪝 épaves · ✕ trésors enterrés · cercles blancs : des remous où les poissons rares mordent plus${s.traps.length ? ' · ronds orange : tes casiers (verts quand ils sont pleins)' : ''}. ${G.treasuresLeft(s).length} trésors flottent encore quelque part…`;
 }
 export function drawMinimap() {
   const cv = $('#minimap'), g = cv.getContext('2d'), N = cv.width, R = 320, B = S.B; // R : mètres visibles de chaque côté

@@ -18,16 +18,29 @@ export const ISLANDS = [
   { id: 'ilot3', kind: 'tropical', x: 180, z: -430, r: 22, zone: 'recif' },
   { id: 'ilot4', kind: 'rocher', x: -680, z: 260, r: 24, zone: 'roche' },
   { id: 'ilot5', kind: 'rocher', x: 640, z: 90, r: 15, zone: 'cote' },
+  // au-delà de la haute mer
+  { id: 'braise', name: 'Mont Braise', kind: 'volcan', x: -760, z: -600, r: 95, zone: 'volcan',
+    desc: 'Un volcan qui fume doucement. Ses eaux sont tièdes et ses plages, noires comme du charbon.' },
+  { id: 'glaciers', name: 'Les Glaciers', kind: 'glace', x: 120, z: -930, r: 90, zone: 'glace', dock: [0, 1], village: 'station',
+    desc: 'Tout au nord, une île de neige et de glace. Une petite station de recherche y veille, et les nuits s’y colorent d’aurores.' },
+  { id: 'naufrages', name: 'Baie des Naufrages', kind: 'banc', x: -860, z: 420, r: 70, zone: 'epaves',
+    desc: 'Un banc de sable traître où des navires se sont échoués. Leurs carcasses cachent encore des trésors.' },
+  { id: 'mangrove', name: 'Mangrove des Hérons', kind: 'mangrove', x: 470, z: 800, r: 110, zone: 'mangrove', dock: [-0.7, -0.7], village: 'heron',
+    desc: 'Un labyrinthe de racines et de chenaux. Les hérons y pêchent aussi bien que toi.' },
 ];
 export const WORLD = 1100;                       // au-delà : la brume, on ne peut pas aller plus loin
 export const OPEN_SEA = 580;                     // au-delà de cette distance de Port-Galet : il faut une coque renforcée
+export const NORTH = -800;                       // au nord de cette ligne (les Glaciers) : coque de haute mer
 export const FOSSE = { x: 830, z: 440, r: 230, name: 'La Fosse' }; // eaux très profondes : coque de haute mer
+export const CAVE = { x: -598, z: -168, r: 20, open: Math.PI, name: 'Grotte aux Lucioles' }; // dans les Falaises ; open : direction de l'entrée
 
 export const ZONES = {
   cote: 'Côtes de Port-Galet', recif: 'Récif des Palmes', roche: 'Rochers des Falaises', phare: 'Eaux du Phare',
-  large: 'Haute mer', fosse: 'La Fosse',
+  large: 'Haute mer', fosse: 'La Fosse', volcan: 'Eaux tièdes du Mont Braise', glace: 'Mer des Glaciers',
+  epaves: 'Baie des Naufrages', mangrove: 'Chenaux de la mangrove', grotte: 'Grotte aux Lucioles',
 };
-export const ZONE_SHORT = { cote: 'côtes de Port-Galet', recif: 'récif des Palmes', roche: 'rochers des Falaises', phare: 'eaux du Phare', large: 'haute mer', fosse: 'la Fosse' };
+export const ZONE_SHORT = { cote: 'côtes de Port-Galet', recif: 'récif des Palmes', roche: 'rochers des Falaises', phare: 'eaux du Phare', large: 'haute mer', fosse: 'la Fosse',
+  volcan: 'Mont Braise', glace: 'Glaciers', epaves: 'Baie des Naufrages', mangrove: 'mangrove', grotte: 'grotte aux Lucioles' };
 
 // Coins de pêche : des remous où les poissons rares mordent plus souvent.
 export const SPOTS = [
@@ -37,6 +50,11 @@ export const SPOTS = [
   { x: 230, z: 30, zone: 'large' }, { x: -260, z: -440, zone: 'large' }, { x: 300, z: 420, zone: 'large' },
   { x: -80, z: 680, zone: 'phare' }, { x: -190, z: 790, zone: 'phare' },
   { x: 800, z: 400, zone: 'fosse' }, { x: 900, z: 520, zone: 'fosse' },
+  { x: -640, z: -560, zone: 'volcan' }, { x: -820, z: -480, zone: 'volcan' },
+  { x: 20, z: -860, zone: 'glace' }, { x: 230, z: -870, zone: 'glace' },
+  { x: -780, z: 470, zone: 'epaves' }, { x: -900, z: 330, zone: 'epaves' },
+  { x: 360, z: 720, zone: 'mangrove' }, { x: 560, z: 690, zone: 'mangrove' },
+  { x: -598, z: -168, zone: 'grotte' },
 ];
 
 // ---------- Les poissons ----------
@@ -107,6 +125,46 @@ export const FISH = [
     look: { shape: 'anguille', body: '#cfd8e3', belly: '#ffffff', accent: '#7aa7d6', pattern: 'scales' }, desc: 'La légende de l’archipel. Il ne remonte de la Fosse que les nuits d’orage.' },
 ];
 
+// Les poissons des terres lointaines
+FISH.push(
+  // Mont Braise (eaux tièdes)
+  { id: 'gobie', name: 'Gobie des sources', zones: ['volcan'], rarity: 'commun', price: 11, size: [8, 16], when: 'toujours', difficulty: 1, wait: [2, 5],
+    look: { shape: 'long', body: '#8a6a52', belly: '#d8b898', accent: '#ff8a3a', pattern: 'spots' }, desc: 'Il adore l’eau chaude qui sort des roches du volcan.' },
+  { id: 'braisefish', name: 'Poisson-braise', zones: ['volcan'], rarity: 'peu', price: 32, size: [20, 40], when: 'jour', difficulty: 3, wait: [5, 10],
+    look: { shape: 'rond', body: '#3a2a26', belly: '#6a4a3a', accent: '#ff6a2a', pattern: 'glow' }, desc: 'Ses écailles rougeoient comme des braises quand il nage près des sources.' },
+  { id: 'salamandre', name: 'Salamandre de mer', zones: ['volcan'], rarity: 'rare', price: 88, size: [50, 110], when: 'nuit', difficulty: 4, wait: [8, 15],
+    look: { shape: 'anguille', body: '#2a1a1a', belly: '#5a2a1a', accent: '#ffb02a', pattern: 'spots' }, desc: 'La nuit, elle se glisse hors des fissures du volcan, tachetée de feu.' },
+  { id: 'phenix', name: 'Phénix des abysses', zones: ['volcan'], rarity: 'legende', price: 700, size: [80, 140], when: 'crepuscule', weather: 'clair', difficulty: 5, wait: [15, 25], minRod: 3,
+    look: { shape: 'long', body: '#ff7a2a', belly: '#ffd27a', accent: '#ff2a2a', pattern: 'glow' }, desc: 'On raconte qu’il renaît chaque soir dans le volcan, quand le ciel s’enflamme.' },
+  // Les Glaciers
+  { id: 'morue', name: 'Morue polaire', zones: ['glace'], rarity: 'commun', price: 10, size: [30, 60], when: 'toujours', difficulty: 1, wait: [2, 6],
+    look: { shape: 'long', body: '#9aa08a', belly: '#eeeedd', accent: '#5a604a', pattern: 'spots' }, desc: 'Elle supporte l’eau glacée sans broncher.' },
+  { id: 'omble', name: 'Omble arctique', zones: ['glace'], rarity: 'peu', price: 28, size: [35, 70], when: 'jour', difficulty: 2, wait: [5, 10],
+    look: { shape: 'long', body: '#5a7a8a', belly: '#ff8a6a', accent: '#ffd0c0', pattern: 'spots' }, desc: 'Un ventre rouge vif sous un dos couleur de glace.' },
+  { id: 'glassfish', name: 'Poisson des glaces', zones: ['glace'], rarity: 'rare', price: 72, size: [20, 40], when: 'toujours', weather: 'brume', difficulty: 3, wait: [8, 14],
+    look: { shape: 'long', body: '#d8f0ff', belly: '#ffffff', accent: '#9ad8ff', pattern: 'plain' }, desc: 'Presque transparent : son sang n’a pas de rouge. Il sort dans la brume.' },
+  { id: 'requin', name: 'Requin des glaces', zones: ['glace'], rarity: 'rare', price: 130, size: [200, 400], when: 'nuit', difficulty: 5, wait: [12, 20], minRod: 2,
+    look: { shape: 'long', body: '#4a5560', belly: '#a8b0b8', accent: '#2a3038', pattern: 'plain' }, desc: 'Lent, énorme et très vieux : certains auraient plus de trois cents ans.' },
+  // Baie des Naufrages
+  { id: 'lion', name: 'Rascasse volante', zones: ['epaves'], rarity: 'peu', price: 34, size: [20, 38], when: 'toujours', difficulty: 3, wait: [5, 10],
+    look: { shape: 'rond', body: '#e8a080', belly: '#fff0e0', accent: '#8a2a1a', pattern: 'stripes' }, desc: 'Des nageoires comme des éventails, et des épines venimeuses. Elle adore les épaves.' },
+  { id: 'barracuda', name: 'Barracuda', zones: ['epaves', 'large'], rarity: 'peu', price: 30, size: [60, 150], when: 'jour', difficulty: 3, wait: [5, 10],
+    look: { shape: 'long', body: '#8a9aa8', belly: '#e8eef2', accent: '#2a3a48', pattern: 'stripes' }, desc: 'Une flèche aux dents pointues qui patrouille autour des carcasses.' },
+  { id: 'pierre', name: 'Poisson-pierre', zones: ['epaves'], rarity: 'rare', price: 64, size: [20, 40], when: 'toujours', difficulty: 4, wait: [9, 15],
+    look: { shape: 'rond', body: '#7a6a58', belly: '#a89a88', accent: '#4a3a28', pattern: 'spots' }, desc: 'On le prend pour un caillou… jusqu’à ce qu’il bouge.' },
+  // Mangrove des Hérons
+  { id: 'barramundi', name: 'Barramundi', zones: ['mangrove'], rarity: 'commun', price: 15, size: [40, 90], when: 'toujours', difficulty: 2, wait: [3, 7],
+    look: { shape: 'long', body: '#a8a890', belly: '#f0f0e0', accent: '#5a5a48', pattern: 'plain' }, desc: 'Le poisson roi des chenaux, à l’œil rouge.' },
+  { id: 'archer', name: 'Poisson-archer', zones: ['mangrove'], rarity: 'peu', price: 27, size: [12, 25], when: 'jour', difficulty: 2, wait: [4, 9],
+    look: { shape: 'rond', body: '#e8e0b0', belly: '#fffff0', accent: '#2a2a2a', pattern: 'band' }, desc: 'Il crache un jet d’eau pour faire tomber les insectes des feuilles. En plein dans le mille !' },
+  { id: 'tarpon', name: 'Tarpon argenté', zones: ['mangrove'], rarity: 'rare', price: 84, size: [100, 200], when: 'crepuscule', difficulty: 4, wait: [9, 16],
+    look: { shape: 'long', body: '#c8d0d8', belly: '#ffffff', accent: '#6a7a8a', pattern: 'scales' }, desc: 'Le roi d’argent : quand il saute, on dirait un miroir qui vole.' },
+  // Grotte aux Lucioles
+  { id: 'aveugle', name: 'Poisson aveugle', zones: ['grotte'], rarity: 'peu', price: 42, size: [8, 15], when: 'toujours', difficulty: 2, wait: [4, 9],
+    look: { shape: 'long', body: '#f0d8d8', belly: '#fff0f0', accent: '#e0b0b0', pattern: 'plain' }, desc: 'Il n’a jamais vu le soleil : rose pâle, sans yeux, il se guide au toucher.' },
+  { id: 'lucifer', name: 'Poisson-lucifer', zones: ['grotte'], rarity: 'rare', price: 96, size: [15, 30], when: 'toujours', difficulty: 4, wait: [9, 16],
+    look: { shape: 'anguille', body: '#101830', belly: '#203060', accent: '#7affd8', pattern: 'glow' }, desc: 'Il brille comme les lucioles de la grotte. Certains disent que ce sont elles, les lucioles.' },
+);
 // Pris seulement dans les casiers (trap : eaux où le casier les attrape) ou en plongée au harpon (dive).
 FISH.push(
   { id: 'crabe', name: 'Crabe vert', zones: [], trap: ['cote', 'recif', 'roche', 'phare'], rarity: 'commun', price: 6, size: [6, 11], when: 'toujours', difficulty: 1, wait: [1, 2],
@@ -117,6 +175,10 @@ FISH.push(
     look: { shape: 'crabe', body: '#d08a4a', belly: '#f0c08a', accent: '#8a4a1a', pattern: 'spines' }, desc: 'De longues pattes fines et une carapace hérissée de piquants.' },
   { id: 'poulpe', name: 'Poulpe', zones: [], trap: ['roche', 'recif'], rarity: 'peu', price: 24, size: [30, 90], when: 'toujours', difficulty: 1, wait: [1, 2],
     look: { shape: 'poulpe', body: '#c8645a', belly: '#f0a89a', accent: '#7a2a24', pattern: 'spots' }, desc: 'Huit bras, trois cœurs, et assez malin pour entrer dans le casier… mais pas pour en sortir.' },
+  { id: 'paletuvier', name: 'Crabe de palétuvier', zones: [], trap: ['mangrove'], rarity: 'peu', price: 22, size: [8, 14], when: 'toujours', difficulty: 1, wait: [1, 2],
+    look: { shape: 'crabe', body: '#2a6a7a', belly: '#6ab0c0', accent: '#e0402a', pattern: 'plain' }, desc: 'Il grimpe aux racines de la mangrove, une pince rouge plus grosse que l’autre.' },
+  { id: 'royal', name: 'Crabe royal', zones: [], trap: ['glace'], rarity: 'rare', price: 95, size: [40, 80], when: 'toujours', difficulty: 1, wait: [1, 2],
+    look: { shape: 'crabe', body: '#c84a3a', belly: '#f0a088', accent: '#7a1a10', pattern: 'spines' }, desc: 'Des pattes d’un mètre et une carapace hérissée : le trésor des eaux glacées.' },
   { id: 'langouste', name: 'Langouste royale', zones: [], trap: ['recif'], rarity: 'rare', price: 58, size: [25, 45], when: 'toujours', difficulty: 1, wait: [1, 2],
     look: { shape: 'homard', body: '#e0703a', belly: '#f5b07a', accent: '#8a3010', pattern: 'spots' }, desc: 'Ses longues antennes dépassent du casier. Soir de fête à Anse-Corail !' },
   { id: 'homard', name: 'Homard bleu', zones: [], trap: ['roche', 'phare'], rarity: 'rare', price: 72, size: [25, 50], when: 'toujours', difficulty: 1, wait: [1, 2],
@@ -132,9 +194,12 @@ FISH.push(
 // calme, course (il file et la vitesse change), fond (il tire vers le fond : l'arc rétrécit), saut (l'arc bouge), zigzag (l'aiguille change de sens).
 const BAIT_OF = { maquereau: 'leurre', rouget: 'ver', bar: 'leurre', sole: 'ver', perroquet: 'crevette', labre: 'crevette', merou: 'calmar', vieille: 'crevette',
   rascasse: 'ver', congre: 'calmar', daurade: 'crevette', thon: 'leurre', espadon: 'calmar', calmar: 'lumineux', lanterne: 'lumineux', hareng: 'leurre',
-  grenadier: 'ver', baudroie: 'lumineux', dragon: 'lumineux', roi: 'leurre', raie: 'lumineux', leviathan: 'calmar', lune: 'crevette' };
+  grenadier: 'ver', baudroie: 'lumineux', dragon: 'lumineux', roi: 'leurre', raie: 'lumineux', leviathan: 'calmar', lune: 'crevette',
+  gobie: 'ver', braisefish: 'crevette', salamandre: 'calmar', phenix: 'lumineux', morue: 'ver', omble: 'leurre', glassfish: 'lumineux', requin: 'calmar',
+  lion: 'crevette', barracuda: 'leurre', pierre: 'ver', barramundi: 'ver', archer: 'crevette', tarpon: 'leurre', aveugle: 'ver', lucifer: 'lumineux' };
 const FIGHT_OF = { thon: 'course', espadon: 'saut', merou: 'fond', congre: 'fond', baudroie: 'fond', leviathan: 'course', raie: 'saut', bar: 'zigzag',
-  rascasse: 'zigzag', daurade: 'zigzag', dragon: 'zigzag', roi: 'saut', labre: 'zigzag', maquereau: 'course', lune: 'fond', grenadier: 'fond' };
+  rascasse: 'zigzag', daurade: 'zigzag', dragon: 'zigzag', roi: 'saut', labre: 'zigzag', maquereau: 'course', lune: 'fond', grenadier: 'fond',
+  salamandre: 'fond', phenix: 'saut', requin: 'fond', barracuda: 'course', tarpon: 'saut', lion: 'zigzag', lucifer: 'zigzag', omble: 'course', pierre: 'fond' };
 const DIVE_OF = { perroquet: ['recif'], labre: ['recif'], merou: ['recif'], rouget: ['cote'], bar: ['cote'], sole: ['cote'], sardine: ['cote'] };
 for (const f of FISH) { f.bait = BAIT_OF[f.id] ?? null; f.fight = FIGHT_OF[f.id] ?? 'calme'; f.trap ??= null; f.dive ??= DIVE_OF[f.id] ?? null; }
 export const FIGHTS = { calme: '', course: 'Il file au large !', fond: 'Il tire vers le fond !', saut: 'Il saute hors de l’eau !', zigzag: 'Il zigzague dans tous les sens !' };
@@ -150,6 +215,7 @@ export const BAITS = {
 export const BAIT_SHOPS = { port: ['ver', 'calmar', 'leurre'], corail: ['crevette', 'lumineux', 'calmar'] };
 export const GEAR = {
   harpon: { name: 'Masque et harpon', icon: '🤿', cost: 260, shop: 'corail', desc: 'Plonge là où l’eau est claire et peu profonde (touche H) et chasse au harpon. On y trouve aussi des huîtres perlières.' },
+  grappin: { name: 'Grappin et aimant', icon: '🪝', cost: 340, shop: 'port', desc: 'Arrête-toi au-dessus d’une épave et fouille-la (touche E) : pièces, et parfois une relique ancienne.' },
 };
 
 // ---------- Améliorations (chantier naval de Port-Galet) ----------
@@ -167,7 +233,7 @@ export const UPGRADES = {
   coque: { name: 'Coque', icon: '⛵', levels: [
     { name: 'Coque en bois', cost: 0, desc: 'Pour les eaux calmes de l’archipel.' },
     { name: 'Coque renforcée', cost: 300, desc: 'Tient la haute mer : le phare et le large.' },
-    { name: 'Coque de haute mer', cost: 1200, desc: 'Affronte les creux de la Fosse.' }] },
+    { name: 'Coque de haute mer', cost: 1200, desc: 'Affronte les creux de la Fosse et les eaux glacées du nord.' }] },
   lanterne: { name: 'Lanterne', icon: '🏮', levels: [
     { name: 'Pas de lanterne', cost: 0 }, { name: 'Lanterne de pont', cost: 160, desc: 'Éclaire la nuit : les poissons nocturnes mordent à sa lumière.' }] },
   filet: { name: 'Filet de traîne', icon: '🥅', levels: [
@@ -183,6 +249,8 @@ export const VILLAGES = {
   port: { name: 'Port-Galet', island: 'port', shop: true, market: 1 },
   corail: { name: 'Anse-Corail', island: 'palmes', shop: false, market: 1.1 }, // on y paie un peu mieux
   phare: { name: 'Le Phare', island: 'phare', shop: false, market: 0 },        // pas de marché, juste le gardien
+  station: { name: 'Station Boréale', island: 'glaciers', shop: false, market: 1.2 }, // loin de tout : on y paie bien
+  heron: { name: 'Cabane des Hérons', island: 'mangrove', shop: false, market: 1 },
 };
 
 // Missions : catch (rapporter un poisson), sell (vendre n poissons), find (rapporter un objet trouvé en mer), see (voir un lieu).
@@ -217,6 +285,18 @@ export const PEOPLE = [
     quests: [
       { id: 'bouteille', text: 'J’ai jeté une bouteille à la mer avec un dessin dedans ! Tu l’as vue ? Elle dérivait vers l’ouest.', type: 'find', item: 'dessin', reward: 70, done: 'Tu l’as retrouvée ! Garde le dessin, c’est un cadeau.' },
     ] },
+  { id: 'lena', name: 'Léna', role: 'Chercheuse polaire', village: 'station', face: '👩‍🔬',
+    hello: 'Bienvenue au bout du monde ! J’étudie les poissons qui vivent dans l’eau glacée. Et les nuits claires… regarde le ciel.',
+    quests: [
+      { id: 'glassfish', text: 'Un Poisson des glaces, pour mes recherches. Il ne sort que les jours de brume.', type: 'catch', fish: 'glassfish', reward: 160, done: 'Transparent ! Regarde, on voit son cœur battre. Merci !' },
+      { id: 'aurore', text: 'Reste au large des Glaciers par une nuit claire et regarde les aurores.', type: 'see', place: 'aurore', reward: 120, done: 'Magnifique, n’est-ce pas ? Je ne m’en lasse pas.' },
+    ] },
+  { id: 'tibo', name: 'Tibo', role: 'Passeur de la mangrove', village: 'heron', face: '🧑‍🦱',
+    hello: 'Ici, les chenaux changent avec la marée. Suis les hérons : ils savent où sont les poissons.',
+    quests: [
+      { id: 'archer', text: 'Attrape un Poisson-archer, celui qui crache sur les insectes !', type: 'catch', fish: 'archer', reward: 70, done: 'Il m’a craché dessus, le coquin. Merci !' },
+      { id: 'tarpon', text: 'Le Tarpon argenté saute au crépuscule. Personne ici n’en a jamais sorti un.', type: 'catch', fish: 'tarpon', reward: 260, done: 'Un vrai miroir volant ! Tu es le roi de la mangrove.' },
+    ] },
   { id: 'anselme', name: 'Anselme', role: 'Gardien du phare', village: 'phare', face: '🧑‍✈️',
     hello: 'Peu de bateaux viennent jusqu’ici. Les nuits de brume, des lueurs montent de l’eau… et les nuits d’orage, du côté de la Fosse, quelque chose d’énorme.',
     quests: [
@@ -237,6 +317,55 @@ export const TREASURES = [
   { id: 't5', kind: 'coffre', x: -240, z: 830, money: 200, note: 'Un coffre lesté, à moitié pris dans les algues. Lourd !' },
   { id: 't6', kind: 'coffre', x: 960, z: 560, money: 400, note: 'Au fond de la Fosse, un coffre remonté par le courant. Plein d’or.' },
   { id: 't7', kind: 'bouteille', x: 700, z: -420, money: 30, note: '« La raie céleste ne sort que les nuits claires, loin des côtes. »' },
+  // bouteilles qui contiennent une carte au trésor (map : la chasse qu'elles lancent)
+  { id: 'm1', kind: 'bouteille', x: 330, z: -40, map: 'h1', note: 'Un vieux parchemin roulé : une carte au trésor !' },
+  { id: 'm2', kind: 'bouteille', x: -420, z: 420, map: 'h2', note: 'Une carte déchirée, tachée de sel.' },
+  { id: 'm3', kind: 'bouteille', x: -640, z: -760, map: 'h3', note: 'Une carte roussie par la chaleur.' },
+  { id: 'm4', kind: 'bouteille', x: 330, z: -760, map: 'h4', note: 'Une carte raide de givre.' },
+  { id: 't8', kind: 'coffre', x: -700, z: 520, money: 260, note: 'Un coffre de marine tombé d’une des épaves, intact.' },
+  { id: 't9', kind: 'bouteille', x: 620, z: 860, money: 35, note: '« Les hérons pêchent au lever du jour. Fais comme eux. »' },
+];
+
+// ---------- Reliques (trouvées dans les épaves et les trésors enterrés ; on peut les exposer chez soi) ----------
+export const RELICS = {
+  boussole: { name: 'Boussole en laiton', icon: '🧭', desc: 'Son aiguille montre toujours… le large.' },
+  longuevue: { name: 'Longue-vue de capitaine', icon: '🔭', desc: 'Gravée au nom du « Neptune ».' },
+  cloche: { name: 'Cloche du Neptune', icon: '🔔', desc: 'La cloche du navire amiral des Naufrages.' },
+  proue: { name: 'Figure de proue', icon: '🧜', desc: 'Une sirène de bois aux yeux peints en bleu.' },
+  ancre: { name: 'Ancre dorée', icon: '⚓', desc: 'Trop belle pour avoir jamais servi.' },
+  sablier: { name: 'Sablier de navigateur', icon: '⏳', desc: 'Le sable coule encore, très lentement.' },
+  jade: { name: 'Statuette de jade', icon: '🗿', desc: 'Un poisson souriant, venu de très loin.' },
+  couronne: { name: 'Couronne engloutie', icon: '👑', desc: 'Celle du Roi des Sardines ? Personne ne sait.' },
+  carte: { name: 'Carte des étoiles', icon: '🗺️', desc: 'Les constellations des marins d’autrefois.' },
+  perle: { name: 'Perle noire', icon: '⚫', desc: 'Grosse comme une bille, et d’un noir profond.' },
+};
+// Épaves : on les fouille au grappin, une fois par jour ; la première fouille donne leur relique.
+export const WRECKS = [
+  { id: 'neptune', name: 'Le Neptune', x: -790, z: 480, relic: 'cloche', kind: 'galion' },
+  { id: 'sirene', name: 'La Sirène', x: -930, z: 360, relic: 'proue', kind: 'galion' },
+  { id: 'albatros', name: 'L’Albatros', x: -800, z: 350, relic: 'longuevue', kind: 'chalutier' },
+  { id: 'mouette', name: 'La Mouette', x: -60, z: 640, relic: 'boussole', kind: 'chalutier' },
+  { id: 'abysses', name: 'L’Étoile des abysses', x: 700, z: 330, relic: 'carte', kind: 'galion' },
+  { id: 'glacon', name: 'Le Glaçon', x: 240, z: -820, relic: 'sablier', kind: 'chalutier' },
+];
+// Cartes au trésor : un indice, un endroit sur une plage ; on y creuse (touche E quand on est tout près).
+export const HUNTS = {
+  h1: { name: 'Carte du pirate borgne', clue: 'Île aux Palmes, sur la plage tournée vers le soleil couchant, près de la pointe.', island: 'palmes', dir: [-1, 0.15], money: 180, relic: 'jade' },
+  h2: { name: 'Carte déchirée', clue: 'Sur un îlot rocheux, à l’ouest de Port-Galet, la plage qui regarde vers le sud.', island: 'ilot2', dir: [0, 1], money: 150, relic: 'ancre' },
+  h3: { name: 'Carte roussie', clue: 'Mont Braise : sur le sable noir, côté soleil levant.', island: 'braise', dir: [1, 0], money: 320, relic: 'perle' },
+  h4: { name: 'Carte givrée', clue: 'Les Glaciers : la plage la plus à l’ouest, là où le vent ne souffle jamais.', island: 'glaciers', dir: [-1, 0], money: 380, relic: 'couronne' },
+};
+// Merveilles : des lieux à voir (certaines à un moment précis). when : jour, nuit, soir (coucher de soleil) ; weather : clair.
+export const WONDERS = [
+  { id: 'arche', name: 'L’Arche des Falaises', icon: '🌉', x: -560, z: -290, r: 60, desc: 'Une arche de pierre géante où s’engouffrent les vagues.' },
+  { id: 'cascade', name: 'La Cascade de Port-Galet', icon: '💧', x: 10, z: -95, r: 70, desc: 'Une cascade qui tombe de la forêt directement dans la mer.' },
+  { id: 'source', name: 'Les Sources fumantes', icon: '♨️', x: -680, z: -560, r: 70, desc: 'L’eau bouillonne et fume au pied du volcan.' },
+  { id: 'cathedrale', name: 'La Cathédrale de glace', icon: '🧊', x: 40, z: -870, r: 60, desc: 'Une arche de glace bleue, haute comme une église.' },
+  { id: 'aurore', name: 'Les Aurores boréales', icon: '🌌', x: 120, z: -870, r: 260, when: 'nuit', weather: 'clair', desc: 'Des voiles verts et violets qui dansent dans le ciel du nord.' },
+  { id: 'foret', name: 'La Forêt sur pilotis', icon: '🌳', x: 470, z: 800, r: 130, desc: 'Des arbres qui marchent sur l’eau, perchés sur leurs racines.' },
+  { id: 'lucioles', name: 'La Grotte aux Lucioles', icon: '✨', x: -598, z: -168, r: 18, desc: 'Une grotte où des milliers de petites lumières bleues scintillent.' },
+  { id: 'cimetiere', name: 'Le Cimetière des navires', icon: '⚓', x: -850, z: 410, r: 110, desc: 'Des carcasses de navires échoués sur le sable, comme des baleines endormies.' },
+  { id: 'rayonvert', name: 'Le Rayon vert', icon: '🟢', zone: 'large', when: 'soir', weather: 'clair', desc: 'Au large, à l’instant précis où le soleil disparaît, un éclair vert.' },
 ];
 
 export const DAY_SECONDS = 600; // une journée dure 10 minutes
