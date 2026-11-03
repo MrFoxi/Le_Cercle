@@ -20,14 +20,12 @@ function winningLine(board, row, col) {
   return null;
 }
 
-class Room {
+const { BaseRoom } = require('../../../lib/room-base');
+
+class Room extends BaseRoom {
   constructor(code, rng = Math.random, isPrivate = false) {
-    this.code = code;
-    this.private = isPrivate;
-    this.players = []; // [{ name, connected }] ; le premier est le créateur du salon
-    this.spectators = [];
+    super(code, rng, isPrivate, Date.now);
     this.phase = 'lobby'; // lobby | playing | over
-    this.round = 0; // numéro de la manche dans ce salon
     this.board = null; // board[ligne][colonne], ligne 0 en haut : null | 'red' | 'yellow'
     this.moves = [];
     this.turn = null; // pseudo du joueur qui doit jouer
@@ -39,10 +37,6 @@ class Room {
     this.notice = null;
   }
 
-  get host() { return this.players[0]?.name; }
-  get(name) { return this.players.find(p => p.name === name); }
-  spectator(name) { return this.spectators.find(s => s.name === name); }
-  taken(name) { return !!this.get(name) || !!this.spectator(name); }
   other(name) { return this.players.find(p => p.name !== name)?.name; }
 
   addPlayer(name) {
@@ -52,13 +46,7 @@ class Room {
     this.stats.wins[name] ??= 0;
   }
 
-  addSpectator(name) {
-    if (this.taken(name)) throw new Error('Ce pseudo est déjà pris dans ce salon');
-    if (this.spectators.length >= 30) throw new Error('Trop de spectateurs dans ce salon');
-    this.spectators.push({ name, connected: true });
-  }
 
-  removeSpectator(name) { this.spectators = this.spectators.filter(s => s.name !== name); }
 
   // Départ définitif d'un joueur : la manche s'arrête, le joueur restant devient créateur.
   removePlayer(name) {

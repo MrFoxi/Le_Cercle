@@ -33,22 +33,17 @@ const validPos = p => Array.isArray(p) && p.length === 9 && p.every(v => typeof 
 const validPing = p => !!p && typeof p.host === 'string' && /^[a-z]{0,16}$/.test(p.host) && Array.isArray(p.at) && p.at.length === 3
   && p.at.every(v => typeof v === 'number' && Number.isFinite(v) && Math.abs(v) < 1e7);
 
-class Room {
+const { BaseRoom } = require('../../../lib/room-base');
+
+class Room extends BaseRoom {
   constructor(code, rng = Math.random, isPrivate = false, clock = Date.now) {
-    this.code = code;
-    this.rng = rng;
-    this.clock = clock;
-    this.private = isPrivate;
-    this.players = []; // [{ name, connected, ship }] ; le premier est l'hôte
-    this.spectators = [];
+    super(code, rng, isPrivate, clock);
     this.phase = 'space';
     this.round = 1;
     this.event = null; // { type, phase: 'warning' | 'active', start, end, target, seed }
     this.deadline = this.clock() + this.gap();
   }
 
-  get host() { return this.players[0]?.name; }
-  get(name) { return this.players.find(p => p.name === name); }
   spectator() { return undefined; }
   taken(name) { return !!this.get(name); }
   gap() { return GAP[0] + this.rng() * (GAP[1] - GAP[0]); }

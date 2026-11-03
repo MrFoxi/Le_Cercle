@@ -23,34 +23,21 @@ function shuffle(list, rng) {
   return a;
 }
 
-class Room {
+const { BaseRoom } = require('../../../lib/room-base');
+
+class Room extends BaseRoom {
   constructor(code, rng = Math.random, isPrivate = false) {
-    this.code = code;
-    this.private = isPrivate; // privé : absent de la liste publique, on n'entre qu'avec le code
-    this.rng = rng;
-    this.players = []; // [{ name, score, connected }] ; le premier est le créateur du salon
+    super(code, rng, isPrivate, Date.now);
     this.phase = 'lobby'; // lobby | clue | guess | reveal | over
-    this.round = 0;
     this.current = null; // { theme, target, clue, guess, diff, points, giver, guesser }
     this.history = [];
     this.notice = null; // dernier événement à afficher (départ d'un joueur…)
-    this.spectators = []; // [{ name, connected }] : regardent la partie sans jouer
     this.themes = [...THEME_IDS]; // thèmes choisis par le créateur ; tous par défaut
   }
 
-  get host() { return this.players[0]?.name; }
-  get(name) { return this.players.find(p => p.name === name); }
 
-  taken(name) { return !!this.get(name) || this.spectators.some(s => s.name === name); }
-  spectator(name) { return this.spectators.find(s => s.name === name); }
 
-  addSpectator(name) {
-    if (this.taken(name)) throw new Error('Ce pseudo est déjà pris dans ce salon');
-    if (this.spectators.length >= 30) throw new Error('Trop de spectateurs dans ce salon');
-    this.spectators.push({ name, connected: true });
-  }
 
-  removeSpectator(name) { this.spectators = this.spectators.filter(s => s.name !== name); }
 
   addPlayer(name) {
     if (this.taken(name)) throw new Error('Ce pseudo est déjà pris dans ce salon');

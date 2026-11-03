@@ -19,25 +19,17 @@ const BOT_NAMES = ['Robot Birdie', 'Robot Putt', 'Robot Caddie', 'Robot Bunker',
 const daily = new Map(); // jour -> Map(pseudo -> meilleur score) : le classement du trou du jour, en mémoire
 const dayKey = now => new Date(now).toISOString().slice(0, 10);
 
-class Room {
+const { BaseRoom } = require('../../../lib/room-base');
+
+class Room extends BaseRoom {
   constructor(code, rng = Math.random, isPrivate = false, clock = Date.now) {
-    this.code = code;
-    this.private = isPrivate;
-    this.rng = rng;
-    this.clock = clock;
-    this.players = []; // [{ name, connected, look, bot? }]
-    this.spectators = [];
+    super(code, rng, isPrivate, clock);
     this.phase = 'lobby'; // lobby | playing | over
-    this.round = 0;
     this.settings = { ...DEFAULTS };
     this.wins = {}; // victoires dans ce salon
     this.notice = null;
   }
 
-  get host() { return this.players.find(p => !p.bot)?.name; }
-  get(name) { return this.players.find(p => p.name === name); }
-  spectator(name) { return this.spectators.find(s => s.name === name); }
-  taken(name) { return !!this.get(name) || !!this.spectator(name); }
   get turnMode() { return TURN_MODES.includes(this.settings.mode); }
   get live() { return this.order.filter(n => this.balls[n]); }
   get maxStrokes() { return this.hole.par + this.settings.max; }
@@ -52,12 +44,6 @@ class Room {
     const used = new Set(this.players.map(p => p.look.color));
     return (CATALOG.color.slice(0, 8).find(c => !used.has(c.id)) ?? CATALOG.color[0]).id;
   }
-  addSpectator(name) {
-    if (this.taken(name)) throw new Error('Ce pseudo est déjà pris dans ce salon');
-    if (this.spectators.length >= 30) throw new Error('Trop de spectateurs dans ce salon');
-    this.spectators.push({ name, connected: true });
-  }
-  removeSpectator(name) { this.spectators = this.spectators.filter(s => s.name !== name); }
 
   removePlayer(name) {
     this.players = this.players.filter(p => p.name !== name);

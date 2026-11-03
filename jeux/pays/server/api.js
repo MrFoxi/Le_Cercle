@@ -1,7 +1,5 @@
 // Classement en ligne de Trouve le pays : un top 10 par combinaison de réglages (zone|chrono|erreurs).
-const express = require('express');
-const store = require('../../../lib/store');
-const activity = require('../../../lib/activity');
+const leaderboard = require('../../../lib/leaderboard');
 
 const TOP = 10;
 const TIMES = [0, 60, 180, 300, 600], LIVES = [0, 1, 3, 5, 10];
@@ -13,11 +11,6 @@ for (const g of require('../client/countries.json').objects.countries.geometries
   COUNT.Monde++;
   COUNT[g.properties.c] = (COUNT[g.properties.c] || 0) + 1;
 }
-
-// Classement durable (base en ligne, ou fichier en local) : il survit aux redéploiements.
-let boards = {};
-const ready = store.load('pays-board', {}).then(v => (boards = v));
-const save = () => store.save('pays-board', boards);
 
 const validKey = key => {
   const [scope, time, lives] = String(key).split('|');
@@ -39,36 +32,13 @@ function check({ key, name, points, found, total, seconds }) {
 
 const rank = (a, b) => b.points - a.points || a.seconds - b.seconds || a.at - b.at;
 
-const router = express.Router();
-router.use(express.json({ limit: '1kb' }));
-// Les requêtes attendent que le classement soit lu (au démarrage, depuis la base).
-router.use((req, res, next) => ready.then(() => next()));
-
-router.get('/board', (req, res) => {
-  const key = String(req.query.key ?? '');
-  if (!validKey(key)) return res.status(400).json({ error: 'Réglages inconnus' });
-  res.json(boards[key] || []);
+module.exports = leaderboard({
+  name: 'pays-board',
+  key: q => (validKey(String(q.key ?? '')) ? String(q.key) : null),
+  read: b => ({ points: b.points, found: b.found, total: b.total, seconds: b.seconds }),
+  check: (e, b) => check({ ...e, key: String(b.key) }),
+  rank,
+  announce: e => `${e.name} : ${e.points} points à Trouve le pays (${e.found}/${e.total} pays)`,
 });
-
-// Renvoie le classement à jour et la place du joueur (null s'il n'y entre pas).
-router.post('/board', (req, res) => {
-  const b = req.body || {};
-  const entry = { name: String(b.name ?? '').trim().slice(0, 20), points: b.points, found: b.found, total: b.total, seconds: b.seconds };
-  const error = check({ ...entry, key: String(b.key ?? '') });
-  if (error) return res.status(400).json({ error });
-  entry.at = Date.now();
-  const list = boards[b.key] || [];
-  // Un seul score par pseudo : on ne garde que le meilleur.
-  const prev = list.find(e => e.name.toLowerCase() === entry.name.toLowerCase());
-  if (prev && rank(entry, prev) >= 0) return res.json({ board: list, place: list.indexOf(prev) + 1, improved: false });
-  const next = list.filter(e => e !== prev).concat(entry).sort(rank).slice(0, TOP);
-  boards[b.key] = next;
-  save();
-  const place = next.indexOf(entry) + 1 || null;
-  if (place) activity.log(`${entry.name} : ${entry.points} points à Trouve le pays (${entry.found}/${entry.total} pays)`);
-  res.json({ board: next, place, improved: !!place });
-});
-
-module.exports = router;
 module.exports.check = check;
 module.exports.COUNT = COUNT;

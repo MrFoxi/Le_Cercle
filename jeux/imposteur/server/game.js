@@ -40,16 +40,13 @@ const int = (v, min, max, name) => {
   return v;
 };
 
-class Room {
+const { BaseRoom } = require('../../../lib/room-base');
+
+class Room extends BaseRoom {
   constructor(code, rng = Math.random, isPrivate = false, now = Date.now) {
-    this.code = code;
-    this.rng = rng;
+    super(code, rng, isPrivate, now);
     this.now = now;
-    this.private = isPrivate;
-    this.players = []; // [{ name, connected }] ; le premier est l'hôte
-    this.spectators = [];
     this.phase = 'lobby'; // lobby | reveal | clues | discussion | vote | guess | elim | over
-    this.round = 0; // numéro de la manche dans la partie
     this.settings = { rounds: 3, impostors: 1, whites: 1, discussion: 60, categories: CATEGORIES.map(c => c.id) };
     this.scores = {};
     this.used = new Set(); // paires déjà jouées dans ce salon
@@ -58,10 +55,6 @@ class Room {
     this.game = null;
   }
 
-  get host() { return this.players[0]?.name; }
-  get(name) { return this.players.find(p => p.name === name); }
-  spectator(name) { return this.spectators.find(s => s.name === name); }
-  taken(name) { return !!this.get(name) || !!this.spectator(name); }
 
   addPlayer(name) {
     if (this.taken(name)) throw new Error('Ce pseudo est déjà pris dans ce salon');
@@ -70,13 +63,7 @@ class Room {
     this.scores[name] ??= 0;
   }
 
-  addSpectator(name) {
-    if (this.taken(name)) throw new Error('Ce pseudo est déjà pris dans ce salon');
-    if (this.spectators.length >= 30) throw new Error('Trop de spectateurs dans ce salon');
-    this.spectators.push({ name, connected: true });
-  }
 
-  removeSpectator(name) { this.spectators = this.spectators.filter(s => s.name !== name); }
 
   // Un joueur de la manche qui part pour de bon l'annule : sans lui, les rôles ne tiennent plus.
   removePlayer(name) {

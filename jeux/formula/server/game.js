@@ -17,24 +17,16 @@ function validLook(l = {}) {
   return { color: c(l.color, '#e10600'), accent: c(l.accent, '#ffffff'), helmet: c(l.helmet, '#ffd400'), rim: c(l.rim, '#c9ccd2'), motif: MOTIFS.includes(l.motif) ? l.motif : 'stripe', number: Math.max(1, Math.min(99, Math.round(Number(l.number)) || 7)) };
 }
 
-class Room {
+const { BaseRoom } = require('../../../lib/room-base');
+
+class Room extends BaseRoom {
   constructor(code, rng = Math.random, isPrivate = false, clock = Date.now) {
-    this.code = code;
-    this.private = isPrivate;
-    this.rng = rng;
-    this.clock = clock;
-    this.players = []; // { name, connected, look, ready }
-    this.spectators = [];
+    super(code, rng, isPrivate, clock);
     this.phase = 'lobby'; // lobby | race | results
-    this.round = 0;
     this.settings = { track: 'riviera', laps: 3, weather: 'dry', time: 'day' };
     this.wins = {};
     this.arrivals = {};
   }
-  get host() { return this.players[0]?.name; }
-  get(name) { return this.players.find(p => p.name === name); }
-  spectator(name) { return this.spectators.find(s => s.name === name); }
-  taken(name) { return !!this.get(name) || !!this.spectator(name); }
 
   addPlayer(name) {
     if (this.taken(name)) throw new Error('Ce pseudo est déjà pris dans ce salon');
@@ -43,12 +35,6 @@ class Room {
     this.players.push({ name, connected: true, look: validLook(), ready: false });
     this.setLook(name, {});
   }
-  addSpectator(name) {
-    if (this.taken(name)) throw new Error('Ce pseudo est déjà pris dans ce salon');
-    if (this.spectators.length >= 30) throw new Error('Trop de spectateurs dans ce salon');
-    this.spectators.push({ name, connected: true });
-  }
-  removeSpectator(name) { this.spectators = this.spectators.filter(s => s.name !== name); }
   removePlayer(name) {
     this.players = this.players.filter(p => p.name !== name);
     if (this.phase === 'race') this.checkEnd();

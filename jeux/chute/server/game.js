@@ -2,6 +2,7 @@
 // Chaque navigateur déplace son propre personnage et envoie sa position ; le serveur fait tomber les dalles,
 // déplace les robots, décide qui est éliminé et envoie l'état de l'arène 20 fois par seconde. Testé par jeux/chute/chute.test.js.
 const C = require('../client/sim');
+const { PartyRoom } = require('../../../lib/room-base');
 
 const MAX_PLAYERS = 12;
 const SETTINGS = { rounds: [1, 3, 5] };
@@ -10,65 +11,18 @@ const COLORS = ['#ff5a5f', '#3d8bff', '#ffc93c', '#2fd47a', '#a46bff', '#ff8a3d'
 const BOT_NAMES = ['Robot Patate', 'Robot Gélatine', 'Robot Ressort', 'Robot Pirouette', 'Robot Culbute', 'Robot Bulle', 'Robot Plouf', 'Robot Zigzag', 'Robot Toupie', 'Robot Guimauve', 'Robot Flan'];
 const num = v => typeof v === 'number' && Number.isFinite(v);
 
-class Room {
-  constructor(code, rng = Math.random, isPrivate = false, clock = Date.now) {
-    this.code = code;
-    this.private = isPrivate;
-    this.rng = rng;
-    this.clock = clock;
-    this.players = []; // { name, connected, bot?, color, points }
-    this.spectators = [];
-    this.phase = 'lobby'; // lobby | countdown | play | roundEnd | over
-    this.round = 0; // numéro de partie (pour la liste des salons)
-    this.roundNo = 0; // manche dans la partie
+class Room extends PartyRoom {
+  static MAX_PLAYERS = MAX_PLAYERS;
+  static SETTINGS = SETTINGS;
+  static COLORS = COLORS;
+  static BOT_NAMES = BOT_NAMES;
+  constructor(...args) {
+    super(...args);
     this.settings = { rounds: 3 };
-    this.wins = {};
     this.timer = null;
   }
-  get host() { return this.players.find(p => !p.bot)?.name; }
-  get(name) { return this.players.find(p => p.name === name); }
-  spectator(name) { return this.spectators.find(s => s.name === name); }
-  taken(name) { return !!this.get(name) || !!this.spectator(name); }
-  freeColor() { const used = this.players.map(p => p.color); return COLORS.find(c => !used.includes(c)) ?? COLORS[0]; }
-
-  addPlayer(name) {
-    if (this.taken(name)) throw new Error('Ce pseudo est déjà pris dans ce salon');
-    if (this.phase !== 'lobby') throw new Error('Partie en cours : tu peux la regarder en attendant la suivante');
-    if (this.players.length >= MAX_PLAYERS) throw new Error('Ce salon est complet (12 joueurs) : tu peux regarder');
-    this.players.push({ name, connected: true, color: this.freeColor(), points: 0 });
-  }
-  addSpectator(name) {
-    if (this.taken(name)) throw new Error('Ce pseudo est déjà pris dans ce salon');
-    if (this.spectators.length >= 30) throw new Error('Trop de spectateurs dans ce salon');
-    this.spectators.push({ name, connected: true });
-  }
-  removeSpectator(name) { this.spectators = this.spectators.filter(s => s.name !== name); }
-  removePlayer(name) {
-    this.players = this.players.filter(p => p.name !== name);
-    if (!this.players.some(p => !p.bot)) { this.players = []; this.stop(); return; } // plus d'humains : le salon ferme
-    if (this.bodies?.[name]) this.eliminate(name);
-  }
-
-  addBot(name) {
-    this.hostOnly(name);
-    if (this.players.length >= MAX_PLAYERS) throw new Error('Le salon est complet');
-    const bot = BOT_NAMES.find(n => !this.taken(n));
-    this.players.push({ name: bot, connected: true, bot: true, color: this.freeColor(), points: 0, aggr: 0.5 + this.rng() });
-  }
-  removeBot(name, bot) {
-    this.hostOnly(name);
-    if (!this.get(bot)?.bot) throw new Error('Ce joueur n’est pas un robot');
-    this.players = this.players.filter(p => p.name !== bot);
-  }
-  configure(name, key, value) {
-    this.hostOnly(name);
-    if (!SETTINGS[key]?.includes(value)) throw new Error('Réglage invalide');
-    this.settings[key] = value;
-  }
-  hostOnly(name) {
-    if (name !== this.host) throw new Error('Seul le créateur du salon peut faire ça');
-    if (this.phase !== 'lobby') throw new Error('Attends la fin de la partie');
-  }
+  newPlayer(name, extra) { return { ...super.newPlayer(name, extra), aggr: 0.5 + this.rng() }; } // robots plus ou moins bagarreurs
+  left(name) { if (this.bodies?.[name]) this.eliminate(name); }
 
   start(name) {
     this.hostOnly(name);
@@ -189,25 +143,9 @@ class Room {
     this.emit?.('snap', this.snapshot());
     this.notify?.();
   }
-  finish() {
-    this.phase = 'over';
-    this.ranking = [...this.players].sort((a, b) => b.points - a.points).map(p => ({ name: p.name, points: p.points, color: p.color }));
-    const w = this.ranking[0]?.name;
-    if (w) this.wins[w] = (this.wins[w] ?? 0) + 1;
-  }
-  again(name) {
-    if (name !== this.host) throw new Error('Seul le créateur du salon peut faire ça');
-    if (this.phase !== 'over') throw new Error('La partie n’est pas finie');
-    this.phase = 'lobby';
-  }
-
-  summary() { return { rounds: this.settings.rounds }; }
   viewFor(name) {
     return {
-      code: this.code, private: this.private, phase: this.phase, round: this.round, roundNo: this.roundNo, me: name, host: this.host, now: this.clock(),
-      settings: this.settings, spectator: !!this.spectator(name), spectators: this.spectators.filter(s => s.connected).map(s => s.name),
-      deadline: this.deadline, order: this.order ?? [], lastWinner: this.lastWinner ?? null, ranking: this.phase === 'over' ? this.ranking : null,
-      players: this.players.map(p => ({ name: p.name, connected: p.connected, bot: !!p.bot, color: p.color, points: p.points, wins: this.wins[p.name] ?? 0 })),
+      ...this.baseView(name), order: this.order ?? [], lastWinner: this.lastWinner ?? null,
       spawn: this.bodies?.[name] && this.phase === 'countdown' ? { x: this.bodies[name].x, y: this.bodies[name].y } : null,
     };
   }

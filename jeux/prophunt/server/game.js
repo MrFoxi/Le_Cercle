@@ -6,6 +6,7 @@
 const PH = require('../client/map');
 
 const MAX_PLAYERS = 12;
+const { PartyRoom } = require('../../../lib/room-base');
 const SETTINGS = { rounds: [2, 4, 6], hide: [20, 30, 45], hunt: [120, 150, 180, 240], map: ['hasard', ...PH.MAPS] };
 const HIDE_MS = 30000, HUNT_MS = 150000, ROUND_END_MS = 7000, TICK_MS = 100;
 const TAG_RANGE = 4, MISS_DAMAGE = 12, FOUND_HEAL = 20, TAUNT_CD = 8000, FORCED_WHISTLE = 35000, FORM_CD = 10000;
@@ -16,64 +17,19 @@ const COLORS = ['#ff5a5f', '#3d8bff', '#ffc93c', '#2fd47a', '#a46bff', '#ff8a3d'
 const BOT_NAMES = ['Robot Théière', 'Robot Pot-de-fleur', 'Robot Lanterne', 'Robot Tabouret', 'Robot Bonsaï', 'Robot Parapluie', 'Robot Sushi', 'Robot Gong', 'Robot Éventail', 'Robot Daruma', 'Robot Origami'];
 const num = v => typeof v === 'number' && Number.isFinite(v);
 
-class Room {
-  constructor(code, rng = Math.random, isPrivate = false, clock = Date.now) {
-    this.code = code;
-    this.private = isPrivate;
-    this.rng = rng;
-    this.clock = clock;
-    this.players = []; // { name, connected, bot?, color, points, hunted }
-    this.spectators = [];
-    this.phase = 'lobby'; // lobby | hide | hunt | roundEnd | over
-    this.round = 0;
-    this.roundNo = 0;
+class Room extends PartyRoom {
+  static MAX_PLAYERS = MAX_PLAYERS;
+  static SETTINGS = SETTINGS;
+  static COLORS = COLORS;
+  static BOT_NAMES = BOT_NAMES;
+  constructor(...args) {
+    super(...args);
     this.settings = { rounds: 4, hide: 30, hunt: 150, map: 'hasard' };
     this.mapId = 'place';
-    this.wins = {};
     this.timer = null;
   }
-  get host() { return this.players.find(p => !p.bot)?.name; }
-  get(name) { return this.players.find(p => p.name === name); }
-  spectator(name) { return this.spectators.find(s => s.name === name); }
-  taken(name) { return !!this.get(name) || !!this.spectator(name); }
-  freeColor() { const used = this.players.map(p => p.color); return COLORS.find(c => !used.includes(c)) ?? COLORS[0]; }
-
-  addPlayer(name) {
-    if (this.taken(name)) throw new Error('Ce pseudo est déjà pris dans ce salon');
-    if (this.phase !== 'lobby') throw new Error('Partie en cours : tu peux la regarder en attendant la suivante');
-    if (this.players.length >= MAX_PLAYERS) throw new Error('Ce salon est complet (12 joueurs) : tu peux regarder');
-    this.players.push({ name, connected: true, color: this.freeColor(), points: 0, hunted: 0 });
-  }
-  addSpectator(name) {
-    if (this.taken(name)) throw new Error('Ce pseudo est déjà pris dans ce salon');
-    if (this.spectators.length >= 30) throw new Error('Trop de spectateurs dans ce salon');
-    this.spectators.push({ name, connected: true });
-  }
-  removeSpectator(name) { this.spectators = this.spectators.filter(s => s.name !== name); }
-  removePlayer(name) {
-    this.players = this.players.filter(p => p.name !== name);
-    if (!this.players.some(p => !p.bot)) { this.players = []; this.stop(); return; }
-    if (this.bodies?.[name]) { this.bodies[name].alive = false; this.checkEnd(); }
-  }
-  hostOnly(name) {
-    if (name !== this.host) throw new Error('Seul le créateur du salon peut faire ça');
-    if (this.phase !== 'lobby') throw new Error('Attends la fin de la partie');
-  }
-  addBot(name) {
-    this.hostOnly(name);
-    if (this.players.length >= MAX_PLAYERS) throw new Error('Le salon est complet');
-    this.players.push({ name: BOT_NAMES.find(n => !this.taken(n)), connected: true, bot: true, color: this.freeColor(), points: 0, hunted: 0 });
-  }
-  removeBot(name, bot) {
-    this.hostOnly(name);
-    if (!this.get(bot)?.bot) throw new Error('Ce joueur n’est pas un robot');
-    this.players = this.players.filter(p => p.name !== bot);
-  }
-  configure(name, key, value) {
-    this.hostOnly(name);
-    if (!SETTINGS[key]?.includes(value)) throw new Error('Réglage invalide');
-    this.settings[key] = value;
-  }
+  newPlayer(name, extra) { return { ...super.newPlayer(name, extra), hunted: 0 }; } // nombre de manches passées à chasser
+  left(name) { if (this.bodies?.[name]) { this.bodies[name].alive = false; this.checkEnd(); } }
 
   start(name) {
     this.hostOnly(name);
@@ -245,17 +201,6 @@ class Room {
     this.stop();
     this.notify?.();
   }
-  finish() {
-    this.phase = 'over';
-    this.ranking = [...this.players].sort((a, b) => b.points - a.points).map(p => ({ name: p.name, points: p.points, color: p.color }));
-    const w = this.ranking[0]?.name;
-    if (w) this.wins[w] = (this.wins[w] ?? 0) + 1;
-  }
-  again(name) {
-    if (name !== this.host) throw new Error('Seul le créateur du salon peut faire ça');
-    if (this.phase !== 'over') throw new Error('La partie n’est pas finie');
-    this.phase = 'lobby';
-  }
 
   /* ---- Robots ---- */
   think(name, b) {
@@ -306,15 +251,11 @@ class Room {
   }
   heard(x, z) { for (const [n] of this.living('hunter')) if (this.get(n)?.bot) (this.brains[n] ??= {}).whistle = { x, z, at: this.clock() }; }
 
-  summary() { return { rounds: this.settings.rounds }; }
   viewFor(name) {
     const role = this.roles?.[name] ?? null;
     return {
-      code: this.code, private: this.private, phase: this.phase, round: this.round, roundNo: this.roundNo, me: name, host: this.host, now: this.clock(),
-      settings: this.settings, spectator: !!this.spectator(name), spectators: this.spectators.filter(s => s.connected).map(s => s.name),
-      deadline: this.deadline, result: this.result, ranking: this.phase === 'over' ? this.ranking : null,
+      ...this.baseView(name), result: this.result,
       role, roles: this.playing() || this.phase === 'roundEnd' ? this.roles : null, found: this.order ?? [],
-      players: this.players.map(p => ({ name: p.name, connected: p.connected, bot: !!p.bot, color: p.color, points: p.points, wins: this.wins[p.name] ?? 0 })),
       map: this.mapId,
       spawn: this.bodies?.[name] && this.phase === 'hide' ? { x: this.bodies[name].x, z: this.bodies[name].z } : null,
       night: this.roundNo % 2 === 0, gadgets: this.bodies?.[name] ? { radar: this.bodies[name].radar, grenade: this.bodies[name].grenade } : null,

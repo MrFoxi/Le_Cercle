@@ -28,18 +28,16 @@ function think(gameId, state, level) {
   });
 }
 
-class Room {
+const { BaseRoom } = require('../../../lib/room-base');
+
+class Room extends BaseRoom {
+  static MAX_SPECTATORS = 50;
   constructor(code, rng = Math.random, isPrivate = false) {
-    this.code = code;
-    this.rng = rng;
-    this.private = isPrivate;
-    this.players = []; // humains [{ name, connected }] ; le premier est l'hôte
-    this.spectators = [];
+    super(code, rng, isPrivate, Date.now);
     this.settings = { game: 'chess', time: 0, goSize: 19, goRules: 'chinese' };
     this.seats = [null, null]; // camp 0 (joue en premier) et camp 1 : { name } ou { name, bot: niveau }
     this.ready = new Set();
     this.phase = 'lobby'; // lobby | playing | scoring (go : pierres mortes) | over
-    this.round = 0;
     this.state = null;
     this.history = []; // [{ san, side, key }]
     this.clocks = [0, 0];
@@ -55,9 +53,6 @@ class Room {
   }
 
   get game() { return GAMES[this.settings.game]; }
-  get host() { return this.players[0]?.name; }
-  get(name) { return this.players.find(p => p.name === name); }
-  spectator(name) { return this.spectators.find(s => s.name === name); }
   taken(name) { return !!this.get(name) || !!this.spectator(name) || this.seats.some(s => s?.name === name); }
   sideOf(name) { return this.seats.findIndex(s => s && !s.bot && s.name === name); }
   humansSeated() { return this.seats.filter(s => s && !s.bot); }
@@ -70,12 +65,6 @@ class Room {
     const free = this.seats.findIndex(s => !s);
     if (this.phase === 'lobby' && free >= 0) this.seats[free] = { name };
   }
-  addSpectator(name) {
-    if (this.taken(name)) throw new Error('Ce pseudo est déjà pris dans ce salon');
-    if (this.spectators.length >= 50) throw new Error('Trop de spectateurs dans ce salon');
-    this.spectators.push({ name, connected: true });
-  }
-  removeSpectator(name) { this.spectators = this.spectators.filter(s => s.name !== name); }
 
   removePlayer(name) {
     const side = this.sideOf(name);
