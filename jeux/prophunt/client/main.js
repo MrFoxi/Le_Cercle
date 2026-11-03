@@ -1,29 +1,15 @@
 // Prop Hunt : accueil, salons, et la partie. Le navigateur déplace son personnage et envoie sa position ; le serveur tient
 // les rôles, les déguisements, les tirs et les sifflets, et renvoie les positions (« snap ») et les effets (« fx »).
 import { createView } from './render.js';
+import { $, $$, esc, audio, sound, blip, party } from '/shared/party.js';
 
 const PH = window.PH;
 let MAP = PH.get('place'); // carte de la manche en cours
-const $ = s => document.querySelector(s), $$ = s => [...document.querySelectorAll(s)];
-const store = {
-  get: k => { try { return localStorage.getItem(k); } catch { return null; } },
-  set: (k, v) => { try { v == null ? localStorage.removeItem(k) : localStorage.setItem(k, v); } catch { /* stockage bloqué */ } },
-};
-const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
 const params = new URLSearchParams(location.search);
 const socket = io('/prophunt');
 const RANGE = 4;
 
 /* ---------------- Sons (synthétisés) ---------------- */
-let ac = null;
-const audio = () => { if (!ac) try { ac = new AudioContext(); } catch { /* pas de son */ } if (ac?.state === 'suspended') ac.resume(); return ac; };
-function blip(f0, f1, dur, type = 'sine', vol = 0.12, at = 0) {
-  if (!ac) return;
-  const t = ac.currentTime + at, o = ac.createOscillator(), g = ac.createGain();
-  o.type = type; o.frequency.setValueAtTime(f0, t); o.frequency.exponentialRampToValueAtTime(f1, t + dur);
-  g.gain.setValueAtTime(0.0001, t); g.gain.linearRampToValueAtTime(vol, t + 0.01); g.gain.exponentialRampToValueAtTime(0.001, t + dur);
-  o.connect(g).connect(ac.destination); o.start(t); o.stop(t + dur + 0.02);
-}
 const SFX = {
   whistle: (vol = 0.12) => { blip(1400, 1700, 0.18, 'sine', vol); blip(1700, 1300, 0.25, 'sine', vol, 0.2); },
   shot: () => blip(300, 80, 0.12, 'square', 0.08),
@@ -32,7 +18,6 @@ const SFX = {
   poof: () => blip(400, 1200, 0.25, 'triangle', 0.08),
   tick: () => blip(520, 520, 0.1, 'square', 0.05),
   go: () => blip(880, 1320, 0.35, 'square', 0.07),
-  win: () => [523, 659, 784, 1046, 1318].forEach((f, k) => blip(f, f, 0.22, 'triangle', 0.1, k * 0.11)),
   canard: v => { for (const k of [0, 0.22]) { blip(520, 380, 0.16, 'sawtooth', v * 0.7, k); blip(1040, 760, 0.16, 'square', v * 0.25, k); } },
   pet: v => noise(0.55, 90, v * 2.2, 140),
   rire: v => [0, 0.16, 0.32, 0.5, 0.66].forEach((t, k) => blip(700 - k * 40, 520 - k * 40, 0.12, 'triangle', v, t)),
@@ -42,7 +27,7 @@ const SFX = {
 };
 // Bruit filtré (pet) : un souffle grave qui vibre.
 function noise(dur, freq, vol, wobble) {
-  if (!ac) return;
+  const ac = sound(); if (!ac) return;
   const t = ac.currentTime, b = ac.createBuffer(1, ac.sampleRate * dur, ac.sampleRate), d = b.getChannelData(0);
   for (let k = 0; k < d.length; k++) d[k] = Math.random() * 2 - 1;
   const src = ac.createBufferSource(), f = ac.createBiquadFilter(), g = ac.createGain(), lfo = ac.createOscillator(), lg = ac.createGain();
@@ -52,69 +37,29 @@ function noise(dur, freq, vol, wobble) {
   src.connect(f).connect(g).connect(ac.destination); src.start(t);
 }
 
-/* ---------------- Écrans et salons ---------------- */
-let pseudo = store.get('prophunt-pseudo') || store.get('pseudo') || '';
-$('#nameForm').pseudo.value = pseudo;
-$('#nameForm').pseudo.oninput = e => { pseudo = e.target.value.trim().slice(0, 20); store.set('prophunt-pseudo', pseudo); };
-$('#nameForm').onsubmit = e => e.preventDefault();
-function show(id) {
-  for (const s of $$('.screen')) s.hidden = s.id !== id;
-  const playing = id === 'game';
-  $('#hud').hidden = !playing;
-  document.body.classList.toggle('playing', playing);
-  if (!playing && document.pointerLockElement) document.exitPointerLock();
-}
-const needName = () => { if (pseudo) return false; $('#nameForm').pseudo.focus(); alert('Choisis d’abord un pseudo'); return true; };
-const ask = (ev, payload) => new Promise(res => socket.emit(ev, payload, r => res(r)));
-const act = (...a) => new Promise(res => socket.emit('act', ...a, r => { if (r?.error) toast(r.error); res(r); }));
-async function enter(ev, payload) {
-  if (needName()) return null;
-  const r = await ask(ev, { ...payload, name: pseudo });
-  if (r?.error) alert(r.error);
-  return r?.ok ? r : null;
-}
-$('#soloBtn').onclick = async () => {
-  audio();
-  if (!(await enter('create', { private: true }))) return;
-  for (let k = 0; k < 5; k++) await act('addBot');
-  act('start');
-};
-$('#createForm').onsubmit = e => { e.preventDefault(); audio(); enter('create', { private: e.target.vis.value === 'private' }); };
-$('#joinForm').onsubmit = e => { e.preventDefault(); audio(); enter('join', { code: e.target.code.value, watch: e.submitter?.value === 'watch' }); };
-$('#rooms').onclick = e => { const b = e.target.closest('[data-room]'); if (b) { audio(); enter('join', { code: b.dataset.room, watch: b.dataset.mode === 'watch' }); } };
-socket.on('rooms', list => {
-  $('#rooms').innerHTML = list.length ? list.map(r => `<li><span><b class="code">${r.code}</b> · ${r.players.map(esc).join(', ')} ${r.phase !== 'lobby' ? '· 🔎 en jeu' : ''}</span>
-    ${r.phase === 'lobby' ? `<button class="small primary" data-room="${r.code}">Rejoindre</button>` : ''}<button class="small ghost" data-room="${r.code}" data-mode="watch">👁</button></li>`).join('') : '<li class="hint">Aucun salon public : crée le tien !</li>';
+/* ---------------- Salon ---------------- */
+const ui = party({
+  id: 'prophunt', socket, max: 12, busy: '🔎 en jeu', onError: text => toast(text),
+  onShow: screen => { if (screen !== 'game' && document.pointerLockElement) document.exitPointerLock(); },
+  onRoom: (s, host) => {
+    $('#hideT').disabled = $('#huntT').disabled = $('#mapSel').disabled = !host; $('#mapSel').value = s.settings.map; $('#hideT').value = s.settings.hide; $('#huntT').value = s.settings.hunt;
+    if (host && s.players.length >= 2 && s.players.length < 3) $('#roomHint').textContent = 'C’est plus drôle à 4 ou plus : ajoute des robots ou invite des amis.';
+  },
 });
-const leave = () => { socket.emit('leave'); store.set('prophunt-session', null); room = null; history.replaceState(null, '', location.pathname); $('#board').hidden = true; show('home'); };
-$('#leave').onclick = leave;
-$('#quitGame').onclick = leave;
-$('#copyLink').onclick = () => { navigator.clipboard?.writeText(`${location.origin}/prophunt/?salon=${room.code}`); $('#copyLink').textContent = '✓ Copié'; setTimeout(() => ($('#copyLink').textContent = '🔗 Copier le lien'), 1500); };
-$('#addBot').onclick = () => act('addBot');
-$('#startBtn').onclick = () => { audio(); act('start'); };
-$('#rounds').onchange = e => act('configure', 'rounds', Number(e.target.value));
+const { show, act } = ui;
+const feed = text => ui.feed(text, 5000);
 $('#hideT').onchange = e => act('configure', 'hide', Number(e.target.value));
 $('#mapSel').innerHTML = [['hasard', '🎲 Au hasard (une carte par manche)'], ...PH.MAPS.map(id => [id, PH.NAMES[id]])].map(([v, l]) => `<option value="${v}">${l}</option>`).join('');
 $('#mapSel').onchange = e => act('configure', 'map', e.target.value);
 $('#huntT').onchange = e => act('configure', 'hunt', Number(e.target.value));
-$('#players').onclick = e => { const b = e.target.closest('[data-bot]'); if (b) act('removeBot', b.dataset.bot); };
-socket.on('session', s => { store.set('prophunt-session', JSON.stringify(s)); history.replaceState(null, '', `?salon=${s.code}`); });
-socket.on('closed', msg => { alert(msg); leave(); });
-socket.on('connect', () => {
-  let s = null; try { s = JSON.parse(store.get('prophunt-session')); } catch { /* illisible */ }
-  const code = params.get('salon');
-  if (s && (!code || s.code === code)) socket.emit('resume', s, r => { if (r?.error) { store.set('prophunt-session', null); if (code && pseudo) enter('join', { code }); } });
-  else if (code && pseudo) enter('join', { code });
-});
 
 /* ---------------- État du salon ---------------- */
-let room = null, offset = 0, roundKey = '', seenFound = 0, lastCount = null;
+let offset = 0, roundKey = '', seenFound = 0, lastCount = null;
 const remotes = new Map(); // pseudo -> [{ at, x, z, ry, type, alive, hp }]
 let me = null, locked = false, watching = null;
-const colorOf = n => room?.players.find(p => p.name === n)?.color ?? '#ffffff';
-const roleOf = n => room?.roles?.[n];
+const colorOf = n => ui.room?.players.find(p => p.name === n)?.color ?? '#ffffff';
+const roleOf = n => ui.room?.roles?.[n];
 socket.on('state', s => {
-  room = s;
   if (!s) return;
   offset = s.now - Date.now();
   const inGame = ['hide', 'hunt', 'roundEnd', 'over'].includes(s.phase);
@@ -137,36 +82,19 @@ socket.on('state', s => {
   for (const n of s.found.slice(seenFound)) feed(n === s.me ? '😱 Tu as été trouvé !' : `🔎 ${n} a été trouvé !`);
   seenFound = s.found.length;
   if (s.phase === 'roundEnd' || s.phase === 'over') showBoard(s);
-  renderRoom();
+  ui.renderRoom();
 });
-function renderRoom() {
-  const s = room, host = s.host === s.me;
-  $('#roomCode').textContent = s.code;
-  $('#count').textContent = `(${s.players.length}/12)`;
-  $('#players').innerHTML = s.players.map(p => `<li class="${p.connected ? '' : 'off'}"><i class="dot" style="background:${p.color}"></i><span>${esc(p.name)}${p.name === s.host ? ' 👑' : ''}${p.wins ? ` · 🏆 ${p.wins}` : ''}</span>${p.bot && host ? `<button class="small ghost" data-bot="${esc(p.name)}" aria-label="Retirer ${esc(p.name)}">✕</button>` : ''}</li>`).join('');
-  $('#spect').textContent = s.spectators.length ? `👁 ${s.spectators.join(', ')}` : '';
-  $('#addBot').hidden = !host; $('#rounds').disabled = !host; $('#rounds').value = s.settings.rounds;
-  $('#hideT').disabled = $('#huntT').disabled = $('#mapSel').disabled = !host; $('#mapSel').value = s.settings.map; $('#hideT').value = s.settings.hide; $('#huntT').value = s.settings.hunt;
-  $('#startBtn').hidden = !host; $('#startBtn').disabled = s.players.length < 2;
-  $('#roomHint').textContent = host ? (s.players.length < 3 ? 'C’est plus drôle à 4 ou plus : ajoute des robots ou invite des amis.' : 'Tout le monde est là ? Lance la partie !') : 'Le créateur du salon lance la partie.';
-}
-function feed(text) { const li = document.createElement('li'); li.textContent = text; $('#feed').prepend(li); setTimeout(() => li.remove(), 5000); }
 let toastTimer = 0;
 function toast(text) { $('#aimHint').textContent = text; $('#aimHint').hidden = false; clearTimeout(toastTimer); toastTimer = setTimeout(() => ($('#aimHint').hidden = true), 1400); }
 function showBoard(s) {
   if (document.pointerLockElement) document.exitPointerLock();
-  const over = s.phase === 'over', host = s.host === s.me;
+  const over = s.phase === 'over';
   const rows = over ? s.ranking : [...s.players].sort((a, b) => b.points - a.points);
   $('#boardTitle').textContent = over ? `🏆 ${rows[0]?.name === s.me ? 'Tu gagnes la partie !' : `${rows[0]?.name} gagne la partie !`}` : s.result?.winner === 'hunters' ? '🎯 Les chasseurs ont tout trouvé !' : '🪴 Les objets ont tenu bon !';
   $('#boardList').innerHTML = rows.map((p, k) => `<li class="${p.name === s.me ? 'me' : ''}"><b>${k + 1}</b><i class="dot" style="width:14px;height:14px;border-radius:50%;background:${p.color}"></i><span>${esc(p.name)}</span>${over ? '' : `<em>${roleOf(p.name) === 'hunter' ? '🎯' : s.result?.survivors.includes(p.name) ? '🪴 caché' : '🔎 trouvé'}</em>`}<strong>${p.points} pts</strong></li>`).join('');
   const best = !over && s.result?.best ? `🏅 Meilleure cachette : ${s.result.best}${s.result.forms?.[s.result.best] ? ` (${MAP.PROPS[s.result.forms[s.result.best]]?.name ?? ''})` : ''} · ` : '';
   $('#boardHint').textContent = over ? '' : `${best}Manche ${s.roundNo}/${s.settings.rounds} terminée · les rôles changent…`;
-  const btns = $('#boardButtons'); btns.innerHTML = '';
-  if (over) {
-    if (host) { const b = document.createElement('button'); b.className = 'primary'; b.textContent = 'Rejouer'; b.onclick = async () => { await act('again'); act('start'); }; btns.append(b); }
-    const b2 = document.createElement('button'); b2.className = 'ghost'; b2.textContent = host ? 'Retour au salon' : 'Quitter'; b2.onclick = () => (host ? act('again') : leave()); btns.append(b2);
-    if (rows[0]?.name === s.me) SFX.win();
-  }
+  ui.endButtons(s, rows);
   $('#board').hidden = false;
 }
 
@@ -179,7 +107,7 @@ socket.on('snap', list => {
     if (!remotes.has(n)) remotes.set(n, []);
     const b = remotes.get(n); b.push({ at, x, z, ry, type, alive, hp, marked });
     if (b.length > 10) b.shift();
-    if (me && n === room?.me) { me.hp = hp; me.type = type || null; me.marked = !!marked; if (!alive && me.alive) { me.alive = false; } }
+    if (me && n === ui.room?.me) { me.hp = hp; me.type = type || null; me.marked = !!marked; if (!alive && me.alive) { me.alive = false; } }
   }
 });
 function remoteAt(n, t) {
@@ -195,22 +123,22 @@ socket.on('fx', f => {
     const t = f.taunt ?? 'sifflet';
     view.burst(f.x, f.z, 'taunt', t);
     (t === 'sifflet' ? SFX.whistle : SFX[t])?.(near);
-    if (roleOf(room?.me) === 'hunter') feed(f.forced ? '🎵 Un objet s’est trahi en sifflant !' : { sifflet: '🎵 Un objet siffle…', canard: '🦆 Coin coin ?!', pet: '💨 Quelqu’un a… pété ?', rire: '😂 Un objet se moque de toi !', coucou: '👋 Coucou !' }[t]);
+    if (roleOf(ui.room?.me) === 'hunter') feed(f.forced ? '🎵 Un objet s’est trahi en sifflant !' : { sifflet: '🎵 Un objet siffle…', canard: '🦆 Coin coin ?!', pet: '💨 Quelqu’un a… pété ?', rire: '😂 Un objet se moque de toi !', coucou: '👋 Coucou !' }[t]);
     return;
   }
   view.burst(f.x, f.z, f.kind === 'hunterOut' ? 'miss' : f.kind);
-  if (f.kind === 'radar' && f.by !== room?.me) { SFX.radar(); if (roleOf(room?.me) === 'prop') feed('📡 Un chasseur a lancé son radar !'); }
-  if (f.kind === 'grenade') { SFX.found(); feed(f.hits.length ? `🎉 Confettis : ${f.hits.includes(room?.me) ? 'tu scintilles, bouge !' : `${f.hits.length} objet(s) touché(s) !`}` : '🎉 Confettis… dans le vide'); }
+  if (f.kind === 'radar' && f.by !== ui.room?.me) { SFX.radar(); if (roleOf(ui.room?.me) === 'prop') feed('📡 Un chasseur a lancé son radar !'); }
+  if (f.kind === 'grenade') { SFX.found(); feed(f.hits.length ? `🎉 Confettis : ${f.hits.includes(ui.room?.me) ? 'tu scintilles, bouge !' : `${f.hits.length} objet(s) touché(s) !`}` : '🎉 Confettis… dans le vide'); }
   if (f.kind === 'found') { SFX.found(); }
-  if (f.kind === 'miss' && f.by === room?.me) { SFX.miss(); toast('Raté ! −12 de vie'); }
-  if (f.kind === 'hunterOut') feed(f.by === room?.me ? '💀 Plus de vie : tu ne chasses plus cette manche' : `💀 ${f.by} n’a plus de vie !`);
+  if (f.kind === 'miss' && f.by === ui.room?.me) { SFX.miss(); toast('Raté ! −12 de vie'); }
+  if (f.kind === 'hunterOut') feed(f.by === ui.room?.me ? '💀 Plus de vie : tu ne chasses plus cette manche' : `💀 ${f.by} n’a plus de vie !`);
 });
 
 /* ---------------- Commandes ---------------- */
 const keys = new Set();
 const canvas = $('#view');
 const playing = () => document.body.classList.contains('playing');
-const canMove = () => me?.alive && room && (room.phase === 'hunt' || (room.phase === 'hide' && room.role === 'prop'));
+const canMove = () => me?.alive && ui.room && (ui.room.phase === 'hunt' || (ui.room.phase === 'hide' && ui.room.role === 'prop'));
 addEventListener('keydown', e => {
   if (e.target.closest?.('input, select') || !playing()) return;
   if (['Space', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.code)) e.preventDefault();
@@ -271,16 +199,16 @@ $('#touch').hidden = !matchMedia('(pointer: coarse)').matches;
 }
 // Ce qu'on vise, à portée
 function aimed() {
-  const a = view.aim(room?.me);
+  const a = view.aim(ui.room?.me);
   if (!a || !me) return null;
   const d = Math.hypot(a.point.x - me.x, a.point.z - me.z);
   return d <= RANGE ? a : { ...a, far: true };
 }
 function action() {
-  if (!me?.alive || !room) return;
-  const a = aimed(), role = room.role;
+  if (!me?.alive || !ui.room) return;
+  const a = aimed(), role = ui.room.role;
   if (role === 'hunter') {
-    if (room.phase !== 'hunt') return;
+    if (ui.room.phase !== 'hunt') return;
     if (!a) return toast('Vise un objet');
     if (a.far) return toast('Trop loin : approche-toi');
     SFX.shot();
@@ -295,7 +223,7 @@ function action() {
 }
 let tauntAt = 0;
 function taunt(kind) {
-  if (!me?.alive || room?.role !== 'prop' || room.phase !== 'hunt') return;
+  if (!me?.alive || ui.room?.role !== 'prop' || ui.room.phase !== 'hunt') return;
   const wait = 8 - (performance.now() / 1000 - tauntAt);
   if (wait > 0) return toast(`Encore ${Math.ceil(wait)} s avant la prochaine moquerie`);
   tauntAt = performance.now() / 1000;
@@ -303,7 +231,7 @@ function taunt(kind) {
 }
 // Radar : la réponse n'arrive qu'à moi (positions des objets proches, en rouge, pendant 2 s)
 function radar() {
-  if (!me?.alive || room?.role !== 'hunter' || room.phase !== 'hunt') return;
+  if (!me?.alive || ui.room?.role !== 'hunter' || ui.room.phase !== 'hunt') return;
   if (!gadgets.radar) return toast('Radar déjà utilisé cette manche');
   gadgets.radar = false; SFX.radar();
   socket.emit('radar', pings => {
@@ -314,18 +242,18 @@ function radar() {
 }
 // Grenade à confettis : là où l'on vise (jusqu'à 12 m), sinon devant soi
 function grenade() {
-  if (!me?.alive || room?.role !== 'hunter' || room.phase !== 'hunt') return;
+  if (!me?.alive || ui.room?.role !== 'hunter' || ui.room.phase !== 'hunt') return;
   if (!gadgets.grenade) return toast('Grenade déjà lancée cette manche');
-  const a = view.aim(room.me);
+  const a = view.aim(ui.room.me);
   let p = a?.point ?? null;
   if (!p || Math.hypot(p.x - me.x, p.z - me.z) > 12) { const y = view.cam.yaw; p = { x: me.x - Math.sin(y) * 6, z: me.z - Math.cos(y) * 6 }; }
   gadgets.grenade = false;
   socket.emit('grenade', { x: +p.x.toFixed(2), z: +p.z.toFixed(2) });
 }
 let gadgets = { radar: true, grenade: true };
-function toggleLock() { if (room?.role !== 'prop') return; locked = !locked; toast(locked ? '🔒 Rotation bloquée' : '🔓 Rotation libre'); }
+function toggleLock() { if (ui.room?.role !== 'prop') return; locked = !locked; toast(locked ? '🔒 Rotation bloquée' : '🔓 Rotation libre'); }
 function nextWatch() {
-  const alive = room?.players.map(p => p.name).filter(n => n !== room.me && remoteAt(n, performance.now() / 1000)?.alive) ?? [];
+  const alive = ui.room?.players.map(p => p.name).filter(n => n !== ui.room.me && remoteAt(n, performance.now() / 1000)?.alive) ?? [];
   if (!alive.length) return;
   watching = alive[(alive.indexOf(watching) + 1) % alive.length];
 }
@@ -336,7 +264,7 @@ const labelEls = new Map();
 function frame(now) {
   requestAnimationFrame(frame);
   const dt = Math.min(0.1, (now - last) / 1000); last = now;
-  const t = now / 1000, s = room, list = [];
+  const t = now / 1000, s = ui.room, list = [];
   const inGame = s && ['hide', 'hunt', 'roundEnd', 'over'].includes(s.phase);
   if (inGame) {
     // Les autres (100 ms de retard pour être fluides)

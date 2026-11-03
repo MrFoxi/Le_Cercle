@@ -13,6 +13,10 @@ textes, commentaires, messages de commit (`Feat : …` / `Fix : …`).
   (players, spectators, get, spectator, taken, addPlayer, addSpectator, removePlayer, removeSpectator, viewFor, summary?)
   et ses actions ; `room.deadline` + `room.timeout()` pour les étapes chronométrées ; `room.notify()`, `room.emit()`
   (volatile) et `room.send()` (fiable) sont posés par `lib/rooms.js`.
+- `lib/room-base.js` : `BaseRoom` (joueurs, spectateurs, créateur) pour tous les `Room` ; `PartyRoom` (robots, réglages,
+  manches, fin de partie) pour Chute, Néon, Prop Hunt. `lib/leaderboard.js` : classements mondiaux (top 10 par pseudo).
+- `shared/party.js` (sur `/shared/`) : salon côté navigateur des jeux à manches (pseudo, salons, reconnexion, joueurs, fil,
+  fin de partie, sons `blip`) ; le jeu branche `onShow`/`onRoom` et lit `ui.room`.
 - `lib/store.js` : stockage durable (Upstash Redis en ligne, `data/*.json` en local). `lib/activity.js` : bandeau de l'accueil.
 - `site/index.html` : accueil (tableau `GAMES`, `PSEUDO_KEYS`) ; `site/previews/<jeu>.jpg` : aperçus.
 - `jeux/7-5/server/server.js` : seul jeu qui n'utilise pas `lib/rooms.js` (plus ancien).

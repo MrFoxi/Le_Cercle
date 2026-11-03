@@ -22,6 +22,7 @@ app.get('/imposteur/engine.js', (req, res) => res.type('js').send(require('./jeu
 app.use('/vendor/three/build', express.static(path.join(__dirname, 'node_modules/three/build')));
 app.use('/vendor/three/addons', express.static(path.join(__dirname, 'node_modules/three/examples/jsm')));
 for (const g of GAMES) app.use(`/${g}`, express.static(path.join(__dirname, 'jeux', g, 'client')));
+app.use('/shared', express.static(path.join(__dirname, 'shared')));
 app.use(express.static(path.join(__dirname, 'site')));
 
 const server = http.createServer(app);

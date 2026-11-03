@@ -1,41 +1,17 @@
 // Sillage Néon : accueil, salons, boucle de jeu. Le serveur fait avancer toutes les motos (12 pas par seconde) et envoie
 // chaque pas (« snap ») ; ici on dessine les traînées, on lisse le mouvement entre deux pas et on envoie les virages.
 import { createView } from './render.js';
+import { $, $$, esc, audio, sound, blip, party } from '/shared/party.js';
 
-const $ = s => document.querySelector(s), $$ = s => [...document.querySelectorAll(s)];
-const store = {
-  get: k => { try { return localStorage.getItem(k); } catch { return null; } },
-  set: (k, v) => { try { v == null ? localStorage.removeItem(k) : localStorage.setItem(k, v); } catch { /* stockage bloqué */ } },
-};
-const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
 const params = new URLSearchParams(location.search);
 const socket = io('/neon');
 const TICK = 1 / 12;
 const DIRS = [[1, 0], [0, 1], [-1, 0], [0, -1]];
 
 /* ---------------- Sons (synthétisés) ---------------- */
-let ac = null, hum = null;
-const audio = () => {
-  if (!ac) try {
-    ac = new AudioContext();
-    // ronronnement du moteur de sa moto
-    const o = ac.createOscillator(), o2 = ac.createOscillator(), f = ac.createBiquadFilter(), g = ac.createGain();
-    o.type = 'sawtooth'; o2.type = 'square'; o.frequency.value = 55; o2.frequency.value = 27.5; f.type = 'lowpass'; f.frequency.value = 400; g.gain.value = 0;
-    o.connect(f); o2.connect(f); f.connect(g).connect(ac.destination); o.start(); o2.start();
-    hum = { o, o2, f, g };
-  } catch { /* pas de son */ }
-  if (ac?.state === 'suspended') ac.resume();
-  return ac;
-};
-function blip(f0, f1, dur, type = 'sine', vol = 0.12) {
-  if (!ac) return;
-  const t = ac.currentTime, o = ac.createOscillator(), g = ac.createGain();
-  o.type = type; o.frequency.setValueAtTime(f0, t); o.frequency.exponentialRampToValueAtTime(f1, t + dur);
-  g.gain.setValueAtTime(vol, t); g.gain.exponentialRampToValueAtTime(0.001, t + dur);
-  o.connect(g).connect(ac.destination); o.start(t); o.stop(t + dur + 0.02);
-}
+let hum = null;
 function boom(vol = 0.35) {
-  if (!ac) return;
+  const ac = sound(); if (!ac) return;
   const t = ac.currentTime, b = ac.createBuffer(1, ac.sampleRate * 0.6, ac.sampleRate), d = b.getChannelData(0);
   for (let k = 0; k < d.length; k++) d[k] = (Math.random() * 2 - 1) * (1 - k / d.length) ** 2;
   const s = ac.createBufferSource(), f = ac.createBiquadFilter(), g = ac.createGain();
@@ -47,66 +23,25 @@ const SFX = {
   boost: () => blip(200, 900, 0.4, 'sawtooth', 0.06),
   tick: () => blip(440, 440, 0.12, 'square', 0.06),
   go: () => blip(880, 1760, 0.4, 'square', 0.07),
-  win: () => [523, 659, 784, 1046, 1318].forEach((f, k) => setTimeout(() => blip(f, f, 0.22, 'triangle', 0.1), k * 110)),
 };
-const setHum = (on, boost) => { if (!hum) return; const t = ac.currentTime; hum.g.gain.setTargetAtTime(on ? 0.05 : 0, t, 0.1); hum.o.frequency.setTargetAtTime(boost ? 95 : 55, t, 0.1); hum.o2.frequency.setTargetAtTime(boost ? 47 : 27.5, t, 0.1); hum.f.frequency.setTargetAtTime(boost ? 1400 : 400, t, 0.1); };
-
-/* ---------------- Écrans et salons ---------------- */
-let pseudo = store.get('neon-pseudo') || store.get('pseudo') || '';
-$('#nameForm').pseudo.value = pseudo;
-$('#nameForm').pseudo.oninput = e => { pseudo = e.target.value.trim().slice(0, 20); store.set('neon-pseudo', pseudo); };
-$('#nameForm').onsubmit = e => e.preventDefault();
-function show(id) {
-  for (const s of $$('.screen')) s.hidden = s.id !== id;
-  const playing = id === 'game';
-  $('#hud').hidden = !playing;
-  document.body.classList.toggle('playing', playing);
-  if (!playing) setHum(false);
+// Ronronnement du moteur de sa moto, créé au premier besoin une fois le son permis
+function setHum(on, boost) {
+  const ac = sound(); if (!ac) return;
+  if (!hum) {
+    const o = ac.createOscillator(), o2 = ac.createOscillator(), f = ac.createBiquadFilter(), g = ac.createGain();
+    o.type = 'sawtooth'; o2.type = 'square'; o.frequency.value = 55; o2.frequency.value = 27.5; f.type = 'lowpass'; f.frequency.value = 400; g.gain.value = 0;
+    o.connect(f); o2.connect(f); f.connect(g).connect(ac.destination); o.start(); o2.start();
+    hum = { o, o2, f, g };
+  }
+  const t = ac.currentTime; hum.g.gain.setTargetAtTime(on ? 0.05 : 0, t, 0.1); hum.o.frequency.setTargetAtTime(boost ? 95 : 55, t, 0.1); hum.o2.frequency.setTargetAtTime(boost ? 47 : 27.5, t, 0.1); hum.f.frequency.setTargetAtTime(boost ? 1400 : 400, t, 0.1);
 }
-const needName = () => { if (pseudo) return false; $('#nameForm').pseudo.focus(); alert('Choisis d’abord un pseudo'); return true; };
-const ask = (ev, payload) => new Promise(res => socket.emit(ev, payload, r => res(r)));
-const act = (...a) => new Promise(res => socket.emit('act', ...a, r => { if (r?.error) alert(r.error); res(r); }));
-async function enter(ev, payload) {
-  if (needName()) return null;
-  const r = await ask(ev, { ...payload, name: pseudo });
-  if (r?.error) alert(r.error);
-  return r?.ok ? r : null;
-}
-$('#soloBtn').onclick = async () => {
-  audio();
-  if (!(await enter('create', { private: true }))) return;
-  for (let k = 0; k < 3; k++) await act('addBot');
-  act('start');
-};
-$('#createForm').onsubmit = e => { e.preventDefault(); audio(); enter('create', { private: e.target.vis.value === 'private' }); };
-$('#joinForm').onsubmit = e => { e.preventDefault(); audio(); enter('join', { code: e.target.code.value, watch: e.submitter?.value === 'watch' }); };
-$('#rooms').onclick = e => { const b = e.target.closest('[data-room]'); if (b) { audio(); enter('join', { code: b.dataset.room, watch: b.dataset.mode === 'watch' }); } };
-socket.on('rooms', list => {
-  $('#rooms').innerHTML = list.length ? list.map(r => `<li><span><b class="code">${r.code}</b> · ${r.players.map(esc).join(', ')} ${r.phase !== 'lobby' ? '· 🏍️ en jeu' : ''}</span>
-    ${r.phase === 'lobby' ? `<button class="small primary" data-room="${r.code}">Rejoindre</button>` : ''}<button class="small ghost" data-room="${r.code}" data-mode="watch">👁</button></li>`).join('') : '<li class="hint">Aucun salon public : crée le tien !</li>';
-});
-const leave = () => { socket.emit('leave'); store.set('neon-session', null); room = null; history.replaceState(null, '', location.pathname); $('#board').hidden = true; show('home'); };
-$('#leave').onclick = leave;
-$('#quitGame').onclick = leave;
-$('#copyLink').onclick = () => { navigator.clipboard?.writeText(`${location.origin}/neon/?salon=${room.code}`); $('#copyLink').textContent = '✓ Copié'; setTimeout(() => ($('#copyLink').textContent = '🔗 Copier le lien'), 1500); };
-$('#addBot').onclick = () => act('addBot');
-$('#startBtn').onclick = () => { audio(); act('start'); };
-$('#rounds').onchange = e => act('configure', 'rounds', Number(e.target.value));
-$('#players').onclick = e => { const b = e.target.closest('[data-bot]'); if (b) act('removeBot', b.dataset.bot); };
-socket.on('session', s => { store.set('neon-session', JSON.stringify(s)); history.replaceState(null, '', `?salon=${s.code}`); });
-socket.on('closed', msg => { alert(msg); leave(); });
-socket.on('connect', () => {
-  let s = null; try { s = JSON.parse(store.get('neon-session')); } catch { /* illisible */ }
-  const code = params.get('salon');
-  if (s && (!code || s.code === code)) socket.emit('resume', s, r => { if (r?.error) { store.set('neon-session', null); if (code && pseudo) enter('join', { code }); } });
-  else if (code && pseudo) enter('join', { code });
-});
 
-/* ---------------- État du salon ---------------- */
-let room = null, offset = 0, roundKey = '', seenOrder = 0, lastCount = null;
-const colorOf = n => room?.players.find(p => p.name === n)?.color ?? '#ffffff';
+/* ---------------- Salon ---------------- */
+const ui = party({ id: 'neon', socket, max: 8, bots: 3, busy: '🏍️ en jeu', onShow: screen => screen !== 'game' && setHum(false) });
+const { show, feed } = ui;
+let offset = 0, roundKey = '', seenOrder = 0, lastCount = null;
+const colorOf = n => ui.room?.players.find(p => p.name === n)?.color ?? '#ffffff';
 socket.on('state', s => {
-  room = s;
   if (!s) return;
   offset = s.now - Date.now();
   const inGame = ['countdown', 'play', 'roundEnd', 'over'].includes(s.phase);
@@ -132,32 +67,16 @@ socket.on('state', s => {
   }
   seenOrder = s.order.length;
   if (s.phase === 'roundEnd' || s.phase === 'over') showBoard(s);
-  renderRoom();
+  ui.renderRoom();
 });
-function renderRoom() {
-  const s = room, host = s.host === s.me;
-  $('#roomCode').textContent = s.code;
-  $('#count').textContent = `(${s.players.length}/8)`;
-  $('#players').innerHTML = s.players.map(p => `<li class="${p.connected ? '' : 'off'}"><i class="dot" style="background:${p.color};box-shadow:0 0 10px ${p.color}"></i><span>${esc(p.name)}${p.name === s.host ? ' 👑' : ''}${p.wins ? ` · 🏆 ${p.wins}` : ''}</span>${p.bot && host ? `<button class="small ghost" data-bot="${esc(p.name)}" aria-label="Retirer ${esc(p.name)}">✕</button>` : ''}</li>`).join('');
-  $('#spect').textContent = s.spectators.length ? `👁 ${s.spectators.join(', ')}` : '';
-  $('#addBot').hidden = !host; $('#rounds').disabled = !host; $('#rounds').value = s.settings.rounds;
-  $('#startBtn').hidden = !host; $('#startBtn').disabled = s.players.length < 2;
-  $('#roomHint').textContent = host ? (s.players.length < 2 ? 'Ajoute des robots ou invite des amis (lien ci-dessus).' : 'Tout le monde est là ? Lance la partie !') : 'Le créateur du salon lance la partie.';
-}
-function feed(text) { const li = document.createElement('li'); li.textContent = text; $('#feed').prepend(li); setTimeout(() => li.remove(), 4000); }
 function showBoard(s) {
-  const over = s.phase === 'over', host = s.host === s.me;
+  const over = s.phase === 'over';
   const rows = over ? s.ranking : [...s.players].sort((a, b) => b.points - a.points);
   const gained = n => Math.max(0, s.order.indexOf(n));
   $('#boardTitle').textContent = over ? `🏆 ${rows[0]?.name === s.me ? 'Tu gagnes la partie !' : `${rows[0]?.name} gagne la partie !`}` : `⚡ ${s.lastWinner === s.me ? 'Tu gagnes la manche !' : s.lastWinner ? `${s.lastWinner} gagne la manche` : 'Égalité : tout le monde est sorti'}`;
   $('#boardList').innerHTML = rows.map((p, k) => `<li class="${p.name === s.me ? 'me' : ''}"><b>${k + 1}</b><i style="width:12px;height:12px;border-radius:3px;background:${p.color};box-shadow:0 0 8px ${p.color}"></i><span>${esc(p.name)}</span>${over ? '' : `<em>+${gained(p.name)}</em>`}<strong>${p.points} pts</strong></li>`).join('');
   $('#boardHint').textContent = over ? '' : `Manche ${s.roundNo}/${s.settings.rounds} terminée · la suite arrive…`;
-  const btns = $('#boardButtons'); btns.innerHTML = '';
-  if (over) {
-    if (host) { const b = document.createElement('button'); b.className = 'primary'; b.textContent = 'Rejouer'; b.onclick = async () => { await act('again'); act('start'); }; btns.append(b); }
-    const b2 = document.createElement('button'); b2.className = 'ghost'; b2.textContent = host ? 'Retour au salon' : 'Quitter'; b2.onclick = () => (host ? act('again') : leave()); btns.append(b2);
-    if (rows[0]?.name === s.me) SFX.win();
-  }
+  ui.endButtons(s, rows);
   $('#board').hidden = false;
 }
 
@@ -180,16 +99,16 @@ socket.on('snap', snap => {
       // les cases parcourues pendant ce pas (1, ou 2 avec le turbo), en ligne droite
       const steps = Math.abs(x - h.x) + Math.abs(y - h.y), dx = Math.sign(x - h.x), dy = Math.sign(y - h.y);
       // sa propre moto est affichée en avance : ses cases sont déjà parcourues à l'écran
-      for (let j = 0; j < steps; j++) { const k = view.addSeg(n, colorOf(n), h.x + dx * j, h.y + dy * j, h.x + dx * (j + 1), h.y + dy * (j + 1), n === room?.me ? 1 : 0); if (n !== room?.me) h.segs.push(k); }
+      for (let j = 0; j < steps; j++) { const k = view.addSeg(n, colorOf(n), h.x + dx * j, h.y + dy * j, h.x + dx * (j + 1), h.y + dy * (j + 1), n === ui.room?.me ? 1 : 0); if (n !== ui.room?.me) h.segs.push(k); }
     }
     Object.assign(h, { px: h.x, py: h.y, x, y, dir, boost });
-    if (n === room?.me) {
+    if (n === ui.room?.me) {
       if (boost && !h.wasBoost) SFX.boost(); h.wasBoost = boost; myEnergy = energy;
       const now = performance.now() / 1000;
       if (pending[0] && dir === pending[0].d) pending.shift(); // virage appliqué par le serveur
       pending = pending.filter(p => now - p.at < 0.6);
     }
-    if (!alive && h.alive) { view.explode(x, y, colorOf(n)); view.clear(n); boom(n === room?.me ? 0.45 : 0.2); if (n === room?.me) tip = -1; }
+    if (!alive && h.alive) { view.explode(x, y, colorOf(n)); view.clear(n); boom(n === ui.room?.me ? 0.45 : 0.2); if (n === ui.room?.me) tip = -1; }
     h.alive = !!alive;
   }
 });
@@ -210,8 +129,8 @@ function sync() {
       if (!linked && !(x > 0 && g[c - 1] === v) && !(y > 0 && g[c - S] === v)) view.addSeg(name, colorOf(name), x, y, x, y);
     });
     for (const h of heads.values()) h.segs = [];
-    const me = heads.get(room?.me);
-    tip = me?.alive ? view.addSeg(room.me, colorOf(room.me), me.x, me.y, me.x + 1, me.y, 0) : -1;
+    const me = heads.get(ui.room?.me);
+    tip = me?.alive ? view.addSeg(ui.room.me, colorOf(ui.room.me), me.x, me.y, me.x + 1, me.y, 0) : -1;
     lastK = d.k;
   });
 }
@@ -219,8 +138,8 @@ function sync() {
 /* ---------------- Commandes ---------------- */
 const KEYDIR = { ArrowRight: 0, KeyD: 0, ArrowDown: 1, KeyS: 1, ArrowLeft: 2, KeyA: 2, ArrowUp: 3, KeyW: 3 };
 const turn = d => {
-  const me = heads.get(room?.me);
-  if (me?.alive && room.phase !== 'roundEnd') {
+  const me = heads.get(ui.room?.me);
+  if (me?.alive && ui.room.phase !== 'roundEnd') {
     const lastDir = pending.length ? pending.at(-1).d : me.dir;
     if (d === lastDir || (d + 2) % 4 === lastDir || pending.length >= 3) return; // même règle que le serveur
     pending.push({ d, at: performance.now() / 1000 });
@@ -258,7 +177,7 @@ const labelEls = new Map();
 function frame(now) {
   requestAnimationFrame(frame);
   const dt = Math.min(0.1, (now - last) / 1000); last = now;
-  const t = now / 1000, s = room;
+  const t = now / 1000, s = ui.room;
   const list = [];
   if (s && ['countdown', 'play', 'roundEnd', 'over'].includes(s.phase)) {
     // entre deux pas : les motos glissent de leur ancienne case à la nouvelle, et les traînées poussent avec elles

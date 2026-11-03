@@ -77,7 +77,10 @@ Le reste :
 - `server.js` : démarre le site, branche chaque jeu, `/health`, `/api/online`, `/api/activity`.
 - `site/` : la page d'accueil (`index.html`) et les aperçus des jeux (`previews/`).
 - `lib/rooms.js` : salons temps réel communs (code, salon public ou privé, reconnexion par jeton, spectateurs, chat). Un jeu fournit sa classe `Room` et la liste de ses actions ; si la `Room` a un `deadline`, sa méthode `timeout()` est appelée à l’heure dite.
+- `lib/room-base.js` : base des classes `Room` (joueurs, spectateurs, créateur) ; `PartyRoom` y ajoute robots, réglages, manches et fin de partie pour les jeux à manches (Chute Libre, Sillage Néon, Prop Hunt).
+- `lib/leaderboard.js` : classements mondiaux (top 10, meilleur score par pseudo) pour Trouve le pays, Pinball, Démineur Rogue et Top Formula.
 - `lib/store.js` (stockage durable), `lib/activity.js` (bandeau d’activité de l’accueil).
+- `shared/party.js` (servi sur `/shared/`) : côté navigateur des jeux à manches : pseudo, salons, reconnexion, lien d’invitation, liste des joueurs, fil d’événements, fin de partie et petits sons.
 - `npm test` lance tous les fichiers `*.test.*` (`node --test`).
 
 ### Détail par jeu
