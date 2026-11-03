@@ -27,6 +27,7 @@ export const ZONES = {
   cote: 'Côtes de Port-Galet', recif: 'Récif des Palmes', roche: 'Rochers des Falaises', phare: 'Eaux du Phare',
   large: 'Haute mer', fosse: 'La Fosse',
 };
+export const ZONE_SHORT = { cote: 'côtes de Port-Galet', recif: 'récif des Palmes', roche: 'rochers des Falaises', phare: 'eaux du Phare', large: 'haute mer', fosse: 'la Fosse' };
 
 // Coins de pêche : des remous où les poissons rares mordent plus souvent.
 export const SPOTS = [
@@ -106,6 +107,51 @@ export const FISH = [
     look: { shape: 'anguille', body: '#cfd8e3', belly: '#ffffff', accent: '#7aa7d6', pattern: 'scales' }, desc: 'La légende de l’archipel. Il ne remonte de la Fosse que les nuits d’orage.' },
 ];
 
+// Pris seulement dans les casiers (trap : eaux où le casier les attrape) ou en plongée au harpon (dive).
+FISH.push(
+  { id: 'crabe', name: 'Crabe vert', zones: [], trap: ['cote', 'recif', 'roche', 'phare'], rarity: 'commun', price: 6, size: [6, 11], when: 'toujours', difficulty: 1, wait: [1, 2],
+    look: { shape: 'crabe', body: '#5f8f3a', belly: '#a9c46a', accent: '#2f4f1f', pattern: 'plain' }, desc: 'Il court de travers et pince tout ce qui bouge.' },
+  { id: 'etrille', name: 'Étrille', zones: [], trap: ['cote', 'roche'], rarity: 'peu', price: 14, size: [6, 10], when: 'toujours', difficulty: 1, wait: [1, 2],
+    look: { shape: 'crabe', body: '#5a4a8a', belly: '#9a8ac0', accent: '#e04848', pattern: 'spots' }, desc: 'Un petit crabe aux yeux rouges, réputé pour sa chair fine.' },
+  { id: 'araignee', name: 'Araignée de mer', zones: [], trap: ['cote', 'phare'], rarity: 'peu', price: 18, size: [12, 22], when: 'toujours', difficulty: 1, wait: [1, 2],
+    look: { shape: 'crabe', body: '#d08a4a', belly: '#f0c08a', accent: '#8a4a1a', pattern: 'spines' }, desc: 'De longues pattes fines et une carapace hérissée de piquants.' },
+  { id: 'poulpe', name: 'Poulpe', zones: [], trap: ['roche', 'recif'], rarity: 'peu', price: 24, size: [30, 90], when: 'toujours', difficulty: 1, wait: [1, 2],
+    look: { shape: 'poulpe', body: '#c8645a', belly: '#f0a89a', accent: '#7a2a24', pattern: 'spots' }, desc: 'Huit bras, trois cœurs, et assez malin pour entrer dans le casier… mais pas pour en sortir.' },
+  { id: 'langouste', name: 'Langouste royale', zones: [], trap: ['recif'], rarity: 'rare', price: 58, size: [25, 45], when: 'toujours', difficulty: 1, wait: [1, 2],
+    look: { shape: 'homard', body: '#e0703a', belly: '#f5b07a', accent: '#8a3010', pattern: 'spots' }, desc: 'Ses longues antennes dépassent du casier. Soir de fête à Anse-Corail !' },
+  { id: 'homard', name: 'Homard bleu', zones: [], trap: ['roche', 'phare'], rarity: 'rare', price: 72, size: [25, 50], when: 'toujours', difficulty: 1, wait: [1, 2],
+    look: { shape: 'homard', body: '#2f5fa8', belly: '#7aa0d8', accent: '#14284a', pattern: 'plain' }, desc: 'Bleu comme la nuit, avec deux pinces énormes.' },
+  { id: 'ange', name: 'Poisson-ange royal', zones: [], dive: ['recif'], rarity: 'rare', price: 66, size: [20, 35], when: 'toujours', difficulty: 3, wait: [1, 2],
+    look: { shape: 'ange', body: '#ffcf3a', belly: '#ffe9a0', accent: '#2a3fbf', pattern: 'stripes' }, desc: 'Le joyau du lagon : on ne l’approche qu’en plongée.' },
+  { id: 'baliste', name: 'Baliste picasso', zones: [], dive: ['recif'], rarity: 'peu', price: 28, size: [18, 30], when: 'toujours', difficulty: 2, wait: [1, 2],
+    look: { shape: 'rond', body: '#e8e0c8', belly: '#fff8e6', accent: '#2a2a2a', pattern: 'band' }, desc: 'On dirait qu’un peintre l’a dessiné. Il grogne quand on l’approche !' },
+  { id: 'murene', name: 'Murène tigrée', zones: [], dive: ['recif', 'cote'], rarity: 'peu', price: 32, size: [60, 140], when: 'toujours', difficulty: 2, wait: [1, 2],
+    look: { shape: 'anguille', body: '#d8c050', belly: '#f0e0a0', accent: '#3a3010', pattern: 'spots' }, desc: 'Elle guette depuis son trou, la bouche ouverte. Impressionnante, mais pas méchante.' },
+);
+// L'appât préféré de chaque poisson (il mord trois fois plus souvent avec), et sa façon de se battre au moulinet :
+// calme, course (il file et la vitesse change), fond (il tire vers le fond : l'arc rétrécit), saut (l'arc bouge), zigzag (l'aiguille change de sens).
+const BAIT_OF = { maquereau: 'leurre', rouget: 'ver', bar: 'leurre', sole: 'ver', perroquet: 'crevette', labre: 'crevette', merou: 'calmar', vieille: 'crevette',
+  rascasse: 'ver', congre: 'calmar', daurade: 'crevette', thon: 'leurre', espadon: 'calmar', calmar: 'lumineux', lanterne: 'lumineux', hareng: 'leurre',
+  grenadier: 'ver', baudroie: 'lumineux', dragon: 'lumineux', roi: 'leurre', raie: 'lumineux', leviathan: 'calmar', lune: 'crevette' };
+const FIGHT_OF = { thon: 'course', espadon: 'saut', merou: 'fond', congre: 'fond', baudroie: 'fond', leviathan: 'course', raie: 'saut', bar: 'zigzag',
+  rascasse: 'zigzag', daurade: 'zigzag', dragon: 'zigzag', roi: 'saut', labre: 'zigzag', maquereau: 'course', lune: 'fond', grenadier: 'fond' };
+const DIVE_OF = { perroquet: ['recif'], labre: ['recif'], merou: ['recif'], rouget: ['cote'], bar: ['cote'], sole: ['cote'], sardine: ['cote'] };
+for (const f of FISH) { f.bait = BAIT_OF[f.id] ?? null; f.fight = FIGHT_OF[f.id] ?? 'calme'; f.trap ??= null; f.dive ??= DIVE_OF[f.id] ?? null; }
+export const FIGHTS = { calme: '', course: 'Il file au large !', fond: 'Il tire vers le fond !', saut: 'Il saute hors de l’eau !', zigzag: 'Il zigzague dans tous les sens !' };
+
+// ---------- Appâts (vendus par paquets ; le leurre ne s'use pas) ----------
+export const BAITS = {
+  ver: { name: 'Vers de vase', icon: '🪱', pack: 5, cost: 8, desc: 'Les poissons de fond en raffolent : rouget, sole, rascasse…' },
+  crevette: { name: 'Crevettes', icon: '🦐', pack: 5, cost: 12, desc: 'Le régal des poissons du récif.' },
+  calmar: { name: 'Lamelles de calmar', icon: '🦑', pack: 5, cost: 20, desc: 'Pour les gros : mérou, congre, espadon…' },
+  lumineux: { name: 'Appât lumineux', icon: '✨', pack: 5, cost: 25, desc: 'Brille dans le noir : les poissons de nuit mordent même sans lanterne.' },
+  leurre: { name: 'Leurre argenté', icon: '🎏', pack: 1, cost: 90, forever: true, desc: 'Ne s’use jamais. Les chasseurs (maquereau, bar, thon) ne lui résistent pas.' },
+};
+export const BAIT_SHOPS = { port: ['ver', 'calmar', 'leurre'], corail: ['crevette', 'lumineux', 'calmar'] };
+export const GEAR = {
+  harpon: { name: 'Masque et harpon', icon: '🤿', cost: 260, shop: 'corail', desc: 'Plonge là où l’eau est claire et peu profonde (touche H) et chasse au harpon. On y trouve aussi des huîtres perlières.' },
+};
+
 // ---------- Améliorations (chantier naval de Port-Galet) ----------
 // levels[k] : le niveau k ; le niveau 0 est celui du départ (gratuit).
 export const UPGRADES = {
@@ -124,6 +170,12 @@ export const UPGRADES = {
     { name: 'Coque de haute mer', cost: 1200, desc: 'Affronte les creux de la Fosse.' }] },
   lanterne: { name: 'Lanterne', icon: '🏮', levels: [
     { name: 'Pas de lanterne', cost: 0 }, { name: 'Lanterne de pont', cost: 160, desc: 'Éclaire la nuit : les poissons nocturnes mordent à sa lumière.' }] },
+  filet: { name: 'Filet de traîne', icon: '🥅', levels: [
+    { name: 'Pas de filet', cost: 0 }, { name: 'Petit filet de traîne', cost: 220, every: 260, desc: 'Se déploie derrière le bateau (touche N) et attrape des petits poissons pendant que tu navigues.' },
+    { name: 'Grand filet', cost: 700, every: 150, desc: 'Attrape deux fois plus souvent.' }] },
+  casiers: { name: 'Casiers', icon: '🦀', levels: [
+    { name: 'Aucun casier', cost: 0, count: 0 }, { name: '2 casiers', cost: 150, count: 2, desc: 'Pose-les sur un fond peu profond (touche T) et reviens quelques heures plus tard.' },
+    { name: '4 casiers', cost: 450, count: 4 }, { name: '6 casiers', cost: 900, count: 6 }] },
 };
 
 // ---------- Villages et habitants ----------
@@ -154,10 +206,11 @@ export const PEOPLE = [
       { id: 'alliance', text: 'Retrouve la boîte de Gustave, quelque part près des Falaises.', type: 'find', item: 'alliance', reward: 150, done: 'Ma bague… cinquante ans après. Merci, petit. Merci.' },
     ] },
   { id: 'ines', name: 'Inès', role: 'Plongeuse', village: 'corail', face: '🤿',
-    hello: 'Le récif est vivant, tu sais. Je plonge tous les jours et je ne m’en lasse pas.',
+    hello: 'Le récif est vivant, tu sais. Je plonge tous les jours et je ne m’en lasse pas. Si tu veux essayer, je vends masques et harpons à la boutique.',
     quests: [
       { id: 'labre', text: 'Montre-moi un Labre arc-en-ciel, pour mon carnet de dessins.', type: 'catch', fish: 'labre', reward: 80, done: 'Regarde ces couleurs ! Je le dessine et je te le rends… enfin, je le garde.' },
       { id: 'merou', text: 'Le vieux Mérou corail du récif… personne ne l’a jamais sorti de l’eau.', type: 'catch', fish: 'merou', reward: 220, done: 'Incroyable. Il est encore plus gros que dans mes rêves.' },
+      { id: 'ange', text: 'Prends mon masque et mon harpon (boutique), plonge dans le lagon (touche H) et montre-moi un Poisson-ange royal.', type: 'catch', fish: 'ange', reward: 180, done: 'Tu l’as vu de près, hein ? Le plus beau poisson du monde.' },
     ] },
   { id: 'kai', name: 'Kaï', role: 'Gamin du hameau', village: 'corail', face: '🧒',
     hello: 'T’as vu le phare, au sud-ouest ? Mon oncle dit qu’il faut une coque solide pour y aller.',

@@ -26,7 +26,7 @@
         <button class="primary big" id="playBtn">⛵ Prendre la mer</button>
         <button class="ghost" id="newBtn" hidden>Nouvelle partie</button>
       </div>
-      <p class="keys"><b>ZQSD</b> ou flèches : naviguer · <b>Espace</b> : pêcher · <b>E</b> : accoster · <b>I</b> cale · <b>C</b> carnet · <b>M</b> carte</p>
+      <p class="keys"><b>ZQSD</b> ou flèches : naviguer · <b>Espace</b> : pêcher · <b>E</b> : accoster · <b>B</b> appât · <b>T</b> casier · <b>N</b> filet · <b>H</b> plonger · <b>I</b> cale · <b>C</b> carnet · <b>M</b> carte</p>
     </div>
   </section>
 
@@ -35,6 +35,7 @@
     <div class="pills left">
       <span class="pill" id="hMoney" title="Ton argent">🪙 0</span>
       <span class="pill" id="hCargo" title="Ta cale">🐟 0/6</span>
+      <button class="pill btn" id="hBait" title="Appât (B pour changer)">🪱 5</button>
     </div>
     <div class="pills right">
       <span class="pill" id="hClock" title="Heure et météo">☀️ 07:00</span>
@@ -48,6 +49,7 @@
     <canvas id="minimap" width="300" height="300"></canvas>
     <div id="hint"></div>
     <div id="bite">!</div>
+    <div id="o2" hidden><span>🫧</span><b><i></i></b></div>
     <div id="reel" hidden>
       <canvas id="reelCanvas" width="320" height="320"></canvas>
       <p id="reelText">Appuie quand l’aiguille est dans le vert !</p>
@@ -56,6 +58,9 @@
     <div id="touch" hidden>
       <div id="stick"><i></i></div>
       <div class="tbtns">
+        <button id="tTrap" hidden title="Poser un casier">🦀</button>
+        <button id="tNet" hidden title="Filet">🥅</button>
+        <button id="tDive" hidden title="Plonger">🤿</button>
         <button id="tFish">🎣</button>
         <button id="tAct">⚓</button>
       </div>

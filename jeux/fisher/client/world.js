@@ -65,6 +65,7 @@ const CORALS = ['#ff8a8a', '#ffb35c', '#c27be0', '#ff6fa8', '#ffd36b'].map(c => 
 export function createWorld(renderer, scene, { low = false } = {}) {
   const rng = mulberry(20261103);
   const uTime = { value: 0 }; // horloge partagée par l'eau, les reflets du fond et la végétation
+  let under = false;          // la caméra est sous l'eau (plongée)
   const root = new THREE.Group(); scene.add(root);
   const anim = []; // fonctions (dt, t, night) appelées à chaque image
 
@@ -184,6 +185,17 @@ export function createWorld(renderer, scene, { low = false } = {}) {
       float noise(vec2 p) { vec2 i = floor(p), f = fract(p), u = f * f * (3.0 - 2.0 * f);
         return mix(mix(hash(i), hash(i + vec2(1, 0)), u.x), mix(hash(i + vec2(0, 1)), hash(i + vec2(1, 1)), u.x), u.y); }
       void main() {
+        if (!gl_FrontFacing) { // vue d'en dessous, en plongée : une surface lumineuse et ondulante
+          vec3 vd = normalize(vPos - cameraPosition);
+          float spot = pow(max(dot(vd, uSunDir), 0.0), 8.0), rip = noise(vPos.xz * 0.6 + uTime * 0.5);
+          vec3 c = mix(uShallow * (0.85 + rip * 0.35), vec3(0.9, 0.98, 1.0), spot * (1.0 - uNight * 0.7));
+          float dd = length(cameraPosition - vPos);
+          c = mix(c, uFogColor, 1.0 - exp(-uFogDensity * uFogDensity * dd * dd));
+          gl_FragColor = vec4(c, 0.95);
+          #include <tonemapping_fragment>
+          #include <colorspace_fragment>
+          return;
+        }
         float ground = texture2D(uDepth, vPos.xz / uSpan + 0.5).r * 70.0 - 60.0;
         float depth = max(0.0, -ground);
         vec3 col = mix(uShallow, uDeep, smoothstep(0.3, 20.0, depth));
@@ -217,7 +229,7 @@ export function createWorld(renderer, scene, { low = false } = {}) {
       }`,
   });
   const waterGeo = new THREE.PlaneGeometry(SPAN, SPAN, 300, 300); waterGeo.rotateX(-Math.PI / 2);
-  waterMat.transparent = true;
+  waterMat.transparent = true; waterMat.side = THREE.DoubleSide;
   const water = new THREE.Mesh(waterGeo, waterMat);
   water.frustumCulled = false; water.renderOrder = -1; // dessinée avant les autres objets transparents (écume, remous)
   root.add(water);
@@ -600,6 +612,12 @@ export function createWorld(renderer, scene, { low = false } = {}) {
     state.fog += (fog - state.fog) * Math.min(1, dt * 0.8);
     scene.fog.density = U.uFogDensity.value = state.fog;
     scene.fog.color.copy(skyU.uHorizon.value); U.uFogColor.value.copy(skyU.uHorizon.value);
+    if (under) { // sous l'eau : un brouillard bleu-vert, on ne voit pas loin
+      const c = U.uShallow.value.clone().multiplyScalar(0.5);
+      scene.fog.color.copy(c); U.uFogColor.value.copy(c); scene.fog.density = U.uFogDensity.value = 0.042;
+    }
+    scene.background = under ? scene.fog.color : null; // le lointain se fond dans l'eau
+    sky.visible = !under;
     // lumières
     sun.color.copy(skyU.uSunColor.value);
     sun.intensity = (night > 0.5 ? 0.6 : 2.6 * (1 - dusk * 0.35)) * (1 - wet * 0.55 - mist * 0.4);
@@ -612,7 +630,7 @@ export function createWorld(renderer, scene, { low = false } = {}) {
     // ciel et pluie suivent la caméra
     sky.position.copy(camera.position);
     for (const c of clouds) { c.position.x += dt * 4; if (c.position.x > 1300) c.position.x -= 2600; }
-    rain.visible = wet > 0.9;
+    rain.visible = wet > 0.9 && !under;
     if (rain.visible) {
       rain.position.set(camera.position.x, camera.position.y - 30, camera.position.z);
       const p = rainGeo.attributes.position;
@@ -631,5 +649,6 @@ export function createWorld(renderer, scene, { low = false } = {}) {
   return {
     heightAt, waveAt, docks, obstacles, people, treasures, spots: spotMeshes, update, state, sunDir,
     hideTreasure: id => { const g = treasures.get(id); if (g) g.visible = false; },
+    setUnder: on => { under = on; },
   };
 }

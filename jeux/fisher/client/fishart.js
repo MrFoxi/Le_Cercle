@@ -12,12 +12,38 @@ export function fishImage(f, silhouette = false) {
   const grad = () => { const gr = g.createLinearGradient(0, -40, 0, 40); gr.addColorStop(0, shade(body, -0.18)); gr.addColorStop(0.5, body); gr.addColorStop(1, belly); return gr; };
 
   // contour du corps selon la forme ; a : demi-longueur, b : demi-hauteur
-  const dims = { long: [78, 22], rond: [62, 38], plat: [70, 34], anguille: [100, 13], calmar: [70, 20], raie: [60, 46], epee: [70, 20] }[L.shape];
+  const dims = { long: [78, 22], rond: [62, 38], plat: [70, 34], anguille: [100, 13], calmar: [70, 20], raie: [60, 46], epee: [70, 20], ange: [46, 44], crabe: [44, 26], homard: [70, 16], poulpe: [36, 32] }[L.shape];
   const [a, b] = dims;
   g.save();
   g.lineJoin = 'round';
   g.strokeStyle = silhouette ? '#122230' : shade(body, -0.45); g.lineWidth = 3;
-  if (L.shape === 'raie') {
+  const eyesOn = (xs, y, r = 5) => { for (const x of xs) { g.beginPath(); g.arc(x, y, r, 0, 7); g.fillStyle = silhouette ? '#3a5266' : '#fff'; g.fill(); if (!silhouette) { g.beginPath(); g.arc(x, y + 1, r * 0.55, 0, 7); g.fillStyle = '#111'; g.fill(); } } };
+  if (L.shape === 'crabe' || L.shape === 'homard') {
+    const lob = L.shape === 'homard', legCol = silhouette ? '#1c2c3a' : acc;
+    g.strokeStyle = legCol; g.lineWidth = 4;
+    for (let k = 0; k < 4; k++) for (const s of [-1, 1]) { // pattes
+      const x = lob ? -10 + k * 12 : -24 + k * 16;
+      g.beginPath(); g.moveTo(x, s * b * 0.5); g.lineTo(x + s * 0 - 8, s * (b + 16)); g.lineTo(x - 14, s * (b + 22)); g.stroke();
+    }
+    for (const s of [-1, 1]) { // pinces
+      g.beginPath(); g.moveTo(lob ? a * 0.5 : a * 0.6, s * b * 0.4); g.lineTo(lob ? a + 18 : a + 14, s * (b + 10)); g.stroke();
+      g.beginPath(); g.ellipse(lob ? a + 26 : a + 22, s * (b + 12), lob ? 14 : 16, lob ? 9 : 10, s * 0.4, 0, 7); g.fillStyle = silhouette ? '#24384a' : body; g.fill(); g.strokeStyle = silhouette ? '#122230' : shade(body, -0.45); g.lineWidth = 3; g.stroke(); g.strokeStyle = legCol; g.lineWidth = 4;
+    }
+    if (lob) { g.lineWidth = 2; for (const s of [-1, 1]) { g.beginPath(); g.moveTo(a, s * 4); g.quadraticCurveTo(a + 40, s * 30, a + 50, s * 54); g.stroke(); } }
+    g.strokeStyle = silhouette ? '#122230' : shade(body, -0.45); g.lineWidth = 3;
+    if (lob) for (let k = 0; k < 4; k++) { g.beginPath(); g.ellipse(-a * 0.35 - k * 14, 0, 11 - k, b - k * 2, 0, 0, 7); g.fillStyle = grad(); g.fill(); g.stroke(); }
+    g.beginPath(); g.ellipse(lob ? a * 0.3 : 0, 0, lob ? a * 0.55 : a, b, 0, 0, 7); g.fillStyle = grad(); g.fill(); g.stroke();
+    if (!silhouette) { g.save(); g.beginPath(); g.ellipse(lob ? a * 0.3 : 0, 0, lob ? a * 0.55 : a, b, 0, 0, 7); g.clip(); pattern(g, L, a, b); g.restore(); }
+    eyesOn(lob ? [a * 0.75] : [a * 0.55, a * 0.55], lob ? -6 : -b * 0.35, 4);
+    if (!lob) eyesOn([a * 0.55], b * 0.35, 4);
+  } else if (L.shape === 'poulpe') {
+    g.strokeStyle = silhouette ? '#24384a' : body; g.lineWidth = 7; g.lineCap = 'round';
+    for (let k = 0; k < 8; k++) { const y = (k - 3.5) * 7; g.beginPath(); g.moveTo(-a * 0.3, y * 0.6); g.bezierCurveTo(-a - 10, y * 1.6, -a - 30, y * 1.8 + 12 * Math.sin(k), -a - 46, y * 1.3 + 10); g.stroke(); }
+    g.strokeStyle = silhouette ? '#122230' : shade(body, -0.45); g.lineWidth = 3;
+    g.beginPath(); g.ellipse(a * 0.25, -4, a, b, 0, 0, 7); g.fillStyle = grad(); g.fill(); g.stroke();
+    if (!silhouette) { g.save(); g.beginPath(); g.ellipse(a * 0.25, -4, a, b, 0, 0, 7); g.clip(); pattern(g, L, a, b); g.restore(); }
+    eyesOn([a * 0.1], 4, 6);
+  } else if (L.shape === 'raie') {
     g.beginPath(); g.moveTo(-a, 0); g.quadraticCurveTo(0, -b * 1.4, a * 0.9, -b * 0.2); g.lineTo(a, 0); g.lineTo(a * 0.9, b * 0.2); g.quadraticCurveTo(0, b * 1.4, -a, 0); g.closePath();
     g.fillStyle = grad(); g.fill(); g.stroke();
     g.beginPath(); g.moveTo(-a, 0); g.lineTo(-a - 40, 4); g.stroke();
@@ -35,6 +61,7 @@ export function fishImage(f, silhouette = false) {
     g.closePath(); g.fillStyle = silhouette ? '#1c2c3a' : acc; g.fill(); g.stroke();
     // nageoire dorsale
     g.beginPath(); g.moveTo(-a * 0.35, -b * 0.85); g.quadraticCurveTo(0, -b * 1.75, a * 0.3, -b * 0.85); g.closePath(); g.fillStyle = silhouette ? '#1c2c3a' : acc; g.fill(); g.stroke();
+    if (L.shape === 'ange') { g.beginPath(); g.moveTo(-a * 0.35, b * 0.85); g.quadraticCurveTo(-a * 0.1, b * 1.8, a * 0.3, b * 0.85); g.closePath(); g.fill(); g.stroke(); }
     // corps
     g.beginPath(); g.ellipse(0, 0, a, b, 0, 0, Math.PI * 2); g.fillStyle = grad(); g.fill();
     if (L.shape === 'epee') { g.beginPath(); g.moveTo(a - 6, -4); g.lineTo(a + 52, 0); g.lineTo(a - 6, 5); g.fillStyle = silhouette ? '#24384a' : shade(body, -0.2); g.fill(); }
@@ -46,7 +73,7 @@ export function fishImage(f, silhouette = false) {
     g.beginPath(); g.moveTo(a * 0.25, b * 0.2); g.quadraticCurveTo(a * 0.05, b * 0.75, -a * 0.12, b * 0.55); g.closePath(); g.fillStyle = silhouette ? '#1c2c3a' : shade(acc, 0.1); g.fill(); g.stroke();
   }
   // œil
-  if (L.shape !== 'raie') {
+  if (!['raie', 'crabe', 'homard', 'poulpe'].includes(L.shape)) {
     const ex = L.shape === 'calmar' ? a * 0.45 : a * 0.62, ey = L.shape === 'anguille' ? -3 : -b * 0.22;
     g.beginPath(); g.arc(ex, ey, L.shape === 'anguille' ? 4 : 7, 0, 7); g.fillStyle = silhouette ? '#3a5266' : '#fff'; g.fill();
     if (!silhouette) { g.beginPath(); g.arc(ex + 1.5, ey, L.shape === 'anguille' ? 2.2 : 4, 0, 7); g.fillStyle = '#111'; g.fill(); }

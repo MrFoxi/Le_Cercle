@@ -1,16 +1,51 @@
 // Tests de Little Fisher : le contenu se tient (chaque poisson peut mordre quelque part, missions et trésors liés),
 // et la boucle de jeu marche : pêcher, remplir la cale, vendre, améliorer, rendre des missions, sauvegarder.
 import assert from 'node:assert';
-import { FISH, SPOTS, PEOPLE, TREASURES, UPGRADES, ZONES } from './client/data.js';
+import { FISH, SPOTS, PEOPLE, TREASURES, UPGRADES, ZONES, BAITS, FIGHTS } from './client/data.js';
 import * as G from './client/game.js';
 
-// Chaque poisson peut mordre avec le meilleur équipement, à une heure et par un temps donnés.
+// Chaque espèce s'attrape d'une façon : à la canne (meilleur équipement, à une heure et par un temps donnés), au casier ou en plongée.
 const TIMES = [0.1, 0.27, 0.5, 0.79], WEATHERS = ['clair', 'pluie', 'brume'];
 for (const f of FISH) {
-  assert(f.zones.every(z => ZONES[z]), `${f.id} : zone inconnue`);
-  const ok = f.zones.some(zone => TIMES.some(time => WEATHERS.some(weather => G.canBite(f, { zone, time, weather, rod: 3, lantern: 1 }))));
-  assert(ok, `${f.id} ne peut jamais mordre`);
+  assert([...f.zones, ...(f.trap ?? []), ...(f.dive ?? [])].every(z => ZONES[z]), `${f.id} : zone inconnue`);
+  const rod = f.zones.some(zone => TIMES.some(time => WEATHERS.some(weather => G.canBite(f, { zone, time, weather, rod: 3, lantern: 1 }))));
+  assert(rod || f.trap?.length || f.dive?.length, `${f.id} ne s'attrape jamais`);
+  assert(!f.bait || BAITS[f.bait], `${f.id} : appât inconnu`);
+  assert(FIGHTS[f.fight] !== undefined, `${f.id} : combat inconnu`);
 }
+// Appâts : le préféré fait mordre bien plus souvent ; l'appât lumineux remplace la lanterne la nuit.
+const count = (bait, id) => { let n = 0, s = 1; for (let k = 0; k < 3000; k++) if (G.pickFish({ zone: 'cote', time: 0.5, weather: 'clair', rod: 0, lantern: 0, bait }, () => (s = (s * 16807) % 2147483647) / 2147483647)?.id === id) n++; return n; };
+assert(count('ver', 'rouget') > count('crevette', 'rouget') * 2);
+assert(G.canBite(G.fishById('calmar'), { zone: 'phare', time: 0.05, weather: 'clair', rod: 0, lantern: 0, bait: 'lumineux' }));
+const bs = G.newSave();
+assert.strictEqual(G.useBait(bs), 'ver'); assert.strictEqual(bs.baits.ver, 4);
+assert.match(G.buyBait(bs, 'crevette', 'port'), /Pas vendu/);
+bs.money = 200; assert.strictEqual(G.buyBait(bs, 'leurre', 'port'), null);
+for (let k = 0; k < 10; k++) { bs.bait = 'leurre'; assert.strictEqual(G.useBait(bs), 'leurre'); } // le leurre ne s'use pas
+assert.strictEqual(bs.baits.leurre, 1);
+assert.deepStrictEqual([G.nextBait(bs), G.nextBait(bs), G.nextBait(bs)], [null, 'ver', 'leurre']); // on part du leurre
+// Casiers : posés sur un fond peu profond, pleins après 3 heures, ce qui ne tient pas dans la cale est relâché.
+const ts = G.newSave(); ts.levels.casiers = 1;
+assert(G.trapSpot(8, 'roche') && !G.trapSpot(40, 'roche') && !G.trapSpot(8, 'large'));
+assert.strictEqual(G.placeTrap(ts, 10, 10, 'roche'), null); G.placeTrap(ts, 20, 10, 'roche');
+assert.match(G.placeTrap(ts, 30, 10, 'roche'), /déjà posés/);
+assert.strictEqual(G.collectTrap(ts, 0), null);       // pas encore plein
+G.tick(ts, 600 * 3.1 / 24);                           // un peu plus de 3 heures de jeu
+const got = G.collectTrap(ts, 0, () => 0.99);
+assert(got.length >= 1 && got.every(g => g.f.trap.includes('roche')) && ts.traps.length === 1);
+ts.cargo = Array(6).fill({ id: 'sardine', size: 20, price: 4 });
+assert.deepStrictEqual(G.collectTrap(ts, 0), []);    // cale pleine : tout est relâché
+// Filet : seulement des petits poissons communs des eaux traversées ; plongée : il faut le harpon et une eau claire.
+for (let k = 0; k < 50; k++) assert.strictEqual(G.netCatch('recif').rarity, 'commun');
+const ds = G.newSave();
+assert(!G.canDive(ds, 'recif', 8)); ds.gear.harpon = true;
+assert(G.canDive(ds, 'recif', 8) && !G.canDive(ds, 'recif', 60) && !G.canDive(ds, 'large', 8));
+for (let k = 0; k < 50; k++) assert(G.diveFish('recif').dive.includes('recif'));
+assert.match(G.buyGear(ds, 'harpon', 'corail'), /déjà/);
+// Le temps : minuit passe au jour suivant ; attendre jusqu'à l'aube quand il est midi, c'est le lendemain.
+const tt = G.newSave(); tt.time = 0.95;
+assert(G.tick(tt, 60) && tt.days === 1);
+tt.time = 0.5; G.waitUntil(tt, 0.25); assert.deepStrictEqual([tt.days, tt.time], [2, 0.25]);
 // Au départ (canne en bambou, pas de lanterne), on prend quelque chose de jour dans les premières zones.
 for (const zone of ['cote', 'recif', 'roche']) assert(G.pickFish({ zone, time: 0.5, weather: 'clair', rod: 0, lantern: 0 }), `rien à pêcher en ${zone}`);
 // La nuit sans lanterne : seuls les poissons qui ne sont pas « nuit » mordent.
