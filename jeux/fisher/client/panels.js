@@ -1,7 +1,7 @@
 // Little Fisher : les fenêtres. Village (marché, boutique d'appâts et de plongée, chantier naval, habitants), cale, carnet, carte.
-import { S, persist } from './state.js';
+import { S, persist, dressBoat } from './state.js';
 import * as G from './game.js';
-import { FISH, UPGRADES, VILLAGES, ZONE_SHORT, TREASURES, PEOPLE, BAITS, BAIT_SHOPS, GEAR, FIGHTS, WONDERS, RELICS, HUNTS } from './data.js';
+import { FISH, UPGRADES, VILLAGES, ZONE_SHORT, TREASURES, PEOPLE, BAITS, BAIT_SHOPS, GEAR, FIGHTS, WONDERS, RELICS, HUNTS, BOATS, HULL_COLORS, FLAGS, AQUARIUM, RARITY } from './data.js';
 import { fishImage } from './fishart.js';
 import { SFX } from './audio.js';
 import { toast, coins, rarityTag, gain, renderMap } from './hud.js';
@@ -29,18 +29,18 @@ let vTab = 'market';
 export function openVillage(id) {
   const v = VILLAGES[id];
   $('#vName').textContent = `⚓ ${v.name}`;
-  const tabs = [v.market && ['market', '🐟 Marché'], (BAIT_SHOPS[id] || Object.values(GEAR).some(g => g.shop === id)) && ['bait', '🪱 Boutique'], v.shop && ['shop', '🛠️ Chantier naval'], ['people', '👋 Habitants']].filter(Boolean);
+  const tabs = [v.market && ['market', '🐟 Marché'], (BAIT_SHOPS[id] || Object.values(GEAR).some(g => g.shop === id)) && ['bait', '🪱 Boutique'], v.shop && ['shop', '🛠️ Chantier naval'], id === 'port' && ['house', '🏠 Maison'], ['people', '👋 Habitants']].filter(Boolean);
   if (!tabs.some(([t]) => t === vTab)) vTab = tabs[0][0];
   $('#vTabs').innerHTML = tabs.map(([t, l]) => `<button class="${t === vTab ? 'on' : ''}" data-tab="${t}">${l}</button>`).join('');
   $('#vTabs').onclick = e => { const b = e.target.closest('[data-tab]'); if (b) { vTab = b.dataset.tab; openVillage(id); } };
   if (S.panel !== 'village') openPanel('village');
-  ({ market: renderMarket, bait: renderBaitShop, shop: renderShop, people: renderPeople })[vTab](id);
+  ({ market: renderMarket, bait: renderBaitShop, shop: renderShop, house: renderHouse, people: renderPeople })[vTab](id);
 }
 const money = () => `<div class="sum"><span>Ton argent : <b>${coins(S.save.money)}</b></span></div>`;
 function renderMarket(id) {
   const s = S.save;
-  const rows = s.cargo.map((f, k) => { const d = G.fishById(f.id); return `<li><img src="${fishImage(d)}" alt=""><div class="grow"><b>${esc(d.name)}</b> ${rarityTag(d)}<small>${f.size} cm</small></div><span class="price">${coins(G.priceAt(f, id))}</span><button class="small ghost" data-sell="${k}">Vendre</button></li>`; });
-  const total = s.cargo.reduce((a, f) => a + G.priceAt(f, id), 0);
+  const rows = s.cargo.map((f, k) => { const d = G.fishById(f.id); return `<li><img src="${fishImage(d)}" alt=""><div class="grow"><b>${esc(d.name)}</b> ${rarityTag(d)}<small>${f.size} cm${G.isFresh(s, f) ? ' · 🧊 très frais (+15 %)' : ''}</small></div><span class="price">${coins(G.priceAt(f, id, s))}</span><button class="small ghost" data-sell="${k}">Vendre</button></li>`; });
+  const total = s.cargo.reduce((a, f) => a + G.priceAt(f, id, s), 0);
   $('#vBody').innerHTML = `${VILLAGES[id].market > 1 ? '<p class="hint">Ici, on paie 10 % de plus qu’à Port-Galet.</p>' : ''}
     ${rows.length ? `<ul class="list">${rows.join('')}</ul>` : '<p class="empty">Ta cale est vide. Va pêcher !</p>'}
     <div class="sum"><span>Ton argent : <b>${coins(s.money)}</b></span>${rows.length ? `<button class="primary" id="sellAll">Tout vendre · ${coins(total)}</button>` : ''}</div>`;
@@ -69,9 +69,12 @@ function renderBaitShop(id) {
     renderBaitShop(id);
   };
 }
-function renderShop() {
-  const s = S.save;
-  $('#vBody').innerHTML = `<p class="hint">Joseph améliore ton bateau. Chaque amélioration se voit dessus !</p><ul class="list">${Object.entries(UPGRADES).map(([key, u]) => {
+let shopTab = 'up';
+function renderShop(id) {
+  const s = S.save, sub = `<div class="tabs">${[['up', '⚙️ Améliorations'], ['boats', '⛵ Bateaux'], ['paint', '🎨 Peinture']].map(([t, l]) => `<button class="small ${t === shopTab ? 'on' : ''}" data-stab="${t}">${l}</button>`).join('')}</div>`;
+  if (shopTab === 'boats') return renderBoats(id, sub);
+  if (shopTab === 'paint') return renderPaint(id, sub);
+  $('#vBody').innerHTML = `${sub}<p class="hint">Joseph améliore ton bateau. Chaque amélioration se voit dessus !</p><ul class="list">${Object.entries(UPGRADES).map(([key, u]) => {
     const cur = G.lvl(s, key), next = G.nextUpgrade(s, key);
     return `<li class="up"><span style="font-size:1.8rem">${u.icon}</span><div class="grow"><b>${u.name} : ${esc(cur.name)}</b>
       <div class="lv">${u.levels.map((_, k) => `<i class="${k <= s.levels[key] ? 'on' : ''}"></i>`).join('')}</div>
@@ -79,10 +82,11 @@ function renderShop() {
       ${next ? `<button class="small primary" data-buy="${key}" ${s.money < next.cost ? 'disabled' : ''}>${coins(next.cost)}</button>` : ''}</li>`;
   }).join('')}</ul>${money()}`;
   $('#vBody').onclick = e => {
+    if (subTab(e, id)) return;
     const b = e.target.closest('[data-buy]'); if (!b) return;
     const err = G.buy(s, b.dataset.buy);
     if (err) return toast(err);
-    SFX.upgrade(); S.boat.setLevels(s.levels); persist();
+    SFX.upgrade(); dressBoat(); persist();
     toast(`✨ ${UPGRADES[b.dataset.buy].name} : ${esc(G.lvl(s, b.dataset.buy).name)} !`);
     renderShop();
   };
@@ -105,6 +109,77 @@ function renderPeople(id) {
     if (G.completeQuest(s, q)) { SFX.upgrade(); gain(q.reward); persist(); toast(`${p.face} <b>${esc(p.name)}</b> : « ${esc(q.done)} » <b>+${coins(q.reward)}</b>`, 6000); }
     renderPeople(id);
   };
+}
+
+const subTab = (e, id) => { const t = e.target.closest('[data-stab]'); if (t) { shopTab = t.dataset.stab; renderShop(id); } return !!t; };
+function renderBoats(id, sub) {
+  const s = S.save;
+  $('#vBody').innerHTML = `${sub}<ul class="list">${Object.entries(BOATS).map(([k, b]) => `<li><span style="font-size:1.8rem">${k === 'voilier' ? '⛵' : k === 'chalutier' ? '🚢' : '🛶'}</span><div class="grow"><b>${esc(b.name)}</b><small>${esc(b.desc)}${b.cargo ? ` · +${b.cargo} places` : ''}</small></div>
+    ${s.model === k ? '<small>✓ En service</small>' : s.boats.includes(k) ? `<button class="small ghost" data-use="${k}">Prendre</button>` : `<button class="small primary" data-boat="${k}" ${s.money < b.cost ? 'disabled' : ''}>${coins(b.cost)}</button>`}</li>`).join('')}</ul>
+    <p class="hint">Tu gardes tous tes bateaux au chantier : change quand tu veux.${s.gear.sousmarin ? '' : ' Le petit sous-marin pour les grands fonds se trouve à la boutique.'}</p>${money()}`;
+  $('#vBody').onclick = e => {
+    if (subTab(e, id)) return;
+    const u = e.target.closest('[data-use]'), b = e.target.closest('[data-boat]');
+    if (u) { G.setBoat(s, u.dataset.use); SFX.click(); }
+    if (b) { const err = G.buyBoat(s, b.dataset.boat); if (err) return toast(err); SFX.upgrade(); toast(`⛵ Ton nouveau bateau : <b>${esc(BOATS[b.dataset.boat].name)}</b> !`); }
+    if (u || b) { dressBoat(); persist(); renderBoats(id, sub); }
+  };
+}
+function renderPaint(id, sub) {
+  const s = S.save, c = s.custom, lock = it => (it.need ? `🔒 ${esc(RELICS[it.need].name)}` : '');
+  $('#vBody').innerHTML = `${sub}
+    <h3>Nom du bateau</h3><div class="row"><input id="boatName" maxlength="18" value="${esc(c.name)}" style="flex:1;min-width:160px;font:600 1rem var(--font);padding:9px 12px;border-radius:12px;border:2px solid var(--line)"><button class="small primary" id="nameOk">Peindre le nom</button></div>
+    <h3>Couleur de la coque</h3><div class="row">${Object.entries(HULL_COLORS).map(([k, h]) => { const ok = G.unlocked(s, h); return `<button class="small ${c.hull === k ? 'primary' : 'ghost'}" data-hull="${k}" ${ok ? '' : 'disabled'} title="${ok ? '' : `Il faut : ${esc(RELICS[h.need].name)}`}"><span style="display:inline-block;width:14px;height:14px;border-radius:50%;vertical-align:-2px;background:${h.color ?? 'linear-gradient(90deg,#b9804a,#f2efe8,#27445f)'};border:1px solid #0003"></span> ${esc(h.name)} ${ok ? '' : lock(h)}</button>`; }).join('')}</div>
+    <h3>Drapeau</h3><div class="row">${Object.entries(FLAGS).map(([k, f]) => { const ok = G.unlocked(s, f); return `<button class="small ${c.flag === k ? 'primary' : 'ghost'}" data-flag="${k}" ${ok ? '' : 'disabled'}><span style="display:inline-block;width:18px;height:12px;vertical-align:-1px;background:${f.colors[0]};border:2px solid ${f.colors[1] ?? f.colors[0]}"></span> ${esc(f.name)} ${ok ? '' : lock(f)}</button>`; }).join('')}</div>
+    <h3>Mascotte sur le toit</h3><div class="row"><button class="small ${c.mascot ? 'ghost' : 'primary'}" data-mascot="">Aucune</button>${s.relics.map(r => `<button class="small ${c.mascot === r ? 'primary' : 'ghost'}" data-mascot="${r}">${RELICS[r].icon} ${esc(RELICS[r].name)}</button>`).join('') || '<span class="hint">Trouve des reliques (épaves, trésors) pour en exposer une.</span>'}</div>`;
+  const apply = (k, v) => { if (G.setCustom(s, k, v)) { SFX.click(); dressBoat(); persist(); renderPaint(id, sub); } };
+  $('#nameOk').onclick = () => { apply('name', $('#boatName').value); toast(`🖌️ Ton bateau s’appelle « ${esc(s.custom.name)} ».`); };
+  $('#vBody').onclick = e => {
+    if (subTab(e, id)) return;
+    const h = e.target.closest('[data-hull]'), f = e.target.closest('[data-flag]'), m = e.target.closest('[data-mascot]');
+    if (h) apply('hull', h.dataset.hull); if (f) apply('flag', f.dataset.flag); if (m) apply('mascot', m.dataset.mascot || null);
+  };
+}
+
+/* ---------------- Maison : aquarium, trophées, reliques ---------------- */
+let aquaFish = [], aquaLoop = 0; // aquaLoop : une seule animation à la fois
+function renderHouse(id) {
+  const s = S.save, tr = G.trophies(s), legends = tr.filter(t => t.f.rarity === 'legende');
+  $('#vBody').innerHTML = `<canvas id="aquaCanvas" width="640" height="250" style="width:100%;border-radius:16px;display:block"></canvas>
+    <h3>Aquarium <small class="hint">${s.aquarium.length}/${AQUARIUM}</small></h3>
+    ${s.aquarium.length ? `<div class="row">${s.aquarium.map((f, k) => `<button class="small ghost" data-free="${k}" title="Le relâcher">${esc(G.fishById(f.id).name)} · ${f.size} cm ✕</button>`).join('')}</div>` : '<p class="hint">Mets tes plus belles prises dans l’aquarium : elles y nagent pour toujours.</p>'}
+    ${s.cargo.length && s.aquarium.length < AQUARIUM ? `<p class="hint">Depuis ta cale :</p><div class="row">${s.cargo.map((f, k) => `<button class="small primary" data-aqua="${k}">+ ${esc(G.fishById(f.id).name)} (${f.size} cm)</button>`).join('')}</div>` : ''}
+    <h3>Mur des trophées</h3>
+    ${legends.length ? `<p>🏆 Légendaires : ${legends.map(t => `<b>${esc(t.f.name)}</b>`).join(', ')}</p>` : ''}
+    ${tr.length ? `<div class="bookGrid">${tr.slice(0, 12).map(t => `<div class="fishCard" style="cursor:default"><img src="${fishImage(t.f)}" alt=""><b>${esc(t.f.name)}</b><small class="hint">record ${t.best} cm · ${t.count} pris</small></div>`).join('')}</div>` : '<p class="empty">Pas encore de trophée.</p>'}
+    <h3>Étagère des reliques</h3><div class="row">${Object.entries(RELICS).map(([k, r]) => `<span class="pill" style="${s.relics.includes(k) ? '' : 'filter:grayscale(1);opacity:.35'}" title="${s.relics.includes(k) ? esc(r.desc) : '???'}">${r.icon}</span>`).join('')}</div>`;
+  $('#vBody').onclick = e => {
+    const a = e.target.closest('[data-aqua]'), f = e.target.closest('[data-free]');
+    if (a && G.toAquarium(s, +a.dataset.aqua)) SFX.splash();
+    if (f && G.releaseAquarium(s, +f.dataset.free)) SFX.splash();
+    if (a || f) { persist(); renderHouse(id); }
+  };
+  // l'aquarium : les poissons nagent de long en large
+  aquaFish = s.aquarium.map((f, k) => { const img = new Image(); img.src = fishImage(G.fishById(f.id)); return { img, x: 80 + k * 70, y: 50 + (k * 37) % 140, v: 25 + (k % 3) * 12, dir: k % 2 ? -1 : 1, ph: k, s: Math.max(0.5, Math.min(1.1, f.size / 60)) }; });
+  let last = performance.now();
+  const loop = ++aquaLoop;
+  const draw = now => {
+    const cv = document.getElementById('aquaCanvas'); if (!cv || loop !== aquaLoop) return;
+    const g = cv.getContext('2d'), dt = Math.min(0.05, (now - last) / 1000); last = now;
+    const gr = g.createLinearGradient(0, 0, 0, 250); gr.addColorStop(0, '#7fd8f0'); gr.addColorStop(1, '#1f6f9a'); g.fillStyle = gr; g.fillRect(0, 0, 640, 250);
+    g.fillStyle = '#f1dca2'; g.beginPath(); g.moveTo(0, 230); for (let x = 0; x <= 640; x += 40) g.lineTo(x, 226 + Math.sin(x * 0.05) * 5); g.lineTo(640, 250); g.lineTo(0, 250); g.fill();
+    g.strokeStyle = '#3f9a5a'; g.lineWidth = 6; g.lineCap = 'round';
+    for (const x of [60, 150, 470, 560]) { g.beginPath(); g.moveTo(x, 232); g.quadraticCurveTo(x + Math.sin(now / 900 + x) * 14, 180, x + Math.sin(now / 700 + x) * 10, 120 + (x % 40)); g.stroke(); }
+    g.fillStyle = 'rgba(255,255,255,.5)'; for (let k = 0; k < 10; k++) { const y = 230 - ((now / 20 + k * 47) % 230); g.beginPath(); g.arc(300 + Math.sin(y / 20 + k) * 8 + (k % 3) * 12, y, 3, 0, 7); g.fill(); }
+    for (const f of aquaFish) {
+      f.x += f.v * f.dir * dt; if (f.x > 600) f.dir = -1; if (f.x < 40) f.dir = 1;
+      const w = 110 * f.s, h = 64 * f.s, y = f.y + Math.sin(now / 600 + f.ph) * 6;
+      g.save(); g.translate(f.x, y); g.scale(f.dir, 1); if (f.img.complete) g.drawImage(f.img, -w / 2, -h / 2, w, h); g.restore();
+    }
+    if (!aquaFish.length) { g.fillStyle = 'rgba(255,255,255,.8)'; g.font = '600 18px Fredoka, sans-serif'; g.textAlign = 'center'; g.fillText('Ton aquarium est vide… pour l’instant !', 320, 125); }
+    requestAnimationFrame(draw);
+  };
+  requestAnimationFrame(draw);
 }
 
 /* ---------------- Cale ---------------- */

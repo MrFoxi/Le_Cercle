@@ -8,7 +8,7 @@ import { buildBoat, createWake } from './boat.js';
 import { startAudio, ambience, SFX, toggleMute, isMuted } from './audio.js';
 import { ISLANDS, UPGRADES, VILLAGES, ZONES, FOSSE, PEOPLE, HUNTS, RELICS } from './data.js';
 import * as G from './game.js';
-import { S, persist, fwd, right } from './state.js';
+import { S, persist, fwd, right, dressBoat } from './state.js';
 import { toast, banner, gain, updateHud, drawMinimap, buildMapLand, catchOpen, closeCatch, coins, baitLabel, esc } from './hud.js';
 import { openPanel, closePanel, togglePanel, openVillage } from './panels.js';
 import * as Fishing from './fishing.js';
@@ -119,10 +119,10 @@ function cycleBait() {
 }
 function startDive() {
   if (!free() || Fishing.busy()) return;
-  const why = Dive.whyNot();
-  if (why) return toast(why);
+  const k = Dive.diveKind();
+  if (k.why) return toast(k.why);
   if (Traps.net.on) Traps.toggleNet();
-  Dive.startDive();
+  Dive.startDive(k.kind);
 }
 const nearDock = () => S.world.docks.find(d => Math.hypot(d.x - B.x, d.z - B.z) < 18);
 function interact() {
@@ -184,9 +184,10 @@ function sail(dt) {
   }
   const inp = S.panel || Fishing.F.phase === 'reel' || catchOpen() ? { throttle: 0, steer: 0 } : input();
   if (Math.abs(inp.throttle) > 0.2 && (Fishing.F.phase === 'wait' || Fishing.F.phase === 'bite')) { Fishing.stop(); toast('Tu remontes ta ligne.'); }
-  const max = G.lvl(S.save, 'moteur').speed * (Traps.net.on ? 0.75 : 1), target = inp.throttle * max;
+  const def = G.boatOf(S.save), wind = def.wind ? G.sailFactor(B.heading - W.windDir, W.wind) : 1; // le voilier profite du vent
+  const max = G.lvl(S.save, 'moteur').speed * def.speed * wind * (Traps.net.on ? 0.75 : 1), target = inp.throttle * max;
   B.speed += (target - B.speed) * Math.min(1, dt * (Math.abs(target) > Math.abs(B.speed) ? 0.6 : 0.45));
-  const rate = (0.35 + 0.6 * Math.min(1, Math.abs(B.speed) / 7)) * (B.speed < -0.3 ? -1 : 1);
+  const rate = (0.35 + 0.6 * Math.min(1, Math.abs(B.speed) / 7)) * (B.speed < -0.3 ? -1 : 1) * def.turn;
   B.turn += (-inp.steer * rate - B.turn) * Math.min(1, dt * 3);
   const oldH = B.heading; B.heading += B.turn * dt;
   const f = fwd(B.heading); let nx = B.x + f.x * B.speed * dt, nz = B.z + f.z * B.speed * dt;
@@ -246,7 +247,7 @@ function hint() {
   if (huntNear()) return '<b>E</b> : débarquer et creuser ici !';
   const d = nearDock(); if (d) return `<b>E</b> : accoster à ${esc(d.name)}`;
   if (Math.abs(B.speed) < 2.5) {
-    const c = Fishing.castPoint(), extra = [G.trapsMax(S.save) > S.save.traps.length && '<b>T</b> casier', S.save.gear.harpon && !Dive.whyNot() && '<b>H</b> plonger'].filter(Boolean).join(' · ');
+    const c = Fishing.castPoint(), extra = [G.trapsMax(S.save) > S.save.traps.length && '<b>T</b> casier', (S.save.gear.harpon || S.save.gear.sousmarin) && !Dive.whyNot() && '<b>H</b> plonger'].filter(Boolean).join(' · ');
     return `<b>Espace</b> : lancer la ligne${spotAt(c) ? ' · <b>un remous</b> !' : ` · ${ZONES[G.zoneAt(B.x, B.z)]}`}${extra ? ` · ${extra}` : ''}`;
   }
   if (S.save.cargo.length === 0 && S.save.sold === 0) return 'Arrête-toi et pêche avec <b>Espace</b> · les cercles blancs sur l’eau sont des remous';
@@ -257,7 +258,7 @@ const spotAt = c => S.world.spots.some(m => Math.hypot(m.position.x - c.x, m.pos
 function touchButtons() {
   if (!coarse) return;
   const s = S.save, sail = S.mode === 'sail';
-  $('#tTrap').hidden = !sail || !G.trapsMax(s); $('#tNet').hidden = !sail || !s.levels.filet; $('#tDive').hidden = !sail || !s.gear.harpon;
+  $('#tTrap').hidden = !sail || !G.trapsMax(s); $('#tNet').hidden = !sail || !s.levels.filet; $('#tDive').hidden = !sail || !(s.gear.harpon || s.gear.sousmarin);
 }
 
 /* ---------------- Boucle ---------------- */
@@ -277,6 +278,9 @@ function frame(now) {
     }
   }
   S.amp = 1 + (W.kind === 'pluie' ? 0.9 : 0);
+  // le vent tourne lentement et forcit sous la pluie
+  W.windDir += Math.sin(S.time * 0.013) * dt * 0.03;
+  W.wind = Math.min(1, 0.3 + 0.35 * (Math.sin(S.time * 0.021) + 1) / 2 + (W.kind === 'pluie' ? 0.35 : W.kind === 'nuageux' ? 0.15 : 0));
   const inp = S.mode === 'sail' ? sail(dt) : { throttle: 0 };
   // le bateau sur les vagues
   const boat = S.boat, w = S.world.waveAt(B.x, B.z, S.time, S.amp), f = fwd(B.heading), r = right(B.heading);
@@ -286,7 +290,7 @@ function frame(now) {
   boat.body.rotation.x = -Math.atan((w.dx * f.x + w.dz * f.z) * 1.4) - Math.max(0, B.speed) / max * 0.07;
   boat.body.rotation.z = -Math.atan((w.dx * r.x + w.dz * r.z) * 1.4) + B.turn * Math.abs(B.speed) / max * 0.12;
   boat.fisher.rotation.y = Fishing.busy() ? -Math.PI / 2 + 0.3 : Math.sin(S.time * 0.3) * 0.4;
-  boat.tick(dt, S.world.state.night, inp.throttle ?? 0);
+  boat.tick(dt, S.world.state.night, inp.throttle ?? 0, B.heading - W.windDir, W.wind);
   wake.update(dt, B.x, B.z, B.heading, Math.abs(B.speed), (x, z) => S.world.waveAt(x, z, S.time, S.amp).h);
   Fishing.updateFishing(dt);
   Traps.updateTraps(dt);
@@ -325,7 +329,7 @@ function frame(now) {
 function applySave() {
   const at = S.save.boat ?? S.world.docks.find(d => d.village === 'port'); // première partie : au ponton de Port-Galet
   Object.assign(B, { x: at.x, z: at.z, heading: at.heading, speed: 0, turn: 0, docked: null, camHeading: at.heading });
-  S.boat.setLevels(S.save.levels);
+  dressBoat();
   for (const g of S.world.treasures.values()) g.visible = true;
   for (const id of S.save.treasures) S.world.hideTreasure(id);
 }

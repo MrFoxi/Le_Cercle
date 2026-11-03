@@ -75,7 +75,7 @@ const CORALS = ['#ff8a8a', '#ffb35c', '#c27be0', '#ff6fa8', '#ffd36b'].map(c => 
 export function createWorld(renderer, scene, { low = false } = {}) {
   const rng = mulberry(20261103);
   const uTime = { value: 0 }; // horloge partagée par l'eau, les reflets du fond et la végétation
-  let under = false;          // la caméra est sous l'eau (plongée)
+  let under = false, deep = false; // la caméra est sous l'eau (plongée) ; deep : dans les grands fonds
   const root = new THREE.Group(); scene.add(root);
   const anim = []; // fonctions (dt, t, night) appelées à chaque image
 
@@ -655,8 +655,8 @@ export function createWorld(renderer, scene, { low = false } = {}) {
     state.fog += (fog - state.fog) * Math.min(1, dt * 0.8);
     scene.fog.density = U.uFogDensity.value = state.fog;
     scene.fog.color.copy(skyU.uHorizon.value); U.uFogColor.value.copy(skyU.uHorizon.value);
-    if (under) { // sous l'eau : un brouillard bleu-vert, on ne voit pas loin
-      const c = U.uShallow.value.clone().multiplyScalar(0.5);
+    if (under) { // sous l'eau : un brouillard bleu-vert, on ne voit pas loin (presque noir dans les grands fonds)
+      const c = deep ? new THREE.Color(0.012, 0.05, 0.1) : U.uShallow.value.clone().multiplyScalar(0.5);
       scene.fog.color.copy(c); U.uFogColor.value.copy(c); scene.fog.density = U.uFogDensity.value = 0.042;
     }
     scene.background = under ? scene.fog.color : null; // le lointain se fond dans l'eau
@@ -694,7 +694,7 @@ export function createWorld(renderer, scene, { low = false } = {}) {
   return {
     heightAt, waveAt, docks, obstacles, people, treasures, spots: spotMeshes, update, state, sunDir,
     hideTreasure: id => { const g = treasures.get(id); if (g) g.visible = false; },
-    setUnder: on => { under = on; },
+    setUnder: (on, isDeep = false) => { under = on; deep = on && isDeep; },
     huntSpots: decor.huntSpots, setHunt: decor.setHunt,
   };
 }

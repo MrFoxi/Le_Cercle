@@ -1,7 +1,7 @@
 // Little Fisher : les règles (sans affichage) : zones, choix du poisson qui mord, appâts, prises, casiers, filet, plongée,
 // marché, chantier, missions, temps qui passe, sauvegarde.
 import { ISLANDS, FOSSE, OPEN_SEA, NORTH, CAVE, WORLD, FISH, RARITY, UPGRADES, VILLAGES, PEOPLE, TREASURES, DAY_SECONDS, BAITS, BAIT_SHOPS, GEAR,
-  WRECKS, RELICS, HUNTS, WONDERS } from './data.js';
+  WRECKS, RELICS, HUNTS, WONDERS, BOATS, HULL_COLORS, FLAGS, AQUARIUM } from './data.js';
 
 export const fishById = id => FISH.find(f => f.id === id);
 export const lvl = (save, key) => UPGRADES[key].levels[save.levels[key]];
@@ -9,11 +9,12 @@ export const lvl = (save, key) => UPGRADES[key].levels[save.levels[key]];
 // ---------- Sauvegarde ----------
 export function newSave() {
   return {
-    v: 1, money: 20, cargo: [], items: [], levels: { moteur: 0, cale: 0, canne: 0, coque: 0, lanterne: 0, filet: 0, casiers: 0 },
+    v: 1, money: 20, cargo: [], items: [], levels: { moteur: 0, cale: 0, canne: 0, coque: 0, lanterne: 0, filet: 0, casiers: 0, sonar: 0 },
     catalog: {}, quests: {}, seen: ['port'], treasures: [], sold: 0, earned: 0,
     time: 0.3, days: 0, boat: null, // null : au ponton de Port-Galet ; on part à 7 h du matin
     baits: { ver: 5 }, bait: 'ver', gear: {}, traps: [],
     relics: [], wrecks: {}, hunts: {}, fog: '',   // reliques trouvées, dernier jour de fouille de chaque épave, cartes au trésor, carte explorée
+    boats: ['barque'], model: 'barque', custom: { hull: 'auto', flag: 'jaune', name: 'Petit Galet', mascot: null }, aquarium: [],
   };
 }
 // Relit une sauvegarde (ou en crée une) ; les champs ajoutés plus tard prennent leur valeur par défaut.
@@ -22,7 +23,7 @@ export function loadSave(text) {
   let s = null;
   try { s = JSON.parse(text); } catch { /* illisible : partie neuve */ }
   if (!s || s.v !== 1) return base;
-  return { ...base, ...s, levels: { ...base.levels, ...s.levels } };
+  return { ...base, ...s, levels: { ...base.levels, ...s.levels }, custom: { ...base.custom, ...s.custom } };
 }
 
 // ---------- Le monde ----------
@@ -107,11 +108,12 @@ export function landFish(save, f, rng = Math.random) {
   const c = save.catalog[f.id] ?? { count: 0, best: 0 };
   const first = c.count === 0, record = size > c.best;
   save.catalog[f.id] = { count: c.count + 1, best: Math.max(c.best, size) };
-  const fish = { id: f.id, size, price };
+  const fish = { id: f.id, size, price, at: now(save) }; // at : quand il a été pêché (fraîcheur)
   save.cargo.push(fish);
   return { fish, first, record: record && !first };
 }
-export const slots = save => lvl(save, 'cale').slots;
+export const boatOf = save => BOATS[save.model] ?? BOATS.barque;
+export const slots = save => lvl(save, 'cale').slots + boatOf(save).cargo;
 export const cargoFull = save => save.cargo.length >= slots(save);
 
 // ---------- Appâts ----------
@@ -151,7 +153,7 @@ export function buyGear(save, id, village) {
 
 // ---------- Casiers ----------
 export const TRAP_HOURS = 3; // heures de jeu avant que le casier soit plein
-export const trapsMax = save => lvl(save, 'casiers').count;
+export const trapsMax = save => lvl(save, 'casiers').count + (save.levels.casiers && boatOf(save).nets ? 2 : 0);
 export const trapReady = (save, t) => now(save) - t.at >= TRAP_HOURS / 24;
 // Un fond où poser un casier : ni trop peu, ni trop profond, et pas en pleine mer.
 export const trapSpot = (depth, zone) => depth >= 2 && depth <= 26 && zone !== 'large' && zone !== 'fosse';
@@ -186,6 +188,8 @@ export function netCatch(zone, rng = Math.random) {
 
 // ---------- Plongée ----------
 export const canDive = (save, zone, depth) => !!save.gear.harpon && (zone === 'recif' || zone === 'cote') && depth >= 3 && depth <= 28;
+// Le sous-marin : seulement en eau profonde, au large ou dans la Fosse
+export const canSub = (save, zone, depth) => !!save.gear.sousmarin && (zone === 'fosse' || zone === 'large') && depth >= 25;
 // Les poissons qu'on croise sous l'eau, avec leur fréquence
 export function diveFish(zone, rng = Math.random) {
   const list = FISH.filter(f => f.dive?.includes(zone)).map(f => [f, RARITY[f.rarity].weight]);
@@ -198,11 +202,14 @@ export function diveFish(zone, rng = Math.random) {
 export const oyster = (rng = Math.random) => (rng() < 0.3 ? 40 + Math.floor(rng() * 110) : 0);
 
 // ---------- Village : marché, chantier ----------
-export const priceAt = (fish, village) => Math.round(fish.price * VILLAGES[village].market);
+// Un poisson vendu très frais rapporte 15 % de plus (3 heures, 12 avec la cale réfrigérée). Jamais de pénalité.
+export const freshHours = save => (save.levels.cale >= 2 ? 12 : 3);
+export const isFresh = (save, fish) => fish.at != null && now(save) - fish.at < freshHours(save) / 24;
+export const priceAt = (fish, village, save = null) => Math.round(fish.price * VILLAGES[village].market * (save && isFresh(save, fish) ? 1.15 : 1));
 export function sell(save, village, index = null) {
   if (!VILLAGES[village].market) return 0;
   const list = index == null ? save.cargo : [save.cargo[index]];
-  const total = list.reduce((a, f) => a + priceAt(f, village), 0);
+  const total = list.reduce((a, f) => a + priceAt(f, village, save), 0);
   save.sold += list.length; save.earned += total; save.money += total;
   save.cargo = index == null ? [] : save.cargo.filter((_, k) => k !== index);
   return total;
@@ -250,6 +257,42 @@ export function takeTreasure(save, t) {
 }
 export const treasuresLeft = save => TREASURES.filter(t => !save.treasures.includes(t.id));
 export const catalogCount = save => Object.keys(save.catalog).length;
+
+// ---------- Bateaux et personnalisation ----------
+export function buyBoat(save, id) {
+  const b = BOATS[id];
+  if (save.boats.includes(id)) return 'Tu l’as déjà';
+  if (save.money < b.cost) return `Il te manque ${b.cost - save.money} pièces`;
+  save.money -= b.cost; save.boats.push(id); save.model = id;
+  return null;
+}
+export function setBoat(save, id) { if (!save.boats.includes(id)) return false; save.model = id; return true; }
+// Le voilier : vitesse selon l'angle avec le vent (rel : 0 vent dans le dos, π face au vent) et sa force (0 à 1)
+export function sailFactor(rel, wind) {
+  const c = Math.cos(rel), f = 0.55 + 0.3 * (c + 1) + 0.45 * (1 - c * c); // 1,15 vent arrière · 1,3 vent de travers · 0,55 face au vent
+  return 1 + (f - 1) * wind;
+}
+// Couleurs, drapeaux et mascottes : certaines demandent une relique
+export const unlocked = (save, item) => !item.need || save.relics.includes(item.need);
+export function setCustom(save, key, value) {
+  if (key === 'hull' && !(HULL_COLORS[value] && unlocked(save, HULL_COLORS[value]))) return false;
+  if (key === 'flag' && !(FLAGS[value] && unlocked(save, FLAGS[value]))) return false;
+  if (key === 'mascot' && value !== null && !save.relics.includes(value)) return false;
+  if (key === 'name') value = String(value).replace(/[<>]/g, '').trim().slice(0, 18) || 'Petit Galet';
+  save.custom[key] = value;
+  return true;
+}
+
+// ---------- Maison : aquarium et trophées ----------
+export function toAquarium(save, k) {
+  if (save.aquarium.length >= AQUARIUM || !save.cargo[k]) return false;
+  save.aquarium.push(save.cargo.splice(k, 1)[0]);
+  return true;
+}
+export function releaseAquarium(save, k) { return save.aquarium.splice(k, 1).length > 0; }
+// Records : le plus grand de chaque espèce pêchée, du plus impressionnant (par rapport à sa taille maximale) au moins
+export const trophies = save => Object.entries(save.catalog).map(([id, c]) => ({ f: fishById(id), best: c.best, count: c.count }))
+  .filter(t => t.f).sort((a, b) => b.best / b.f.size[1] - a.best / a.f.size[1]);
 
 // ---------- Épaves (au grappin) ----------
 export const wreckNear = (x, z, r = 14) => WRECKS.find(w => Math.hypot(w.x - x, w.z - z) < r) ?? null;

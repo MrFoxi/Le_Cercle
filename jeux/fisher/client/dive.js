@@ -1,6 +1,7 @@
 // Little Fisher : la plongée au harpon. Avec le masque et le harpon, on saute à l'eau (H) là où elle est claire et peu
 // profonde : on nage parmi les poissons (ils fuient quand on approche), on tire au harpon (Espace) et on ouvre les huîtres
 // (parfois une perle). L'oxygène dure 45 secondes ; E pour remonter.
+// Avec le petit sous-marin, on descend aussi au large et dans la Fosse : un phare éclaire les grands fonds, la batterie dure 2 minutes.
 import * as THREE from 'three';
 import { S, persist, right, waveH } from './state.js';
 import * as G from './game.js';
@@ -10,9 +11,9 @@ import { fishMesh, swim } from './fishmodel.js';
 import { bubbles, splashAt } from './fx.js';
 import { $ } from '/shared/party.js';
 
-const O2 = 45;
-const D = { yaw: 0, pitch: 0, pos: new THREE.Vector3(), vel: new THREE.Vector3(), o2: O2, zone: 'recif', shot: null, cool: 0, kick: 0, drag: null };
-let diver, legs = [], gun, harpoon, cord, snow, fishes = [], oysters = [];
+const O2 = 45, BATTERY = 120;
+const D = { sub: false, yaw: 0, pitch: 0, pos: new THREE.Vector3(), vel: new THREE.Vector3(), o2: O2, zone: 'recif', shot: null, cool: 0, kick: 0, drag: null };
+let diver, sub, subProp, legs = [], gun, harpoon, cord, snow, fishes = [], oysters = [];
 const dir = new THREE.Vector3(), tmp = new THREE.Vector3();
 
 export function initDive() {
@@ -32,6 +33,17 @@ export function initDive() {
   }
   gun = add(new THREE.CylinderGeometry(0.04, 0.04, 1.1, 6), m('#2b2b30', { metalness: 0.6 }), 0.32, -0.12, 0.75, Math.PI / 2);
   diver.visible = false; S.scene.add(diver);
+  // le petit sous-marin jaune : coque, kiosque, hublot, hélice et phare
+  sub = new THREE.Group();
+  const hullM = m('#f2c230', { roughness: 0.35, metalness: 0.3 });
+  const hull = new THREE.Mesh(new THREE.CapsuleGeometry(0.9, 2.4, 6, 14).rotateX(Math.PI / 2), hullM); hull.castShadow = true; sub.add(hull);
+  const tower = new THREE.Mesh(new THREE.CylinderGeometry(0.4, 0.5, 0.8, 12), hullM); tower.position.set(0, 0.95, 0.2); sub.add(tower);
+  const port = new THREE.Mesh(new THREE.CircleGeometry(0.45, 20), m('#7fd8ff', { emissive: '#3a8ab0', emissiveIntensity: 0.6, roughness: 0.1 })); port.position.set(0, 0.1, 2.12); sub.add(port);
+  for (const s of [-1, 1]) { const w = new THREE.Mesh(new THREE.CircleGeometry(0.22, 16), port.material); w.position.set(s * 0.91, 0.15, 0.5); w.rotation.y = s * Math.PI / 2; sub.add(w); }
+  subProp = new THREE.Group(); subProp.position.z = -2.2; sub.add(subProp);
+  for (let k = 0; k < 3; k++) { const b = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.7, 0.12), m('#8a9096', { metalness: 0.8 })); b.rotation.z = k * 2.1; subProp.add(b); }
+  const beam = new THREE.SpotLight('#fff4d8', 0, 40, 0.5, 0.5, 1.2); beam.position.set(0, 0.1, 2.2); beam.target.position.set(0, -1, 12); sub.add(beam, beam.target);
+  sub.userData.beam = beam; sub.visible = false; S.scene.add(sub);
   harpoon = new THREE.Mesh(new THREE.CylinderGeometry(0.025, 0.025, 1.4, 5).rotateX(Math.PI / 2), m('#c8ccd0', { metalness: 0.8, roughness: 0.3 }));
   harpoon.visible = false; S.scene.add(harpoon);
   cord = new THREE.Line(new THREE.BufferGeometry().setAttribute('position', new THREE.BufferAttribute(new Float32Array(6), 3)), new THREE.LineBasicMaterial({ color: '#e8e2d0' }));
@@ -47,30 +59,40 @@ export function initDive() {
 }
 const clampPitch = p => Math.max(-1.2, Math.min(1.1, p));
 
-// Peut-on plonger ici ? (renvoie un message si non)
-export function whyNot() {
+// Peut-on plonger ici, et avec quoi ? { kind: 'harpon' | 'sub' } ou { why: message }
+export function diveKind() {
   const s = S.save, B = S.B;
-  if (!s.gear.harpon) return 'Il te faut un masque et un harpon : Inès en vend à Anse-Corail.';
-  if (Math.abs(B.speed) > 2) return 'Arrête le bateau pour plonger.';
+  if (!s.gear.harpon && !s.gear.sousmarin) return { why: 'Il te faut un masque et un harpon (Inès, à Anse-Corail) ou un sous-marin (Port-Galet).' };
+  if (Math.abs(B.speed) > 2) return { why: 'Arrête le bateau pour plonger.' };
   const r = right(B.heading), x = B.x + r.x * 4, z = B.z + r.z * 4, depth = -S.world.heightAt(x, z), zone = G.zoneAt(x, z);
+  if (G.canSub(s, zone, depth)) return { kind: 'sub' };
+  if (!s.gear.harpon) return { why: s.gear.sousmarin ? 'Le sous-marin se met à l’eau au large ou dans la Fosse, là où c’est profond.' : 'Il te faut un masque et un harpon.' };
+  const why = whyHarpon(s, zone, depth);
+  return why ? { why } : { kind: 'harpon' };
+}
+export const whyNot = () => diveKind().why ?? null;
+function whyHarpon(s, zone, depth) {
   if (!G.canDive(s, zone, depth)) return depth > 28 || zone === 'large' || zone === 'fosse' ? 'Trop profond ici : plonge dans les eaux claires du récif ou des côtes de Port-Galet.' : zone === 'cote' || zone === 'recif' ? 'Pas assez d’eau ici.' : 'L’eau est trop sombre ici : plonge au récif des Palmes ou près de Port-Galet.';
   return null;
 }
-export function startDive() {
+export function startDive(kind = 'harpon') {
   const B = S.B, r = right(B.heading);
-  D.pos.set(B.x + r.x * 4, -1.4, B.z + r.z * 4); D.vel.set(0, 0, 0);
-  D.yaw = B.heading; D.pitch = -0.35; D.o2 = O2; D.zone = G.zoneAt(D.pos.x, D.pos.z); D.cool = 0; D.shot = null;
+  D.sub = kind === 'sub';
+  D.pos.set(B.x + r.x * 4, D.sub ? -3 : -1.4, B.z + r.z * 4); D.vel.set(0, 0, 0);
+  D.yaw = B.heading; D.pitch = -0.35; D.o2 = D.sub ? BATTERY : O2; D.zone = G.zoneAt(D.pos.x, D.pos.z); D.cool = 0; D.shot = null;
   S.mode = 'dive'; S.boat.fisher.visible = false;
-  diver.visible = snow.visible = true; S.world.setUnder(true);
+  diver.visible = !D.sub; sub.visible = D.sub; snow.visible = true; S.world.setUnder(true, D.sub);
+  sub.userData.beam.intensity = D.sub ? 260 : 0;
   SFX.splash(); splashAt({ x: D.pos.x, y: 0, z: D.pos.z }, 1.6);
   for (let k = 0; k < 16; k++) spawnFish(true);
-  for (let k = 0; k < 7; k++) spawnOyster();
+  if (!D.sub) for (let k = 0; k < 7; k++) spawnOyster();
+  $('#o2 span').textContent = D.sub ? '🔋' : '🫧';
   $('#o2').hidden = false; $('#tFish').textContent = '🎯'; $('#tAct').textContent = '⬆️';
-  toast('🤿 Sous l’eau ! <b>Z/S</b> nager · <b>Q/D</b> tourner · <b>↑/↓</b> ou glisser pour regarder · <b>Espace</b> harpon · <b>E</b> remonter', 6000);
+  toast(D.sub ? '🟡 Plongée en sous-marin ! <b>Z/S</b> avancer · <b>Q/D</b> tourner · <b>↑/↓</b> monter, descendre · <b>Espace</b> bras de capture · <b>E</b> remonter' : '🤿 Sous l’eau ! <b>Z/S</b> nager · <b>Q/D</b> tourner · <b>↑/↓</b> ou glisser pour regarder · <b>Espace</b> harpon · <b>E</b> remonter', 6000);
 }
 export function endDive(msg) {
   S.mode = 'sail'; S.boat.fisher.visible = true;
-  diver.visible = snow.visible = harpoon.visible = cord.visible = false; S.world.setUnder(false);
+  diver.visible = sub.visible = snow.visible = harpoon.visible = cord.visible = false; S.world.setUnder(false); sub.userData.beam.intensity = 0;
   for (const f of fishes) S.scene.remove(f.m); fishes = [];
   for (const o of oysters) S.scene.remove(o.g); oysters = [];
   $('#o2').hidden = true; $('#tFish').textContent = '🎣'; $('#tAct').textContent = '⚓';
@@ -127,7 +149,7 @@ export function updateDive(dt) {
     D.pitch = clampPitch(D.pitch + ((k('ArrowUp') ? 1 : 0) - (k('ArrowDown') ? 1 : 0)) * dt * 1.2);
     const push = (k('KeyW') || k('KeyZ') ? 1 : 0) - (k('KeyS') ? 0.6 : 0) - S.touch.y;
     dir.set(Math.sin(D.yaw) * Math.cos(D.pitch), Math.sin(D.pitch), Math.cos(D.yaw) * Math.cos(D.pitch));
-    D.vel.addScaledVector(dir, push * dt * 7);
+    D.vel.addScaledVector(dir, push * dt * (D.sub ? 12 : 7));
     D.kick += dt * (2 + Math.abs(push) * 8);
   }
   D.vel.multiplyScalar(Math.exp(-dt * 2.2));
@@ -136,15 +158,16 @@ export function updateDive(dt) {
   if (D.pos.y < floor) { D.pos.y = floor; D.vel.y = Math.max(0, D.vel.y); }
   if (D.pos.y > top) { D.pos.y = top; D.vel.y = Math.min(0, D.vel.y); }
   const fromBoat = Math.hypot(D.pos.x - S.B.x, D.pos.z - S.B.z);
-  if (fromBoat > 45) { D.pos.x += (S.B.x - D.pos.x) / fromBoat * dt * 4; D.pos.z += (S.B.z - D.pos.z) / fromBoat * dt * 4; }
+  if (fromBoat > (D.sub ? 90 : 45)) { D.pos.x += (S.B.x - D.pos.x) / fromBoat * dt * 4; D.pos.z += (S.B.z - D.pos.z) / fromBoat * dt * 4; }
   diver.position.copy(D.pos); diver.rotation.set(-D.pitch, D.yaw, Math.sin(D.kick * 0.5) * 0.06, 'YXZ');
+  sub.position.copy(D.pos); sub.rotation.set(-D.pitch * 0.6, D.yaw, 0, 'YXZ'); subProp.rotation.z += dt * (3 + D.vel.length() * 4);
   legs.forEach((l, j) => (l.rotation.x = Math.sin(D.kick + j * Math.PI) * 0.35));
   if (Math.random() < dt * 1.2) bubbles(tmp.set(D.pos.x, D.pos.y + 0.3, D.pos.z).addScaledVector(dir, 0.9), 3);
   // oxygène
   if (!frozen) D.o2 -= dt;
-  $('#o2 i').style.width = `${Math.max(0, D.o2 / O2) * 100}%`;
+  $('#o2 i').style.width = `${Math.max(0, D.o2 / (D.sub ? BATTERY : O2)) * 100}%`;
   $('#o2').classList.toggle('low', D.o2 < 10);
-  if (D.o2 <= 0) return endDive('😮‍💨 Plus d’air ! Tu remontes reprendre ton souffle.');
+  if (D.o2 <= 0) return endDive(D.sub ? '🔋 Batterie vide : le sous-marin remonte tout seul.' : '😮‍💨 Plus d’air ! Tu remontes reprendre ton souffle.');
   D.cool = Math.max(0, D.cool - dt);
   updateFishes(dt);
   updateShot(dt);
@@ -158,7 +181,7 @@ export function updateDive(dt) {
   }
   // caméra derrière le plongeur, neige marine autour
   tmp.set(Math.sin(D.yaw) * Math.cos(D.pitch), Math.sin(D.pitch), Math.cos(D.yaw) * Math.cos(D.pitch));
-  const cam = S.camera, want = D.pos.clone().addScaledVector(tmp, -4.2).add(new THREE.Vector3(0, 1.1, 0));
+  const cam = S.camera, want = D.pos.clone().addScaledVector(tmp, D.sub ? -10.5 : -4.2).add(new THREE.Vector3(0, D.sub ? 2.8 : 1.1, 0));
   want.y = Math.min(want.y, waveH(want.x, want.z) - 0.3);
   cam.position.lerp(want, 1 - Math.exp(-dt * 6));
   cam.lookAt(D.pos.clone().addScaledVector(tmp, 5));
@@ -212,13 +235,13 @@ function caught(F) {
   S.scene.remove(F.m);
   const res = G.landFish(S.save, F.f);
   SFX.catch(F.f.rarity === 'rare');
-  if (res.first) showCatch(F.f, res, '🤿 Pêché au harpon');
+  if (res.first) showCatch(F.f, res, D.sub ? '🟡 Attrapé en sous-marin' : '🤿 Pêché au harpon');
   else toast(`🎯 <b>${esc(F.f.name)}</b> (${res.fish.size} cm)${res.record ? ' · 🏆 record !' : ''}`);
   persist();
   spawnFish(false);
 }
 export function hint() {
   if (S.mode !== 'dive') return '';
-  return `🫧 Air : ${Math.ceil(D.o2)} s · <b>Espace</b> harpon · <b>E</b> remonter`;
+  return `${D.sub ? '🔋 Batterie' : '🫧 Air'} : ${Math.ceil(D.o2)} s · <b>Espace</b> ${D.sub ? 'bras de capture' : 'harpon'} · <b>E</b> remonter`;
 }
 export { D as diveState }; // pour les tests automatiques

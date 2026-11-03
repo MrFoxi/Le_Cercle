@@ -98,7 +98,7 @@ export function updateTraps(dt) {
   // le filet se remplit pendant qu'on navigue
   if (net.on && S.mode === 'sail' && !S.B.docked) {
     netDist += Math.max(0, S.B.speed) * dt;
-    const every = G.lvl(S.save, 'filet').every;
+    const every = G.lvl(S.save, 'filet').every / (G.boatOf(S.save).nets ? 1.5 : 1); // le chalutier remplit son filet plus vite
     if (netDist > every) {
       netDist = 0;
       if (G.cargoFull(S.save)) toast('🥅 Le filet déborde : ta cale est pleine.');

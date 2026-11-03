@@ -126,4 +126,26 @@ assert.strictEqual(G.wonderHere(ws, 300, 300, { time: 18.6 / 24, weather: 'clair
 const fs = G.newSave();
 assert(G.reveal(fs, 0, 0) && !G.reveal(fs, 0, 0));
 assert(G.explored(fs) > 0 && G.explored(fs) < 0.05);
+// Bateaux : le chalutier agrandit la cale et donne 2 casiers de plus ; le voilier va vite vent de travers, lentement face au vent.
+const bt = G.newSave(); bt.money = 5000; bt.levels.casiers = 1;
+assert.strictEqual(G.slots(bt), 6);
+assert.strictEqual(G.buyBoat(bt, 'chalutier'), null);
+assert.deepStrictEqual([G.slots(bt), G.trapsMax(bt), bt.model], [14, 4, 'chalutier']);
+assert(G.setBoat(bt, 'barque') && !G.setBoat(bt, 'voilier'));
+assert(G.sailFactor(Math.PI / 2, 1) > G.sailFactor(0, 1) && G.sailFactor(0, 1) > 1 && G.sailFactor(Math.PI, 1) < 0.6 && G.sailFactor(Math.PI, 0) === 1);
+// Personnalisation : une couleur ou un drapeau à relique reste fermé tant qu'on ne l'a pas ; le nom est nettoyé.
+assert(!G.setCustom(bt, 'hull', 'or')); bt.relics.push('couronne'); assert(G.setCustom(bt, 'hull', 'or'));
+assert(!G.setCustom(bt, 'mascot', 'jade')); assert(G.setCustom(bt, 'mascot', 'couronne'));
+G.setCustom(bt, 'name', '  <Mon bateau> qui a un nom très très long  '); assert.strictEqual(bt.custom.name, 'Mon bateau qui a u');
+// Fraîcheur : +15 % juste après la prise, plus après 3 heures (12 avec la cale réfrigérée).
+const fr = G.newSave(), caught = G.landFish(fr, G.fishById('thon'), () => 0.5).fish;
+const fresh = G.priceAt(caught, 'port', fr); G.tick(fr, 600 * 4 / 24);
+assert(fresh > G.priceAt(caught, 'port', fr) && G.priceAt(caught, 'port', fr) === caught.price);
+fr.levels.cale = 2; assert(G.isFresh(fr, caught));
+// Aquarium : on y met un poisson de la cale (8 au plus), on peut le relâcher.
+assert(G.toAquarium(fr, 0) && fr.aquarium.length === 1 && fr.cargo.length === 0 && G.releaseAquarium(fr, 0));
+assert(G.trophies(fr)[0].f.id === 'thon');
+// Sous-marin : seulement en eau profonde, au large ou dans la Fosse.
+fr.gear.sousmarin = true;
+assert(G.canSub(fr, 'fosse', 60) && !G.canSub(fr, 'cote', 60) && !G.canSub(fr, 'large', 10));
 console.log('Tests de Little Fisher : OK');

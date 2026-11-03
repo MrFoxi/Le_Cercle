@@ -1,7 +1,7 @@
 // Little Fisher : l'interface en mer. Messages, nom des lieux, argent, cale, heure, appât, carte de la prise, mini-carte et carte.
 import { S } from './state.js';
 import * as G from './game.js';
-import { RARITY, ISLANDS, SPOTS, FOSSE, OPEN_SEA, BAITS, WRECKS, WONDERS, HUNTS } from './data.js';
+import { RARITY, ISLANDS, SPOTS, FOSSE, OPEN_SEA, BAITS, WRECKS, WONDERS, HUNTS, FISH, TREASURES } from './data.js';
 import { fishImage } from './fishart.js';
 import { SFX } from './audio.js';
 import { $, esc } from '/shared/party.js';
@@ -106,6 +106,19 @@ export function renderMap() {
   arrow(g, ...toMap(S.B.x, S.B.z, N), S.B.heading, 14);
   $('#mapHint').innerHTML = `Exploré : <b>${Math.round(G.explored(s) * 100)} %</b> de la carte · Pointillés jaunes : la haute mer (il faut la <b>coque renforcée</b>) · violets : <b>la Fosse</b> et le grand nord (coque de haute mer) · 🪝 épaves · ✕ trésors enterrés · cercles blancs : des remous où les poissons rares mordent plus${s.traps.length ? ' · ronds orange : tes casiers (verts quand ils sont pleins)' : ''}. ${G.treasuresLeft(s).length} trésors flottent encore quelque part…`;
 }
+// Sonar : pour chaque remous à portée, la couleur du poisson le plus rare qui mord là maintenant (recalculé toutes les 2 s)
+const RANK = ['commun', 'peu', 'rare', 'legende'];
+let sonarAt = -9, sonarCache = [];
+function sonarBlips(range) {
+  if (S.time - sonarAt < 2) return sonarCache;
+  sonarAt = S.time;
+  const s = S.save, ctx = { time: s.time, weather: S.W.kind, rod: s.levels.canne, lantern: s.levels.lanterne, bait: s.bait };
+  sonarCache = SPOTS.filter(p => Math.hypot(p.x - S.B.x, p.z - S.B.z) < range).map(p => {
+    const best = FISH.filter(f => G.canBite(f, { ...ctx, zone: p.zone })).reduce((a, f) => Math.max(a, RANK.indexOf(f.rarity)), -1);
+    return { p, color: best >= 0 ? RARITY[RANK[best]].color : '#888888' };
+  });
+  return sonarCache;
+}
 export function drawMinimap() {
   const cv = $('#minimap'), g = cv.getContext('2d'), N = cv.width, R = 320, B = S.B; // R : mètres visibles de chaque côté
   const M = mapLand.width, px = (B.x / MAP_SPAN + 0.5) * M, pz = (B.z / MAP_SPAN + 0.5) * M, half = R / MAP_SPAN * M;
@@ -116,7 +129,23 @@ export function drawMinimap() {
   for (const p of SPOTS) { const [x, y] = to(p.x, p.z); g.strokeStyle = 'rgba(255,255,255,.9)'; g.lineWidth = 3; g.beginPath(); g.arc(x, y, 7, 0, 7); g.stroke(); }
   for (const d of S.world.docks) { const [x, y] = to(d.x, d.z); g.font = '26px sans-serif'; g.textAlign = 'center'; g.fillText('⚓', x, y + 9); }
   for (const t of S.save.traps) trapDot(g, ...to(t.x, t.z), G.trapReady(S.save, t), 8);
+  const sonar = G.lvl(S.save, 'sonar');
+  if (sonar.range) { // balayage, bancs de poissons, et au loin épaves et trésors qui flottent
+    const a = S.time * 2;
+    g.strokeStyle = 'rgba(120,255,180,.5)'; g.lineWidth = 3; g.beginPath(); g.moveTo(N / 2, N / 2); g.lineTo(N / 2 + Math.cos(a) * N / 2, N / 2 + Math.sin(a) * N / 2); g.stroke();
+    for (const b of sonarBlips(sonar.range)) { const [x, y] = to(b.p.x, b.p.z), r = 9 + Math.sin(S.time * 4 + b.p.x) * 2; g.fillStyle = b.color; g.globalAlpha = 0.85; g.beginPath(); g.arc(x, y, r, 0, 7); g.fill(); g.globalAlpha = 1; }
+    if (S.save.levels.sonar >= 2) {
+      g.font = '22px sans-serif'; g.textAlign = 'center';
+      for (const w of WRECKS) if (Math.hypot(w.x - B.x, w.z - B.z) < sonar.range) g.fillText('🪝', ...to(w.x, w.z + 4));
+      for (const t of G.treasuresLeft(S.save)) if (Math.hypot(t.x - B.x, t.z - B.z) < sonar.range) g.fillText('✨', ...to(t.x, t.z + 4));
+    }
+  }
   arrow(g, N / 2, N / 2, B.heading, 16);
   g.restore();
+  // le vent : une flèche en haut de la mini-carte (plus longue quand il souffle fort)
+  const W = S.W, L = 14 + W.wind * 22, cx = N / 2, cy = 26, dx = Math.sin(W.windDir), dz = Math.cos(W.windDir);
+  g.strokeStyle = '#ffffff'; g.lineWidth = 4; g.lineCap = 'round';
+  g.beginPath(); g.moveTo(cx - dx * L / 2, cy - dz * L / 2); g.lineTo(cx + dx * L / 2, cy + dz * L / 2); g.stroke();
+  g.beginPath(); g.arc(cx + dx * L / 2, cy + dz * L / 2, 5, 0, 7); g.fillStyle = '#ffffff'; g.fill();
 }
 export { esc };

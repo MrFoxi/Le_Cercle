@@ -190,6 +190,13 @@ FISH.push(
   { id: 'murene', name: 'Murène tigrée', zones: [], dive: ['recif', 'cote'], rarity: 'peu', price: 32, size: [60, 140], when: 'toujours', difficulty: 2, wait: [1, 2],
     look: { shape: 'anguille', body: '#d8c050', belly: '#f0e0a0', accent: '#3a3010', pattern: 'spots' }, desc: 'Elle guette depuis son trou, la bouche ouverte. Impressionnante, mais pas méchante.' },
 );
+// Seulement dans les grands fonds, en sous-marin
+FISH.push(
+  { id: 'geant', name: 'Calmar géant', zones: [], dive: ['fosse'], rarity: 'rare', price: 160, size: [400, 900], when: 'toujours', difficulty: 4, wait: [1, 2],
+    look: { shape: 'calmar', body: '#a8343a', belly: '#e07a70', accent: '#5a1018', pattern: 'spots' }, desc: 'Des yeux grands comme des assiettes. Personne ne l’avait jamais vu vivant.' },
+  { id: 'ogre', name: 'Poisson-ogre', zones: [], dive: ['fosse', 'large'], rarity: 'peu', price: 48, size: [10, 18], when: 'toujours', difficulty: 2, wait: [1, 2],
+    look: { shape: 'rond', body: '#2a2228', belly: '#4a3a44', accent: '#e8e0d0', pattern: 'lure' }, desc: 'Petit, mais avec des dents si longues qu’il ne peut pas fermer la bouche.' },
+);
 // L'appât préféré de chaque poisson (il mord trois fois plus souvent avec), et sa façon de se battre au moulinet :
 // calme, course (il file et la vitesse change), fond (il tire vers le fond : l'arc rétrécit), saut (l'arc bouge), zigzag (l'aiguille change de sens).
 const BAIT_OF = { maquereau: 'leurre', rouget: 'ver', bar: 'leurre', sole: 'ver', perroquet: 'crevette', labre: 'crevette', merou: 'calmar', vieille: 'crevette',
@@ -200,7 +207,8 @@ const BAIT_OF = { maquereau: 'leurre', rouget: 'ver', bar: 'leurre', sole: 'ver'
 const FIGHT_OF = { thon: 'course', espadon: 'saut', merou: 'fond', congre: 'fond', baudroie: 'fond', leviathan: 'course', raie: 'saut', bar: 'zigzag',
   rascasse: 'zigzag', daurade: 'zigzag', dragon: 'zigzag', roi: 'saut', labre: 'zigzag', maquereau: 'course', lune: 'fond', grenadier: 'fond',
   salamandre: 'fond', phenix: 'saut', requin: 'fond', barracuda: 'course', tarpon: 'saut', lion: 'zigzag', lucifer: 'zigzag', omble: 'course', pierre: 'fond' };
-const DIVE_OF = { perroquet: ['recif'], labre: ['recif'], merou: ['recif'], rouget: ['cote'], bar: ['cote'], sole: ['cote'], sardine: ['cote'] };
+const DIVE_OF = { perroquet: ['recif'], labre: ['recif'], merou: ['recif'], rouget: ['cote'], bar: ['cote'], sole: ['cote'], sardine: ['cote'],
+  grenadier: ['fosse'], baudroie: ['fosse'], dragon: ['fosse'], thon: ['large'], espadon: ['large'], lune: ['large'] }; // les grands fonds : en sous-marin
 for (const f of FISH) { f.bait = BAIT_OF[f.id] ?? null; f.fight = FIGHT_OF[f.id] ?? 'calme'; f.trap ??= null; f.dive ??= DIVE_OF[f.id] ?? null; }
 export const FIGHTS = { calme: '', course: 'Il file au large !', fond: 'Il tire vers le fond !', saut: 'Il saute hors de l’eau !', zigzag: 'Il zigzague dans tous les sens !' };
 
@@ -216,6 +224,26 @@ export const BAIT_SHOPS = { port: ['ver', 'calmar', 'leurre'], corail: ['crevett
 export const GEAR = {
   harpon: { name: 'Masque et harpon', icon: '🤿', cost: 260, shop: 'corail', desc: 'Plonge là où l’eau est claire et peu profonde (touche H) et chasse au harpon. On y trouve aussi des huîtres perlières.' },
   grappin: { name: 'Grappin et aimant', icon: '🪝', cost: 340, shop: 'port', desc: 'Arrête-toi au-dessus d’une épave et fouille-la (touche E) : pièces, et parfois une relique ancienne.' },
+  sousmarin: { name: 'Petit sous-marin', icon: '🟡', cost: 2400, shop: 'port', desc: 'Il se met à l’eau depuis ton bateau (touche H) au large et dans la Fosse : explore les grands fonds et attrape ce qui y vit.' },
+};
+
+// ---------- Bateaux (chantier naval) ----------
+// speed : vitesse (× moteur) ; turn : maniabilité ; cargo : places de cale en plus ; wind : profite du vent ; nets : filet plus efficace, casiers en plus
+export const BOATS = {
+  barque: { name: 'Barque de pêche', cost: 0, speed: 1, turn: 1, cargo: 0, desc: 'Petite, maniable, fidèle.' },
+  voilier: { name: 'Voilier', cost: 900, speed: 1, turn: 0.9, cargo: 2, wind: true, desc: 'Avec le vent dans le dos ou de côté, il file bien plus vite (et moins vite face au vent).' },
+  chalutier: { name: 'Chalutier', cost: 1600, speed: 0.85, turn: 0.75, cargo: 8, nets: true, desc: 'Lourd mais immense : 8 places de cale en plus, un filet plus efficace et 2 casiers en plus.' },
+};
+// Personnalisation : couleurs de coque, drapeaux, mascotte (une relique posée sur le toit). need : relique nécessaire.
+export const HULL_COLORS = {
+  auto: { name: 'Selon la coque', color: null }, rouge: { name: 'Rouge corsaire', color: '#b8322a' }, vert: { name: 'Vert sapin', color: '#2f6a4a' },
+  jaune: { name: 'Jaune soleil', color: '#f2b631' }, rose: { name: 'Rose corail', color: '#ef7a8a' }, noir: { name: 'Noir goudron', color: '#2a2a2e' },
+  lagon: { name: 'Bleu lagon', color: '#2fb3a6' }, or: { name: 'Or massif', color: '#d8a836', need: 'couronne', metal: true }, nacre: { name: 'Nacre', color: '#f0ece8', need: 'perle', metal: true },
+};
+export const FLAGS = {
+  jaune: { name: 'Jaune', colors: ['#f2c14e'] }, rouge: { name: 'Rouge', colors: ['#d23b32'] }, bleu: { name: 'Bleu', colors: ['#2f6bb0'] },
+  rayures: { name: 'Marinière', colors: ['#ffffff', '#2f6bb0'] }, damier: { name: 'Damier', colors: ['#ffffff', '#222222'] },
+  poisson: { name: 'Poisson', colors: ['#2fb3a6', '#ffffff'], need: 'jade' }, pirate: { name: 'Pirate', colors: ['#111111', '#ffffff'], need: 'boussole' },
 };
 
 // ---------- Améliorations (chantier naval de Port-Galet) ----------
@@ -242,7 +270,11 @@ export const UPGRADES = {
   casiers: { name: 'Casiers', icon: '🦀', levels: [
     { name: 'Aucun casier', cost: 0, count: 0 }, { name: '2 casiers', cost: 150, count: 2, desc: 'Pose-les sur un fond peu profond (touche T) et reviens quelques heures plus tard.' },
     { name: '4 casiers', cost: 450, count: 4 }, { name: '6 casiers', cost: 900, count: 6 }] },
+  sonar: { name: 'Sonar', icon: '📡', levels: [
+    { name: 'Pas de sonar', cost: 0 }, { name: 'Sonar de pêche', cost: 380, range: 260, desc: 'Montre les bancs de poissons sur la mini-carte (la couleur annonce le plus rare qui mord là maintenant).' },
+    { name: 'Sonar à longue portée', cost: 1000, range: 420, desc: 'Plus loin, et il repère aussi les épaves et les trésors qui flottent.' }] },
 };
+export const AQUARIUM = 8; // poissons qu'on peut garder dans l'aquarium de la maison
 
 // ---------- Villages et habitants ----------
 export const VILLAGES = {
