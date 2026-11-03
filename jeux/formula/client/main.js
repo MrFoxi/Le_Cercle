@@ -1,6 +1,6 @@
 // Top Formula : menus, garage, modes de jeu (course rapide, contre-la-montre, multijoueur), boucle de course, HUD, résultats.
 import * as THREE from 'three';
-import { TRACKS, trackById, buildTrack, gridSlot, locate } from './tracks.js';
+import { TRACKS, trackById, buildTrack, gridSlot, locate, locateAll } from './tracks.js';
 import { createCar, stepCar, collideCars, aero, KMH, CAR, env } from './physics.js';
 import { LEVELS, createBrain, drive } from './ai.js';
 import { createView, buildCar } from './render.js';
@@ -429,6 +429,9 @@ function placeGhost(g, player, time) {
   const b = d[lo], a = d[Math.max(0, lo - 1)], f = b[1] > a[1] ? Math.max(0, Math.min(1, (lt - a[1]) / (b[1] - a[1]))) : 0;
   let da = b[4] - a[4]; da = Math.atan2(Math.sin(da), Math.cos(da));
   Object.assign(g, { x: a[2] + (b[2] - a[2]) * f, y: a[3] + (b[3] - a[3]) * f, a: a[4] + da * f, hidden: lt > d.at(-1)[1] + 2, speed: Math.hypot(b[2] - a[2], b[3] - a[3]) / Math.max(0.01, b[1] - a[1]) });
+  // position sur la piste (hauteur, dévers) : sans elle le fantôme garde la hauteur de la grille et s'enfonce dans les montées
+  const loc = g.located ? locate(race.t, g.x, g.y, g.i) : locateAll(race.t, g.x, g.y);
+  g.i = loc.i; g.along = loc.along; g.lat = loc.lat; g.located = !g.hidden;
 }
 // Écart avec le fantôme, à la même distance parcourue dans le tour.
 function ghostDelta() {
