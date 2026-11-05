@@ -144,6 +144,11 @@ async function loadBoard() {
   try {
     const [list, ghosts] = await Promise.all([fetch(`/api/formula/board?track=${sel.tt}`), fetch(`/api/formula/ghost?track=${sel.tt}`)].map(p => p.then(r => (r.ok ? r.json() : []))));
     const has = n => ghosts.some(g => g.name.toLowerCase() === n.toLowerCase()) && n !== pseudo;
+    // au classement mais sans fantôme sur le serveur (tour fait avant leur envoi) : on envoie celui gardé dans ce navigateur
+    const mine = list.find(e => e.name === pseudo), rec = store.json(`formula-ghost-${sel.tt}`);
+    if (mine && !ghosts.some(g => g.name === pseudo) && rec?.length && Math.abs(rec.at(-1)[1] - mine.ms / 1000) < 1.5) {
+      fetch('/api/formula/ghost', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ track: sel.tt, name: pseudo, ms: mine.ms, data: rec.filter((_, k) => k % 2 === 0 || k === rec.length - 1) }) }).catch(() => {});
+    }
     ol.innerHTML = list.length ? list.map(e => `<li class="${e.name === pseudo ? 'me' : ''}">${has(e.name) ? `<button class="ghostPick ${sel.ghost === e.name ? 'on' : ''}" data-ghost="${esc(e.name)}" title="Affronter son fantôme">👻</button>` : ''}${esc(e.name)} <b>${fmt(e.ms / 1000)}</b></li>`).join('') : '<li class="hint">Personne encore : sois le premier !</li>';
     $('#ttGhost').textContent = sel.ghost ? `de ${sel.ghost}` : 'le tien';
   } catch { ol.innerHTML = '<li class="hint">Classement indisponible.</li>'; }
