@@ -14,21 +14,31 @@ function check({ track, name, ms }) {
   if (!Number.isInteger(ms) || ms < MIN_LAP[track] * 1000 || ms > 10 * 60 * 1000) return 'Temps invalide';
   return null;
 }
-// Un fantôme : le tour point par point [distance, temps, x, y, cap], qui finit bien au temps annoncé.
+// Le tour enregistré, point par point [distance, temps, x, y, cap] : il doit finir au temps annoncé, et la voiture ne
+// doit jamais aller plus vite que possible (≈ 285 km/h au mieux ; on tolère 330, et quelques sauts pour « remis en piste »).
+const VMAX = 92; // m/s
+// shortcut: un tricheur appliqué peut encore fabriquer un tour plausible de bout en bout ; il faudrait rejouer le tour sur le serveur.
 function checkGhost({ track, name, ms, data }) {
   const err = check({ track, name, ms });
   if (err) return err;
-  if (!Array.isArray(data) || data.length < 30 || data.length > 1500) return 'Fantôme invalide';
-  if (!data.every(p => Array.isArray(p) && p.length === 5 && p.every(v => typeof v === 'number' && Number.isFinite(v) && Math.abs(v) < 1e5))) return 'Fantôme invalide';
-  if (Math.abs(data.at(-1)[1] - ms / 1000) > 1.5) return 'Fantôme invalide';
-  return null;
+  if (!Array.isArray(data) || data.length < 30 || data.length > 1500) return 'Tour enregistré manquant';
+  if (!data.every(p => Array.isArray(p) && p.length === 5 && p.every(v => typeof v === 'number' && Number.isFinite(v) && Math.abs(v) < 1e5))) return 'Tour enregistré invalide';
+  if (Math.abs(data.at(-1)[1] - ms / 1000) > 1.5) return 'Tour enregistré invalide';
+  let tooFast = 0;
+  for (let k = 1; k < data.length; k++) {
+    const dt = data[k][1] - data[k - 1][1];
+    if (dt <= 0) return 'Tour enregistré invalide';
+    if (Math.hypot(data[k][2] - data[k - 1][2], data[k][3] - data[k - 1][3]) / dt > VMAX) tooFast++;
+  }
+  return tooFast > 3 ? 'Vitesse impossible' : null;
 }
 
 const board = leaderboard({
   name: 'formula-board',
   key: q => (Object.hasOwn(MIN_LAP, String(q.track ?? '')) ? String(q.track) : null),
   read: b => ({ ms: b.ms }),
-  check: (e, b) => check({ ...e, track: b.track }),
+  check: (e, b) => checkGhost({ ...e, track: b.track, data: b.data }),
+  limit: '80kb',
   rank: (a, b) => a.ms - b.ms || a.at - b.at,
   announce: (e, track, place) => place === 1 && `${e.name} bat le record de ${NAMES[track]} à Top Formula (${(e.ms / 1000).toFixed(3)} s)`,
 });

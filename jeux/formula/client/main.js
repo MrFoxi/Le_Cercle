@@ -157,10 +157,11 @@ $('#ttBoard').onclick = e => { const b = e.target.closest('[data-ghost]'); if (b
 async function submitLap(track, sec, rec) {
   if (!pseudo) return null;
   try {
-    const ms = Math.round(sec * 1000);
-    const r = await (await fetch('/api/formula/board', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ track, name: pseudo, ms }) })).json();
-    // dans le top 10 : on envoie aussi le fantôme (un point sur deux, ça suffit pour le rejouer)
-    if (r.place && rec?.length) fetch('/api/formula/ghost', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ track, name: pseudo, ms, data: rec.filter((_, k) => k % 2 === 0 || k === rec.length - 1) }) }).catch(() => {});
+    const ms = Math.round(sec * 1000), data = rec.filter((_, k) => k % 2 === 0 || k === rec.length - 1); // un point sur deux suffit
+    // le tour enregistré accompagne le temps : le serveur vérifie qu'il est possible
+    const r = await (await fetch('/api/formula/board', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ track, name: pseudo, ms, data }) })).json();
+    // dans le top 10 : il devient un fantôme que les autres peuvent affronter
+    if (r.place) fetch('/api/formula/ghost', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ track, name: pseudo, ms, data }) }).catch(() => {});
     return r.place ?? null;
   } catch { return null; }
 }
@@ -326,7 +327,7 @@ function startRace(cfg) {
     cfg, t, cars, player, laps, clock: 0, goAt: 5 + (cfg.mode === 'multi' ? 1 : 0.4 + Math.random() * 1.2), acc: 0, paused: false,
     overtakes: 0, lastPos: 0, rec: [], recAt: 0, lastSend: -Infinity, done: false, results: null, follow: player, followSwitch: 0, msgUntil: 0, towerAt: 0, lastLap: 0,
   };
-  if (params.has('debug')) Object.assign(window, { race, view }); // pour les tests
+  if (params.has('debug') && ['localhost', '127.0.0.1'].includes(location.hostname)) Object.assign(window, { race, view }); // pour les tests (jamais en ligne : on pourrait trafiquer la voiture)
   if (cfg.mode === 'demo') race.clock = race.goAt + 0.01;
   if (cfg.mode === 'multi') race.clock = clockTarget();
   race.lastPos = player ? standings().indexOf(player) + 1 : 0;

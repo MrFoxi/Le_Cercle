@@ -113,6 +113,10 @@ assert.strictEqual(api.checkGhost({ track: 'riviera', name: 'A', ms: 45000, data
 assert(api.checkGhost({ track: 'riviera', name: 'A', ms: 60000, data: lap }));
 assert(api.checkGhost({ track: 'riviera', name: 'A', ms: 45000, data: lap.slice(0, 10) }));
 assert(api.checkGhost({ track: 'riviera', name: 'A', ms: 45000, data: [...lap.slice(0, -1), [1, 44.5, 'x', 0, 0]] }));
+// Trop rapide : 400 km/h tenus (111 m/s, une voiture trafiquée depuis la console) sont refusés ; 280 km/h passent.
+const at = v => Array.from({ length: 100 }, (_, k) => [k * v * 0.45, k * 0.45, k * v * 0.45, 0, 0]);
+assert.strictEqual(api.checkGhost({ track: 'riviera', name: 'A', ms: 45000, data: at(111) }), 'Vitesse impossible');
+assert.strictEqual(api.checkGhost({ track: 'riviera', name: 'A', ms: 45000, data: at(78) }), null);
 
 // Marche arrière : l'accélérateur ramène la voiture en marche avant.
 {
