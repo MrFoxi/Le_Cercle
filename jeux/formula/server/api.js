@@ -69,6 +69,19 @@ api.post('/ghost', express.json({ limit: '80kb' }), (req, res) => {
 });
 api.use(board);
 
+// Ménage au démarrage : un fantôme dont la voiture va plus vite que possible (voiture trafiquée) est retiré,
+// avec son temps au classement.
+ready.then(() => {
+  for (const track of Object.keys(ghosts)) {
+    const bad = ghosts[track].filter(g => checkGhost({ ...g, track }));
+    if (!bad.length) continue;
+    ghosts[track] = ghosts[track].filter(g => !bad.includes(g));
+    store.save(`formula-ghosts-${track}`, ghosts[track]);
+    board.drop(track, e => bad.some(g => same(g.name, e.name)))
+      .then(n => console.log(`Top Formula : ${bad.map(g => g.name).join(', ')} retiré(s) du classement de ${track} (${n} temps, vitesse impossible)`));
+  }
+});
+
 module.exports = api;
 module.exports.check = check;
 module.exports.checkGhost = checkGhost;
