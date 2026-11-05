@@ -72,6 +72,8 @@ kbd { display: inline-block; min-width: 26px; padding: 1px 7px; margin-right: 4p
 output { color: var(--ink); }
 .board ol { margin: 0 0 8px; padding-left: 26px; display: grid; gap: 3px; }
 .board li b { float: right; font-variant-numeric: tabular-nums; }
+.ghostPick { background: none; border: 1px solid var(--line); border-radius: 999px; padding: 0 6px; margin-right: 6px; cursor: pointer; filter: grayscale(1); }
+.ghostPick.on { filter: none; border-color: #ffd27a; background: #ffd27a33; }
 
 .garage { display: grid; grid-template-columns: 1.3fr 1fr; gap: 14px; }
 #garageView { width: 100%; aspect-ratio: 4 / 3; border-radius: 14px; background: radial-gradient(circle at 50% 40%, #2a3142, #0d1016); }

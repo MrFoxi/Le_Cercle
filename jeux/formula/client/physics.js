@@ -38,7 +38,7 @@ export function stepCar(car, input, t, dt, time) {
   const vmax = CAR.vmax * perf * (1 - car.damage * 0.0012) * (1 + car.slipstream * 0.06 + (car.drsOpen ? 0.075 : 0));
   let acc = 0;
   const thr = Math.max(0, Math.min(1, input.throttle || 0)), brk = Math.max(0, Math.min(1, input.brake || 0));
-  if (thr && vf > -1) acc += CAR.accel * perf * thr * Math.max(0, 1 - (vf / vmax) ** 2) * (vf < 0 ? 1.5 : 1);
+  if (thr) acc += vf < -0.5 ? 14 * thr : CAR.accel * perf * thr * Math.max(0, 1 - (vf / vmax) ** 2); // en marche arrière, l'accélérateur freine puis on repart en avant
   if (brk) {
     if (vf > 0.5) acc -= CAR.brake * brk * (0.55 + 0.45 * gripMul) * (env.wet ? 0.85 : 1);
     else acc -= vf > -CAR.reverse ? 7 * brk : 0; // marche arrière

@@ -1,6 +1,6 @@
 // Top Formula : menus, garage, modes de jeu (course rapide, contre-la-montre, multijoueur), boucle de course, HUD, résultats.
 import * as THREE from 'three';
-import { TRACKS, trackById, buildTrack, gridSlot, locate, locateAll } from './tracks.js';
+import { TRACKS, trackById, buildTrack, gridSlot, flyingSlot, locate, locateAll } from './tracks.js';
 import { createCar, stepCar, collideCars, aero, KMH, CAR, env } from './physics.js';
 import { LEVELS, createBrain, drive } from './ai.js';
 import { createView, buildCar } from './render.js';
@@ -55,7 +55,7 @@ function go(id) {
 document.addEventListener('click', e => { const b = e.target.closest('[data-go]'); if (b) { SND.startAudio(); go(b.dataset.go); } });
 
 /* ---------------- Cartes des circuits ---------------- */
-const sel = { quick: store.get('formula-track') || 'riviera', tt: store.get('formula-tt-track') || 'riviera' };
+const sel = { quick: store.get('formula-track') || 'riviera', tt: store.get('formula-tt-track') || 'riviera', ghost: null }; // ghost : pseudo dont on affronte le fantôme (null : le sien)
 function drawMini(c, t, opts = {}) {
   const W = c.width = c.clientWidth * devicePixelRatio || 300, H = c.height = c.clientHeight * devicePixelRatio || 190, g = c.getContext('2d');
   let x0 = Infinity, x1 = -Infinity, y0 = Infinity, y1 = -Infinity;
@@ -91,6 +91,7 @@ document.addEventListener('click', e => {
   if (kind === 'room') return act('configure', 'track', b.dataset.track);
   sel[kind] = b.dataset.track;
   store.set(kind === 'tt' ? 'formula-tt-track' : 'formula-track', sel[kind]);
+  if (kind === 'tt') sel.ghost = null;
   renderTracks();
   if (kind === 'tt') loadBoard();
 });
@@ -111,7 +112,16 @@ $('#qGo').onclick = () => {
   SND.startAudio();
   startRace({ mode: 'quick', track: sel.quick, ...quick, ...cond });
 };
-$('#ttGo').onclick = () => { SND.startAudio(); startRace({ mode: 'tt', track: sel.tt, ...cond }); };
+$('#ttGo').onclick = async () => {
+  SND.startAudio();
+  let ghost = null; // fantôme d'un autre joueur, s'il en a choisi un
+  if (sel.ghost) try { const r = await fetch(`/api/formula/ghost?track=${sel.tt}&name=${encodeURIComponent(sel.ghost)}`); if (r.ok) ghost = await r.json(); } catch { /* sans fantôme */ }
+  startRace({ mode: 'tt', track: sel.tt, flying: store.get('formula-tt-flying') === '1', ghost, ...cond });
+};
+// Départ : sur la grille, ou lancé depuis l'avant-dernier virage
+const renderStart = () => ($('#ttStart').innerHTML = [['0', '🏁 Sur la grille'], ['1', '🏎️ Lancé (avant-dernier virage)']].map(([v, l]) => `<button data-start="${v}" class="${(store.get('formula-tt-flying') || '0') === v ? 'on' : ''}">${l}</button>`).join(''));
+$('#ttStart').onclick = e => { const b = e.target.closest('[data-start]'); if (b) { store.set('formula-tt-flying', b.dataset.start); renderStart(); } };
+renderStart();
 
 /* ---------------- Conditions : météo et moment de la journée ---------------- */
 const cond = Object.assign({ weather: 'dry', time: 'day' }, store.json('formula-cond') || {});
@@ -132,14 +142,20 @@ document.addEventListener('click', e => {
 async function loadBoard() {
   const ol = $('#ttBoard');
   try {
-    const list = await (await fetch(`/api/formula/board?track=${sel.tt}`)).json();
-    ol.innerHTML = list.length ? list.map(e => `<li class="${e.name === pseudo ? 'me' : ''}">${esc(e.name)} <b>${fmt(e.ms / 1000)}</b></li>`).join('') : '<li class="hint">Personne encore : sois le premier !</li>';
+    const [list, ghosts] = await Promise.all([fetch(`/api/formula/board?track=${sel.tt}`), fetch(`/api/formula/ghost?track=${sel.tt}`)].map(p => p.then(r => (r.ok ? r.json() : []))));
+    const has = n => ghosts.some(g => g.name.toLowerCase() === n.toLowerCase()) && n !== pseudo;
+    ol.innerHTML = list.length ? list.map(e => `<li class="${e.name === pseudo ? 'me' : ''}">${has(e.name) ? `<button class="ghostPick ${sel.ghost === e.name ? 'on' : ''}" data-ghost="${esc(e.name)}" title="Affronter son fantôme">👻</button>` : ''}${esc(e.name)} <b>${fmt(e.ms / 1000)}</b></li>`).join('') : '<li class="hint">Personne encore : sois le premier !</li>';
+    $('#ttGhost').textContent = sel.ghost ? `de ${sel.ghost}` : 'le tien';
   } catch { ol.innerHTML = '<li class="hint">Classement indisponible.</li>'; }
 }
-async function submitLap(track, sec) {
+$('#ttBoard').onclick = e => { const b = e.target.closest('[data-ghost]'); if (b) { sel.ghost = sel.ghost === b.dataset.ghost ? null : b.dataset.ghost; loadBoard(); } };
+async function submitLap(track, sec, rec) {
   if (!pseudo) return null;
   try {
-    const r = await (await fetch('/api/formula/board', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ track, name: pseudo, ms: Math.round(sec * 1000) }) })).json();
+    const ms = Math.round(sec * 1000);
+    const r = await (await fetch('/api/formula/board', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ track, name: pseudo, ms }) })).json();
+    // dans le top 10 : on envoie aussi le fantôme (un point sur deux, ça suffit pour le rejouer)
+    if (r.place && rec?.length) fetch('/api/formula/ghost', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ track, name: pseudo, ms, data: rec.filter((_, k) => k % 2 === 0 || k === rec.length - 1) }) }).catch(() => {});
     return r.place ?? null;
   } catch { return null; }
 }
@@ -289,9 +305,10 @@ function startRace(cfg) {
     }
   }
   if (cfg.mode === 'tt') {
-    player = add(0, { id: 'me', name: pseudo || 'Toi', look: profile.look, brain: createBrain(LEVELS[2]), me: true, flying: true });
-    const data = store.json(`formula-ghost-${def.id}`);
-    if (data?.length) add(0, { id: 'ghost', ghost: true, name: 'Fantôme', look: { ...profile.look, color: '#bfe3ff', accent: '#ffffff' }, data });
+    player = createCar(t, cfg.flying ? flyingSlot(t) : gridSlot(t, 0), { id: 'me', name: pseudo || 'Toi', look: profile.look, brain: createBrain(LEVELS[2]), me: true, flying: true });
+    cars.push(player); view.addCar(player.id, player.look, {});
+    const data = cfg.ghost?.data ?? store.json(`formula-ghost-${def.id}`);
+    if (data?.length) add(0, { id: 'ghost', ghost: true, foreign: !!cfg.ghost, name: cfg.ghost ? `Fantôme de ${cfg.ghost.name}` : 'Fantôme', look: { ...profile.look, color: cfg.ghost ? '#ffd27a' : '#bfe3ff', accent: '#ffffff' }, data });
   }
   if (cfg.mode === 'multi') {
     cfg.grid.forEach((name, k) => {
@@ -320,7 +337,7 @@ const raceTime = () => race.clock - race.goAt;
 
 function frame(now) {
   raf = requestAnimationFrame(frame);
-  const dt = Math.min(0.1, (now - last) / 1000); last = now;
+  const dt = Math.max(0, Math.min(0.1, (now - last) / 1000)); last = now; // jamais négatif (horodatage d'image parfois en retard)
   if (!race) return;
   // Avance la simulation par pas fixes ; en multijoueur on suit l'horloge du serveur.
   if (race.cfg.mode === 'multi') { const target = clockTarget(); if (target - race.clock > 2) race.clock = target - STEP; race.acc = target - race.clock; }
@@ -407,9 +424,9 @@ function onEvent(car, e, time) {
         profile.records[t.def.id] = e.time; profile.credits += 50; saveProfile();
         store.set(`formula-ghost-${t.def.id}`, JSON.stringify(race.rec));
         const g = race.cars.find(c => c.ghost);
-        if (g) g.data = race.rec; else { const c = createCar(t, gridSlot(t, 0), { id: 'ghost', ghost: true, name: 'Fantôme', look: { ...profile.look, color: '#bfe3ff', accent: '#ffffff' }, data: race.rec }); race.cars.push(c); view.addCar(c.id, c.look, { ghost: true }); }
+        if (g?.foreign) { /* on garde le fantôme choisi (un autre joueur) */ } else if (g) g.data = race.rec; else { const c = createCar(t, gridSlot(t, 0), { id: 'ghost', ghost: true, name: 'Fantôme', look: { ...profile.look, color: '#bfe3ff', accent: '#ffffff' }, data: race.rec }); race.cars.push(c); view.addCar(c.id, c.look, { ghost: true }); }
         toast(`Record personnel · ${fmt(e.time)}`, 'purple');
-        submitLap(t.def.id, e.time).then(place => place && toast(`${place}ᵉ du classement mondial !`, 'purple'));
+        submitLap(t.def.id, e.time, race.rec).then(place => place && toast(`${place}ᵉ du classement mondial !`, 'purple'));
       } else toast(`Tour ${fmt(e.time)}`, best ? 'purple' : '');
       profile.credits += 10; saveProfile();
       race.rec = [];

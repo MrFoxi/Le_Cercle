@@ -184,3 +184,20 @@ export function gridSlot(t, k) {
   const lat = side * t.half * 0.42;
   return { x: t.x[i] + t.nx[i] * lat, y: t.y[i] + t.ny[i] * lat, a: Math.atan2(t.ty[i], t.tx[i]), i };
 }
+
+// Départ lancé du contre-la-montre : juste avant l'avant-dernier virage, pour passer la ligne déjà à bonne vitesse.
+// On remonte le circuit depuis la ligne et on repère les virages (assez serrés ; deux courbes rapprochées, comme une
+// chicane, à moins de 20 m, comptent pour un seul), puis on se place 40 m avant l'entrée du 2e.
+export function flyingSlot(t, sharp = 1 / 140) {
+  let corners = 0, gap = Infinity, entry = 0;
+  for (let n = 0; n < t.N * 0.8; n++) {
+    const i = t.wrap(t.N - 1 - n);
+    if (Math.abs(t.curv[i]) > sharp) {
+      if (gap * t.ds > 20) corners++;
+      gap = 0;
+      if (corners === 2) entry = i;
+    } else if (++gap * t.ds > 20 && corners === 2) break;
+  }
+  const i = t.wrap(entry - Math.round(40 / t.ds));
+  return { x: t.x[i], y: t.y[i], a: Math.atan2(t.ty[i], t.tx[i]), i };
+}

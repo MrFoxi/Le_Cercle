@@ -2,7 +2,7 @@
 // salon multijoueur (prêts, départ, arrivées, classement) et classement mondial.
 import assert from 'node:assert';
 import { createRequire } from 'node:module';
-import { TRACKS, buildTrack, gridSlot } from './client/tracks.js';
+import { TRACKS, buildTrack, gridSlot, flyingSlot } from './client/tracks.js';
 import { createCar, stepCar, collideCars, aero, CAR } from './client/physics.js';
 import { LEVELS, createBrain, drive } from './client/ai.js';
 
@@ -107,5 +107,22 @@ for (const def of TRACKS) {
 assert(api.check({ track: 'riviera', name: 'A', ms: 24000 }));
 assert(api.check({ track: 'nulle-part', name: 'A', ms: 50000 }));
 assert.strictEqual(api.check({ track: 'riviera', name: 'A', ms: 45000 }), null);
+// Fantômes : le tour doit finir au temps annoncé, avec des points bien formés.
+const lap = Array.from({ length: 100 }, (_, k) => [k * 15, k * 0.45, k, k, 0]); // finit à 44,55 s
+assert.strictEqual(api.checkGhost({ track: 'riviera', name: 'A', ms: 45000, data: lap }), null);
+assert(api.checkGhost({ track: 'riviera', name: 'A', ms: 60000, data: lap }));
+assert(api.checkGhost({ track: 'riviera', name: 'A', ms: 45000, data: lap.slice(0, 10) }));
+assert(api.checkGhost({ track: 'riviera', name: 'A', ms: 45000, data: [...lap.slice(0, -1), [1, 44.5, 'x', 0, 0]] }));
+
+// Marche arrière : l'accélérateur ramène la voiture en marche avant.
+{
+  const t = buildTrack(TRACKS[0]), car = createCar(t, gridSlot(t, 0));
+  for (let k = 0; k < 120; k++) stepCar(car, { brake: 1 }, t, 1 / 60, 10);
+  const back = car.vx * Math.cos(car.a) + car.vy * Math.sin(car.a);
+  for (let k = 0; k < 120; k++) stepCar(car, { throttle: 1 }, t, 1 / 60, 10);
+  assert(back < -2 && car.vx * Math.cos(car.a) + car.vy * Math.sin(car.a) > 2, 'la voiture doit repartir en avant');
+}
+// Départ lancé : avant la ligne, sur la piste, à plus de 300 m.
+for (const d of TRACKS) { const t = buildTrack(d), s = flyingSlot(t); assert((t.N - s.i) * t.ds > 300, d.id); }
 
 console.log('Top Formula : tests OK');
