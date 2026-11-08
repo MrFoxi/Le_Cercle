@@ -174,7 +174,7 @@
   const img = g => (thumb(g) ? `<img class="thumb" src="${thumb(g)}" alt="">` : '<span class="thumb" style="display:grid;place-items:center">🏠</span>');
   const PHASES = { lobby: 'Salon d’attente', waiting: 'En attente', play: 'En jeu', playing: 'En jeu', race: 'En course', countdown: 'Départ', hide: 'Cachette', hunt: 'Chasse', roundEnd: 'Fin de manche', over: 'Partie finie', results: 'Résultats', mer: 'En mer', space: 'En vol' };
   const ago = t => { const s = Math.max(0, Math.round((Date.now() - t) / 1000)); return s < 60 ? `${s} s` : s < 3600 ? `${Math.round(s / 60)} min` : s < 86400 ? `${Math.round(s / 3600)} h` : `${Math.round(s / 86400)} j`; };
-  const value = e => e.ms != null ? `${(e.ms / 1000).toFixed(3)} s` : e.size != null ? `${e.size} cm` : e.score != null ? Number(e.score).toLocaleString('fr-FR') : (() => { const k = Object.keys(e).find(k => typeof e[k] === 'number' && !['at', 'kmh'].includes(k)); return k ? String(e[k]) : ''; })();
+  const value = e => e.ms != null ? `${(e.ms / 1000).toFixed(3)} s` : e.size != null ? `${e.size} cm` : e.score != null ? Number(e.score).toLocaleString('fr-FR') : e.points != null ? `${Number(e.points).toLocaleString('fr-FR')} pts${e.found != null ? ` · ${e.found}/${e.total} pays` : ''}` : (() => { const k = Object.keys(e).find(k => typeof e[k] === 'number' && !['at', 'kmh', 'pos'].includes(k)); return k ? String(e[k]) : ''; })();
   const lower = s => String(s ?? '').trim().toLowerCase();
   const api = (path, body) => fetch(`/api/admin/${path}`, body ? { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) } : {}).then(async r => ({ ok: r.ok, status: r.status, ...(await r.json().catch(() => ({}))) })).catch(() => ({ ok: false, error: 'Serveur injoignable' }));
 
@@ -214,11 +214,15 @@
       if (!sus && i === 0 && list[1]) {
         if (e.ms != null && e.ms < list[1].ms * 0.85) sus = `${Math.round((1 - e.ms / list[1].ms) * 100)} % plus rapide que le 2e`;
         if (e.score != null && e.score > list[1].score * 1.8) sus = `${(e.score / list[1].score).toFixed(1)} fois le score du 2e`;
+        if (e.points != null && e.points > list[1].points * 1.8) sus = `${(e.points / list[1].points).toFixed(1)} fois les points du 2e`;
       }
       out.push({ board, game: b.game, key: k, pos: i + 1, ...e, sus });
     });
     return out;
   }
+  // « classement|clé » : la clé peut elle-même contenir des « | » (Trouve le pays : zone|chrono|erreurs)
+  const cut = k => [k.slice(0, k.indexOf('|')), k.slice(k.indexOf('|') + 1)];
+  const keyLabel = k => { const [zone, time, lives] = k.split('|'); return lives == null ? k : `${zone} · ${+time ? `${+time / 60} min` : 'sans chrono'} · ${+lives ? `${lives} erreur${+lives > 1 ? 's' : ''}` : 'sans limite'}`; };
   const roomsList = () => Object.entries(S.rooms).flatMap(([g, l]) => l.map(r => ({ g, ...r })));
 
   async function refresh() {
@@ -273,7 +277,7 @@
       <div class="two"><div class="card"><h3>Fréquentation (24 h)</h3>${chart()}</div>
       <div class="card"><h3>Les plus joués (7 jours)</h3>${top.length ? `<ul class="list">${top.map(([g, n], i) => `<li>${img(g)}<span class="grow">${i + 1}. ${esc(gname(g))}</span><span class="pill">${n} visite${n > 1 ? 's' : ''}</span></li>`).join('')}</ul>` : '<p class="empty">Pas encore de chiffres.</p>'}</div></div>
       <div class="two" style="margin-top:12px"><div class="card"><h3>Derniers événements <button class="small" data-go="activity">Tout voir</button></h3>${feed(S.events.slice(0, 8))}</div>
-      <div class="card"><h3>Temps suspects <button class="small" data-go="boards">Classements</button></h3>${sus.length ? `<ul class="list">${sus.map(e => `<li>${img(e.game)}<span class="grow"><button class="link" data-fiche="${enc(e.name)}">${esc(e.name)}</button> · ${esc(gname(e.game))} <span class="muted">${esc(e.key)}</span></span><span class="pill warn">⚠️ ${esc(e.sus)}</span></li>`).join('')}</ul>` : '<p class="empty">Rien de suspect 👌</p>'}</div></div>`;
+      <div class="card"><h3>Temps suspects <button class="small" data-go="boards">Classements</button></h3>${sus.length ? `<ul class="list">${sus.map(e => `<li>${img(e.game)}<span class="grow"><button class="link" data-fiche="${enc(e.name)}">${esc(e.name)}</button> · ${esc(gname(e.game))} <span class="muted">${esc(keyLabel(e.key))}</span></span><span class="pill warn">⚠️ ${esc(e.sus)}</span></li>`).join('')}</ul>` : '<p class="empty">Rien de suspect 👌</p>'}</div></div>`;
   }
 
   /* ---------- Joueurs ---------- */
@@ -309,11 +313,11 @@
     if (!games.includes(boardSel.game)) boardSel = { game: games[0], key: '' };
     const keys = [...new Set(all.filter(e => e.game === boardSel.game).map(e => `${e.board}|${e.key}`))].sort();
     if (!keys.includes(boardSel.key)) boardSel.key = keys[0];
-    const [bn, bk] = boardSel.key.split('|'), list = all.filter(e => e.board === bn && e.key === bk);
+    const [bn, bk] = cut(boardSel.key), list = all.filter(e => e.board === bn && e.key === bk);
     const susBy = g => all.filter(e => e.game === g && e.sus).length;
     return `<div class="toolbar">${games.map(g => `<button class="${g === boardSel.game ? 'gold-btn' : ''}" data-bgame="${g}">${esc(gname(g))}${susBy(g) ? ' ⚠️' : ''}</button>`).join('')}</div>
-      <div class="toolbar"><select id="bkey">${keys.map(k => `<option value="${esc(k)}" ${k === boardSel.key ? 'selected' : ''}>${esc(k.split('|')[1])}${all.some(e => `${e.board}|${e.key}` === k && e.sus) ? ' ⚠️' : ''}</option>`).join('')}</select><span class="muted small">${keys.length} classement${keys.length > 1 ? 's' : ''}</span></div>
-      <div class="card"><h3><span>${img(boardSel.game)} ${esc(gname(boardSel.game))} · <span class="muted">${esc(bk)}</span></span></h3>
+      <div class="toolbar"><select id="bkey">${keys.map(k => `<option value="${esc(k)}" ${k === boardSel.key ? 'selected' : ''}>${esc(keyLabel(cut(k)[1]))}${all.some(e => `${e.board}|${e.key}` === k && e.sus) ? ' ⚠️' : ''}</option>`).join('')}</select><span class="muted small">${keys.length} classement${keys.length > 1 ? 's' : ''}</span></div>
+      <div class="card"><h3><span>${img(boardSel.game)} ${esc(gname(boardSel.game))} · <span class="muted">${esc(keyLabel(bk))}</span></span></h3>
       <ol class="rank">${list.map(e => `<li class="${e.sus ? 'sus' : ''}"><span class="pos">${e.pos}</span><span class="grow"><button class="link" data-fiche="${enc(e.name)}">${esc(e.name)}</button> ${e.sus ? `<span class="pill warn">⚠️ ${esc(e.sus)}</span>` : ''}${e.kmh ? ` <span class="pill">${e.kmh} km/h</span>` : ''}</span>
         <span class="val">${esc(value(e))}</span><span class="small muted hide-m">${e.at ? `il y a ${ago(e.at)}` : ''}</span>
         <span>${e.ghost ? `<button class="icon small" data-ghost="${enc(bk)}|${enc(e.name)}" title="Voir le fantôme">👻</button> ` : ''}<button class="icon danger small" data-drop="${enc(bn)}|${enc(bk)}|${enc(e.name)}" title="Supprimer ce temps">✕</button></span></li>`).join('')}</ol></div>`;
@@ -369,7 +373,7 @@
     show(`<div class="card wide"><h3><span>👤 ${esc(name)} ${banned ? '<span class="pill warn">banni</span>' : ''}</span><button data-x>✕</button></h3>
       <p class="muted small">${here.length ? `Connecté : ${here.map(p => `${esc(gname(p.game))} (${p.hidden ? 'en arrière-plan' : 'actif'}, depuis ${ago(p.since)})`).join(' · ')}` : 'Pas connecté en ce moment.'}</p>
       <h3 style="font-size:1rem;margin-top:14px">🎲 Salons</h3>${inRooms.length ? `<ul class="list">${inRooms.map(r => `<li>${img(r.g)}<span class="grow">${esc(gname(r.g))} · ${esc(r.code)}</span><button class="small danger" data-kick="${enc(r.g)}|${enc(r.code)}|${enc(name)}">Exclure</button></li>`).join('')}</ul>` : '<p class="muted small">Dans aucun salon.</p>'}
-      <h3 style="font-size:1rem;margin-top:14px">🏆 Records (${recs.length})</h3>${recs.length ? `<ul class="list">${recs.map(e => `<li>${img(e.game)}<span class="grow">${esc(gname(e.game))} · <span class="muted">${esc(e.key)}</span> ${e.sus ? '<span class="pill warn">⚠️</span>' : ''}</span><span class="pill gold">${e.pos}e</span><span>${esc(value(e))}</span><button class="icon danger small" data-drop="${enc(e.board)}|${enc(e.key)}|${enc(e.name)}">✕</button></li>`).join('')}</ul>` : '<p class="muted small">Aucun record.</p>'}
+      <h3 style="font-size:1rem;margin-top:14px">🏆 Records (${recs.length})</h3>${recs.length ? `<ul class="list">${recs.map(e => `<li>${img(e.game)}<span class="grow">${esc(gname(e.game))} · <span class="muted">${esc(keyLabel(e.key))}</span> ${e.sus ? '<span class="pill warn">⚠️</span>' : ''}</span><span class="pill gold">${e.pos}e</span><span>${esc(value(e))}</span><button class="icon danger small" data-drop="${enc(e.board)}|${enc(e.key)}|${enc(e.name)}">✕</button></li>`).join('')}</ul>` : '<p class="muted small">Aucun record.</p>'}
       <div class="row">${recs.length ? `<button class="danger" data-dropall="${enc(name)}">Supprimer tous ses temps</button>` : ''}${banned ? `<button data-unban="${enc(name)}">Débannir</button>` : `<button class="danger" data-ban="${enc(name)}">Bannir</button>`}</div></div>`);
   }
 
