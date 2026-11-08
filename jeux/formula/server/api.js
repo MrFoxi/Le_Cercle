@@ -4,6 +4,7 @@ const express = require('express');
 const leaderboard = require('../../../lib/leaderboard');
 const store = require('../../../lib/store');
 const { MIN_LAP } = require('./game');
+const admin = require('../../../lib/admin');
 
 const NAMES = { riviera: 'Riviera', lago: 'Autodromo del Lago', marina: 'Marina by Night' };
 
@@ -39,6 +40,7 @@ const board = leaderboard({
   read: b => ({ ms: b.ms }),
   check: (e, b) => checkGhost({ ...e, track: b.track, data: b.data }),
   limit: '80kb',
+  onDrop: (track, who) => { if (!ghosts[track]) return; ghosts[track] = ghosts[track].filter(g => !same(g.name, who)); store.save(`formula-ghosts-${track}`, ghosts[track]); },
   rank: (a, b) => a.ms - b.ms || a.at - b.at,
   announce: (e, track, place) => place === 1 && `${e.name} bat le record de ${NAMES[track]} à Top Formula (${(e.ms / 1000).toFixed(3)} s)`,
 });
@@ -59,7 +61,7 @@ api.get('/ghost', (req, res) => {
 });
 api.post('/ghost', express.json({ limit: '80kb' }), (req, res) => {
   const b = req.body || {}, name = String(b.name ?? '').trim().slice(0, 20), g = { name, ms: b.ms, data: b.data };
-  const error = checkGhost({ ...g, track: b.track });
+  const error = admin.reserved(name, req.headers.cookie) ?? checkGhost({ ...g, track: b.track });
   if (error) return res.status(400).json({ error });
   const list = ghosts[b.track], prev = list.find(e => same(e.name, name));
   if (prev && prev.ms <= g.ms) return res.json({ kept: false });

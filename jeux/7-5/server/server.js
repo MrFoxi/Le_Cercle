@@ -2,6 +2,7 @@
 // Le premier jeu du site : il a sa propre gestion de salons (les autres jeux passent par lib/rooms.js).
 const { Table, MAX_PLAYERS } = require('./game');
 const activity = require('../../../lib/activity');
+const admin = require('../../../lib/admin');
 
 module.exports = io => {
   const ACTIONS = ['start', 'bet', 'draw', 'reveal', 'stand', 'bankerDraw', 'challenge', 'kick', 'ban'];
@@ -14,6 +15,16 @@ module.exports = io => {
     players: table.players.filter(p => !p.left).map(p => ({ name: p.name, avatar: p.avatar })),
   }));
   const sendLobbies = () => io.emit('lobbies', list());
+  // Page d'administration : voir les tables et en fermer une (tout le monde est renvoyé à l'accueil)
+  admin.rooms['7-5'] = {
+    list: () => [...lobbies.values()].map(({ id, table }) => ({ code: id, private: false, phase: table.phase, players: table.players.filter(p => !p.left).map(p => ({ name: p.name, connected: p.connected !== false, bot: false })), spectators: [] })),
+    close: code => {
+      const l = lobbies.get(code); if (!l) return false;
+      for (const [, s] of l.sockets) { s.ejected(); s.emit('state', null); s.emit('err', 'Cette table a été fermée par l’administrateur'); }
+      clearTimeout(l.timer); clearTimeout(l.turnTimer); l.graces.forEach(clearTimeout);
+      lobbies.delete(code); sendLobbies(); return true;
+    },
+  };
 
   // Envoie à chacun son état filtré, enchaîne la manche suivante, supprime le lobby vide.
   function update(lobby) {
@@ -92,6 +103,7 @@ module.exports = io => {
       me = clean(name, 20);
       avatar = clean(av, 8); // un emoji peut faire plusieurs caractères
       if (!me) return fail(new Error('Pseudo requis'));
+      if (admin.reserved(me, socket.handshake.headers.cookie)) { const m = me; me = null; return fail(new Error(admin.reserved(m, socket.handshake.headers.cookie))); }
       socket.emit('lobbies', list());
       // Même pseudo revenu à temps : il retrouve sa place.
       const l = [...lobbies.values()].find(l => l.table.get(me)?.connected === false && !l.table.get(me).left);

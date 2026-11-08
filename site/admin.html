@@ -1,0 +1,105 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex">
+  <title>Administration du Cercle</title>
+  <style>
+    :root { --bg: #0f1117; --card: #181b24; --line: #2a2f3d; --ink: #e8ebf2; --muted: #8a93a6; --red: #e5484d; --green: #30a46c; --gold: #f5c542; }
+    * { box-sizing: border-box; }
+    body { margin: 0; background: var(--bg); color: var(--ink); font: 15px/1.45 system-ui, sans-serif; }
+    main { max-width: 1100px; margin: 0 auto; padding: 20px 16px 60px; }
+    h1 { margin: 0 0 4px; font-size: 1.6rem; } h1 span { color: var(--gold); }
+    h2 { font-size: 1.1rem; margin: 26px 0 10px; display: flex; gap: 8px; align-items: center; }
+    .muted { color: var(--muted); } .small { font-size: .85rem; }
+    .card { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px; margin-bottom: 10px; }
+    .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 10px; }
+    .grid .card { margin: 0; }
+    .card h3 { margin: 0 0 8px; font-size: 1rem; display: flex; justify-content: space-between; gap: 8px; }
+    ul { list-style: none; margin: 0; padding: 0; }
+    li { display: flex; align-items: center; gap: 8px; padding: 4px 0; border-top: 1px solid var(--line); }
+    li:first-child { border-top: 0; }
+    li .grow { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    button { font: inherit; border: 1px solid var(--line); background: #222736; color: var(--ink); border-radius: 8px; padding: 5px 10px; cursor: pointer; }
+    button:hover { filter: brightness(1.2); }
+    button.danger { border-color: #6b2a2c; background: #3a1d1f; color: #ffb4b4; }
+    input { font: inherit; padding: 9px 12px; border-radius: 8px; border: 1px solid var(--line); background: #10131a; color: var(--ink); width: 100%; }
+    form { display: grid; gap: 10px; max-width: 340px; margin-top: 30px; }
+    .pill { font-size: .78rem; padding: 1px 7px; border-radius: 999px; background: #252a38; color: var(--muted); }
+    .on { color: var(--green); } .off { color: var(--muted); text-decoration: line-through; }
+    .bar { display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap; }
+    #msg { min-height: 1.4em; color: var(--red); }
+    [hidden] { display: none !important; }
+  </style>
+</head>
+<body>
+<main>
+  <div class="bar">
+    <div><h1>Administration du <span>Cercle</span></h1><div class="muted small" id="who"></div></div>
+    <div><a href="/" style="color:var(--muted)">← Accueil</a> <button id="logout" hidden>Se déconnecter</button></div>
+  </div>
+
+  <form id="login" hidden>
+    <p class="muted">Le pseudo <b>MrFoxi</b> est réservé à l’administrateur. Entre le mot de passe pour l’utiliser et accéder à cette page.</p>
+    <input type="password" name="password" placeholder="Mot de passe" autocomplete="current-password" required>
+    <button type="submit">Se connecter</button>
+  </form>
+  <p id="msg"></p>
+
+  <section id="panel" hidden>
+    <h2>👥 Qui joue en ce moment <span class="pill" id="nPresence"></span></h2>
+    <div class="grid" id="presence"></div>
+    <h2>🎲 Salons ouverts <span class="pill" id="nRooms"></span></h2>
+    <div class="grid" id="rooms"></div>
+    <h2>🏆 Classements</h2>
+    <div class="grid" id="boards"></div>
+  </section>
+</main>
+<script>
+  const $ = s => document.querySelector(s);
+  const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
+  const NAMES = { '7-5': 'Le Cercle du 7,5', pays: 'Trouve le pays', cote: 'Le Demi-Cercle', p4: 'Puissance 4', size: 'Size It Up', imposteur: 'L’Imposteur', bataille: 'Bataille navale', solar: 'Solar Explorer', golf: 'Mini-golf', strategy: 'Strategy Club', pinball: '3D Pinball', mines: 'Démineur Rogue', district: 'Little District', formula: 'Top Formula', chute: 'Chute Libre', prophunt: 'Prop Hunt', neon: 'Sillage Néon', fisher: 'Little Fisher', accueil: 'Accueil', admin: 'Administration' };
+  const nameOf = g => NAMES[g] ?? g;
+  const api = (path, body) => fetch(`/api/admin/${path}`, body ? { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) } : {}).then(async r => ({ ok: r.ok, ...(await r.json().catch(() => ({}))) }));
+  // Une entrée de classement : son pseudo et sa valeur (temps, score, taille…)
+  const value = e => { if (e.ms != null) return `${(e.ms / 1000).toFixed(3)} s`; if (e.size != null) return `${e.size} cm`; const k = Object.keys(e).find(k => !['name', 'at'].includes(k)); return k ? `${e[k]}` : ''; };
+
+  async function refresh() {
+    const s = await api('state');
+    if (!s.ok) return showLogin(s.error);
+    $('#panel').hidden = false; $('#login').hidden = true; $('#logout').hidden = false;
+    $('#who').textContent = 'Connecté en tant que MrFoxi · mise à jour toutes les 5 s';
+    // présence, par jeu
+    const by = {};
+    for (const p of s.presence) (by[p.game] ??= []).push(p);
+    $('#nPresence').textContent = `${s.presence.length} onglet${s.presence.length > 1 ? 's' : ''}`;
+    $('#presence').innerHTML = Object.keys(by).length ? Object.entries(by).sort((a, b) => b[1].length - a[1].length).map(([g, list]) => `<div class="card"><h3>${esc(nameOf(g))} <span class="pill">${list.length}</span></h3><ul>${list.map(p => `<li><span class="grow">${p.pseudo ? esc(p.pseudo) : '<span class="muted">sans pseudo</span>'}</span><span class="muted small">il y a ${p.ago} s</span></li>`).join('')}</ul></div>`).join('') : '<p class="muted">Personne en ce moment.</p>';
+    // salons
+    const rooms = Object.entries(s.rooms).flatMap(([g, list]) => list.map(r => ({ g, ...r })));
+    $('#nRooms').textContent = rooms.length;
+    $('#rooms').innerHTML = rooms.length ? rooms.map(r => `<div class="card"><h3><span>${esc(nameOf(r.g))} · <code>${esc(r.code)}</code> ${r.private ? '<span class="pill">privé</span>' : ''}</span><button class="danger" data-close="${encodeURIComponent(r.g)}|${encodeURIComponent(r.code)}">Fermer</button></h3>
+      <div class="muted small">Étape : ${esc(r.phase)}</div><ul>${r.players.map(p => `<li><span class="grow ${p.connected ? 'on' : 'off'}">${esc(p.name)}</span>${p.bot ? '<span class="pill">robot</span>' : ''}</li>`).join('')}${r.spectators.map(n => `<li><span class="grow muted">👁 ${esc(n)}</span></li>`).join('')}</ul></div>`).join('') : '<p class="muted">Aucun salon ouvert.</p>';
+    // classements
+    $('#boards').innerHTML = Object.entries(s.boards).flatMap(([board, b]) => Object.entries(b.lists).filter(([, l]) => l.length).map(([k, list]) => `<div class="card"><h3>${esc(nameOf(b.game))} <span class="pill">${esc(k)}</span></h3><ul>${list.map((e, i) => `<li><span class="muted">${i + 1}.</span><span class="grow">${esc(e.name)}</span><span>${esc(value(e))}</span><button class="danger" data-drop="${encodeURIComponent(board)}|${encodeURIComponent(k)}|${encodeURIComponent(e.name)}" title="Supprimer ce temps">✕</button></li>`).join('')}</ul></div>`)).join('') || '<p class="muted">Aucun classement.</p>';
+  }
+  function showLogin(error) {
+    $('#panel').hidden = true; $('#login').hidden = false; $('#logout').hidden = true; $('#who').textContent = '';
+    if (error && error !== 'Réservé à l’administrateur') $('#msg').textContent = error;
+  }
+  $('#login').onsubmit = async e => {
+    e.preventDefault();
+    const r = await api('login', { password: e.target.password.value });
+    $('#msg').textContent = r.ok ? '' : r.error;
+    if (r.ok) { e.target.reset(); localStorage.setItem('pseudo', 'MrFoxi'); refresh(); }
+  };
+  $('#logout').onclick = async () => { await api('logout', {}); showLogin(); };
+  document.addEventListener('click', async e => {
+    const c = e.target.closest('[data-close]'), d = e.target.closest('[data-drop]');
+    if (c) { const [game, code] = c.dataset.close.split('|').map(decodeURIComponent); if (!confirm(`Fermer le salon ${code} (${nameOf(game)}) ? Tous les joueurs seront renvoyés.`)) return; const r = await api('close', { game, code }); $('#msg').textContent = r.ok ? '' : r.error; refresh(); }
+    if (d) { const [board, key, name] = d.dataset.drop.split('|').map(decodeURIComponent); if (!confirm(`Supprimer le temps de ${name} (${key}) ? C’est définitif.`)) return; const r = await api('drop', { board, key, name }); $('#msg').textContent = r.ok ? '' : r.error; refresh(); }
+  });
+  refresh(); setInterval(() => { if (!$('#panel').hidden) refresh(); }, 5000);
+</script>
+</body>
+</html>

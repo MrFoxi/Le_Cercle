@@ -9,13 +9,16 @@ const fs = require('fs');
 const path = require('path');
 const { Server } = require('socket.io');
 const activity = require('./lib/activity');
+const admin = require('./lib/admin');
 
 const GAMES = fs.readdirSync(path.join(__dirname, 'jeux')).filter(g => fs.existsSync(path.join(__dirname, 'jeux', g, 'client')));
 const has = (g, f) => fs.existsSync(path.join(__dirname, 'jeux', g, 'server', f));
 
 const app = express();
+app.set('trust proxy', 1); // derrière Render : la vraie adresse du joueur (limite des essais de mot de passe)
 // Pingée de l'extérieur pour empêcher Render de mettre le serveur en veille.
 app.get('/health', (req, res) => res.send('ok'));
+app.use('/api/admin', admin.router);
 for (const g of GAMES) if (has(g, 'api.js')) app.use(`/api/${g}`, require(`./jeux/${g}/server/api`));
 app.get('/imposteur/engine.js', (req, res) => res.type('js').send(require('./jeux/imposteur/server/engine'))); // règles de L'Imposteur pour le mode un seul appareil
 // Three.js, servi depuis node_modules (pas de CDN)

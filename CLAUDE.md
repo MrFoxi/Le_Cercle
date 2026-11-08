@@ -17,6 +17,9 @@ textes, commentaires, messages de commit (`Feat : …` / `Fix : …`).
   manches, fin de partie) pour Chute, Néon, Prop Hunt. `lib/leaderboard.js` : classements mondiaux (top 10 par pseudo).
 - `shared/party.js` (sur `/shared/`) : salon côté navigateur des jeux à manches (pseudo, salons, reconnexion, joueurs, fil,
   fin de partie, sons `blip`) ; le jeu branche `onShow`/`onRoom` et lit `ui.room`.
+- `lib/admin.js` : administration. Le pseudo `MrFoxi` est réservé (mot de passe dans la variable `ADMIN_PASSWORD`, jamais
+  dans le code) ; page `/admin.html` (présence solo et multi via `shared/presence.js`, salons, classements). `lib/rooms.js`,
+  le 7,5 et `lib/leaderboard.js` s'y inscrivent et refusent le pseudo réservé sans le cookie admin.
 - `lib/store.js` : stockage durable (Upstash Redis en ligne, `data/*.json` en local). `lib/activity.js` : bandeau de l'accueil.
 - `site/index.html` : accueil (tableau `GAMES`, `PSEUDO_KEYS`) ; `site/previews/<jeu>.jpg` : aperçus.
 - `jeux/7-5/server/server.js` : seul jeu qui n'utilise pas `lib/rooms.js` (plus ancien).
