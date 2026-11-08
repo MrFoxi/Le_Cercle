@@ -5,101 +5,455 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="robots" content="noindex">
   <title>Administration du Cercle</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700;900&family=Inter:wght@400;600;800&display=swap" rel="stylesheet">
   <style>
-    :root { --bg: #0f1117; --card: #181b24; --line: #2a2f3d; --ink: #e8ebf2; --muted: #8a93a6; --red: #e5484d; --green: #30a46c; --gold: #f5c542; }
+    :root { --gold: #f5d27a; --gold-2: #c8973a; --gold-3: #8a5f1c; --ink: #f4f1ea; --muted: #a9b1ba; --line: rgba(255, 255, 255, .09); --card: rgba(18, 22, 31, .86); --bg: #07090d;
+      --red: #ff6b6b; --green: #4ade80; --blue: #7cc4ff; --pad: 14px; }
+    body.compact { --pad: 8px; }
     * { box-sizing: border-box; }
-    body { margin: 0; background: var(--bg); color: var(--ink); font: 15px/1.45 system-ui, sans-serif; }
-    main { max-width: 1100px; margin: 0 auto; padding: 20px 16px 60px; }
-    h1 { margin: 0 0 4px; font-size: 1.6rem; } h1 span { color: var(--gold); }
-    h2 { font-size: 1.1rem; margin: 26px 0 10px; display: flex; gap: 8px; align-items: center; }
-    .muted { color: var(--muted); } .small { font-size: .85rem; }
-    .card { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px; margin-bottom: 10px; }
-    .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 10px; }
-    .grid .card { margin: 0; }
-    .card h3 { margin: 0 0 8px; font-size: 1rem; display: flex; justify-content: space-between; gap: 8px; }
-    ul { list-style: none; margin: 0; padding: 0; }
-    li { display: flex; align-items: center; gap: 8px; padding: 4px 0; border-top: 1px solid var(--line); }
-    li:first-child { border-top: 0; }
-    li .grow { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-    button { font: inherit; border: 1px solid var(--line); background: #222736; color: var(--ink); border-radius: 8px; padding: 5px 10px; cursor: pointer; }
-    button:hover { filter: brightness(1.2); }
-    button.danger { border-color: #6b2a2c; background: #3a1d1f; color: #ffb4b4; }
-    input { font: inherit; padding: 9px 12px; border-radius: 8px; border: 1px solid var(--line); background: #10131a; color: var(--ink); width: 100%; }
-    form { display: grid; gap: 10px; max-width: 340px; margin-top: 30px; }
-    .pill { font-size: .78rem; padding: 1px 7px; border-radius: 999px; background: #252a38; color: var(--muted); }
-    .on { color: var(--green); } .off { color: var(--muted); text-decoration: line-through; }
-    .bar { display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap; }
-    #msg { min-height: 1.4em; color: var(--red); }
+    body { margin: 0; min-height: 100vh; font: 15px/1.45 'Inter', system-ui, sans-serif; color: var(--ink);
+      background: radial-gradient(1200px 600px at 80% -10%, rgba(200, 151, 58, .14), transparent 60%), radial-gradient(900px 500px at -10% 110%, rgba(124, 196, 255, .07), transparent 60%), var(--bg); }
+    a { color: var(--gold); }
+    h1, h2, h3 { font-family: 'Playfair Display', serif; margin: 0; }
+    .gold { background: linear-gradient(100deg, var(--gold-3), var(--gold) 35%, #fff6d8 50%, var(--gold) 65%, var(--gold-2)); -webkit-background-clip: text; background-clip: text; color: transparent; }
+    button, select, input, textarea { font: inherit; color: var(--ink); }
+    button { border: 1px solid var(--line); background: rgba(255, 255, 255, .05); border-radius: 10px; padding: 7px 12px; cursor: pointer; transition: background .15s, border-color .15s; }
+    button:hover { background: rgba(255, 255, 255, .1); }
+    button.gold-btn { background: linear-gradient(180deg, var(--gold), var(--gold-2)); color: #1a1206; border: 0; font-weight: 800; }
+    button.danger { border-color: rgba(255, 107, 107, .35); color: #ffc2c2; background: rgba(255, 107, 107, .08); }
+    button.danger:hover { background: rgba(255, 107, 107, .18); }
+    button.icon { padding: 4px 8px; }
+    input, select, textarea { background: rgba(0, 0, 0, .35); border: 1px solid var(--line); border-radius: 10px; padding: 8px 11px; }
+    input:focus, select:focus, textarea:focus, button:focus-visible { outline: 2px solid var(--gold); outline-offset: 1px; }
     [hidden] { display: none !important; }
+    .muted { color: var(--muted); } .small { font-size: .84rem; }
+    .pill { display: inline-block; font-size: .76rem; padding: 2px 8px; border-radius: 999px; background: rgba(255, 255, 255, .07); color: var(--muted); white-space: nowrap; }
+    .pill.warn { background: rgba(255, 107, 107, .15); color: #ffb0b0; }
+    .pill.gold { background: rgba(245, 210, 122, .15); color: var(--gold); -webkit-text-fill-color: currentColor; }
+
+    /* mise en page : menu à gauche, contenu à droite */
+    .app { display: grid; grid-template-columns: 230px 1fr; min-height: 100vh; }
+    .app > *, .two > *, .grid > *, .tiles > * { min-width: 0; } /* les textes longs se coupent au lieu d'élargir la page */
+    nav { border-right: 1px solid var(--line); padding: 20px 14px; position: sticky; top: 0; height: 100vh; display: flex; flex-direction: column; gap: 4px; background: rgba(0, 0, 0, .25); }
+    nav .brand { padding: 0 8px 16px; } nav .brand h1 { font-size: 1.45rem; } nav .brand div { font-size: .8rem; }
+    nav button { text-align: left; border: 0; background: none; padding: 10px 12px; border-radius: 10px; display: flex; justify-content: space-between; align-items: center; gap: 8px; color: var(--muted); font-weight: 600; }
+    nav button.on { background: rgba(245, 210, 122, .12); color: var(--gold); }
+    nav .foot { margin-top: auto; display: grid; gap: 8px; padding: 8px; }
+    main { padding: 20px 24px 60px; min-width: 0; }
+    header.top { display: flex; gap: 12px; align-items: center; justify-content: space-between; flex-wrap: wrap; margin-bottom: 18px; }
+    header.top h2 { font-size: 1.6rem; }
+    .live { display: inline-flex; align-items: center; gap: 6px; font-size: .8rem; color: var(--muted); }
+    .live i { width: 8px; height: 8px; border-radius: 50%; background: var(--green); box-shadow: 0 0 0 0 rgba(74, 222, 128, .6); animation: pulse 2s infinite; }
+    .live.off i { background: var(--red); animation: none; }
+    @keyframes pulse { 70% { box-shadow: 0 0 0 8px rgba(74, 222, 128, 0); } 100% { box-shadow: 0 0 0 0 rgba(74, 222, 128, 0); } }
+    .search { position: relative; } .search input { width: 260px; padding-left: 32px; } .search::before { content: '🔎'; position: absolute; left: 10px; top: 8px; font-size: .9rem; }
+
+    .card { background: var(--card); border: 1px solid var(--line); border-radius: 16px; padding: var(--pad); backdrop-filter: blur(6px); }
+    .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 12px; }
+    .tiles { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 14px; }
+    .tile { padding: 16px; } .tile b { display: block; font: 900 2.2rem 'Playfair Display', serif; color: var(--gold); line-height: 1.1; } .tile span { color: var(--muted); font-size: .86rem; }
+    .tile.alert b { color: var(--red); }
+    .two { display: grid; grid-template-columns: 1.4fr 1fr; gap: 12px; }
+    .card h3 { font-size: 1.05rem; margin-bottom: 10px; display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+    .list { list-style: none; margin: 0; padding: 0; }
+    .list li { display: flex; gap: 10px; align-items: center; padding: calc(var(--pad) * .5) 0; border-top: 1px solid var(--line); }
+    .list li:first-child { border-top: 0; }
+    .grow { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .thumb { width: 34px; height: 34px; border-radius: 9px; object-fit: cover; flex: none; background: #222; }
+    .dot { width: 9px; height: 9px; border-radius: 50%; display: inline-block; flex: none; } .dot.on { background: var(--green); } .dot.off { background: #59606b; }
+    table { width: 100%; border-collapse: collapse; }
+    th, td { text-align: left; padding: calc(var(--pad) * .6) 10px; border-top: 1px solid var(--line); }
+    th { color: var(--muted); font-size: .8rem; font-weight: 600; cursor: pointer; user-select: none; border-top: 0; white-space: nowrap; }
+    th.sorted::after { content: ' ↓'; } th.sorted.asc::after { content: ' ↑'; }
+    td .who { display: flex; gap: 8px; align-items: center; }
+    .link { background: none; border: 0; padding: 0; color: var(--ink); font-weight: 600; cursor: pointer; } .link:hover { color: var(--gold); text-decoration: underline; }
+    .toolbar { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-bottom: 12px; }
+
+    /* salons */
+    .room { position: relative; overflow: hidden; padding: 0; }
+    .room .cover { height: 74px; background-size: cover; background-position: center; position: relative; }
+    .room .cover::after { content: ''; position: absolute; inset: 0; background: linear-gradient(180deg, rgba(7, 9, 13, .1), rgba(18, 22, 31, .98)); }
+    .room .cover h3 { position: absolute; left: 14px; bottom: 8px; z-index: 1; font-size: 1.1rem; }
+    .room .body { padding: 0 var(--pad) var(--pad); }
+    .room .meta { display: flex; gap: 6px; flex-wrap: wrap; margin: 6px 0 8px; }
+    .room .acts { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 10px; }
+
+    /* classements */
+    .rank { list-style: none; margin: 0; padding: 0; }
+    .rank li { display: grid; grid-template-columns: 34px 1fr auto auto auto; gap: 10px; align-items: center; padding: calc(var(--pad) * .55) 6px; border-top: 1px solid var(--line); }
+    .rank li:first-child { border-top: 0; }
+    .rank li.sus { background: rgba(255, 107, 107, .07); border-radius: 10px; }
+    .rank .pos { font: 900 1.15rem 'Playfair Display', serif; color: var(--muted); text-align: center; }
+    .rank li:nth-child(1) .pos { color: var(--gold); } .rank li:nth-child(2) .pos { color: #d9dde3; } .rank li:nth-child(3) .pos { color: #d89a5b; }
+    .rank .val { font-variant-numeric: tabular-nums; font-weight: 800; }
+
+    .feed li .ic { width: 28px; text-align: center; flex: none; }
+    svg.chart { width: 100%; height: 150px; display: block; }
+
+    /* fenêtres, notifications */
+    .modal { position: fixed; inset: 0; z-index: 50; background: rgba(0, 0, 0, .6); display: grid; place-items: center; padding: 16px; backdrop-filter: blur(3px); }
+    .modal .card { width: min(560px, 100%); max-height: 88vh; overflow: auto; animation: pop .18s ease-out; }
+    .modal .card.wide { width: min(820px, 100%); }
+    .modal h3 { font-size: 1.3rem; }
+    .modal .row { display: flex; gap: 8px; justify-content: flex-end; margin-top: 14px; flex-wrap: wrap; }
+    .modal label { display: grid; gap: 6px; margin-top: 10px; color: var(--muted); font-size: .88rem; }
+    @keyframes pop { from { transform: scale(.96); opacity: 0; } }
+    #toasts { position: fixed; right: 18px; bottom: 18px; z-index: 60; display: grid; gap: 8px; }
+    .toast { background: #141922; border: 1px solid var(--line); border-left: 3px solid var(--gold); border-radius: 12px; padding: 10px 14px; display: flex; gap: 12px; align-items: center; box-shadow: 0 10px 30px rgba(0, 0, 0, .4); animation: pop .2s ease-out; }
+    .toast.err { border-left-color: var(--red); }
+    .empty { color: var(--muted); padding: 18px; text-align: center; }
+
+    /* connexion */
+    .login { min-height: 100vh; display: grid; place-items: center; padding: 16px; }
+    .login .card { width: min(400px, 100%); display: grid; gap: 12px; padding: 26px; text-align: center; }
+    .login h1 { font-size: 2.2rem; }
+
+    @media (max-width: 900px) {
+      .app { grid-template-columns: 1fr; }
+      nav { position: sticky; height: auto; flex-direction: row; overflow-x: auto; padding: 8px; border-right: 0; border-bottom: 1px solid var(--line); z-index: 5; backdrop-filter: blur(8px); }
+      nav .brand, nav .foot { display: none; }
+      nav button { white-space: nowrap; }
+      main { padding: 14px 12px 60px; }
+      .tiles { grid-template-columns: repeat(2, 1fr); } .two { grid-template-columns: 1fr; }
+      .search input { width: 100%; } .search { flex: 1; }
+      .hide-m { display: none; }
+    }
   </style>
 </head>
 <body>
-<main>
-  <div class="bar">
-    <div><h1>Administration du <span>Cercle</span></h1><div class="muted small" id="who"></div></div>
-    <div><a href="/" style="color:var(--muted)">← Accueil</a> <button id="logout" hidden>Se déconnecter</button></div>
-  </div>
-
-  <form id="login" hidden>
-    <p class="muted">Le pseudo <b>MrFoxi</b> est réservé à l’administrateur. Entre le mot de passe pour l’utiliser et accéder à cette page.</p>
-    <input type="password" name="password" placeholder="Mot de passe" autocomplete="current-password" required>
-    <button type="submit">Se connecter</button>
-  </form>
-  <p id="msg"></p>
-
-  <section id="panel" hidden>
-    <h2>👥 Qui joue en ce moment <span class="pill" id="nPresence"></span></h2>
-    <div class="grid" id="presence"></div>
-    <h2>🎲 Salons ouverts <span class="pill" id="nRooms"></span></h2>
-    <div class="grid" id="rooms"></div>
-    <h2>🏆 Classements</h2>
-    <div class="grid" id="boards"></div>
+  <!-- Connexion -->
+  <section class="login" id="login" hidden>
+    <form class="card" id="loginForm">
+      <h1 class="gold">Le Cercle</h1>
+      <div class="muted">Administration · réservée à <b>MrFoxi</b></div>
+      <p class="small" id="notConfigured" hidden style="color:var(--red)">⚠️ Le mot de passe n’est pas configuré sur le serveur : ajoute la variable <b>ADMIN_PASSWORD</b> dans Render (onglet Environment).</p>
+      <input type="password" name="password" placeholder="Mot de passe" autocomplete="current-password" required>
+      <button class="gold-btn">Se connecter</button>
+      <div class="small" id="loginMsg" style="color:var(--red);min-height:1.2em"></div>
+      <a href="/" class="small">← Retour à l’accueil</a>
+    </form>
   </section>
-</main>
+
+  <!-- Administration -->
+  <div class="app" id="app" hidden>
+    <nav id="nav">
+      <div class="brand"><h1 class="gold">Le Cercle</h1><div class="muted">Administration</div></div>
+      <button data-tab="home">🏠 Vue d’ensemble</button>
+      <button data-tab="players">👥 Joueurs <span class="pill" data-count="players"></span></button>
+      <button data-tab="rooms">🎲 Salons <span class="pill" data-count="rooms"></span></button>
+      <button data-tab="boards">🏆 Classements <span class="pill" data-count="boards"></span></button>
+      <button data-tab="activity">📜 Activité</button>
+      <button data-tab="tools">🛡️ Outils <span class="pill" data-count="tools"></span></button>
+      <div class="foot">
+        <label class="small muted"><input type="checkbox" id="compact"> Mode compact</label>
+        <a href="/" class="small">← Accueil</a>
+        <button id="logout" class="small">Se déconnecter</button>
+      </div>
+    </nav>
+    <main>
+      <header class="top">
+        <div><h2 id="title"></h2><span class="live" id="live"><i></i><span>En direct</span></span></div>
+        <div class="search"><input id="search" placeholder="Chercher un pseudo…" autocomplete="off" list="pseudos"><datalist id="pseudos"></datalist></div>
+      </header>
+      <div id="view"></div>
+    </main>
+  </div>
+  <div id="modal"></div>
+  <div id="toasts"></div>
+
 <script>
   const $ = s => document.querySelector(s);
-  const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
-  const NAMES = { '7-5': 'Le Cercle du 7,5', pays: 'Trouve le pays', cote: 'Le Demi-Cercle', p4: 'Puissance 4', size: 'Size It Up', imposteur: 'L’Imposteur', bataille: 'Bataille navale', solar: 'Solar Explorer', golf: 'Mini-golf', strategy: 'Strategy Club', pinball: '3D Pinball', mines: 'Démineur Rogue', district: 'Little District', formula: 'Top Formula', chute: 'Chute Libre', prophunt: 'Prop Hunt', neon: 'Sillage Néon', fisher: 'Little Fisher', accueil: 'Accueil', admin: 'Administration' };
-  const nameOf = g => NAMES[g] ?? g;
-  const api = (path, body) => fetch(`/api/admin/${path}`, body ? { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) } : {}).then(async r => ({ ok: r.ok, ...(await r.json().catch(() => ({}))) }));
-  // Une entrée de classement : son pseudo et sa valeur (temps, score, taille…)
-  const value = e => { if (e.ms != null) return `${(e.ms / 1000).toFixed(3)} s`; if (e.size != null) return `${e.size} cm`; const k = Object.keys(e).find(k => !['name', 'at'].includes(k)); return k ? `${e[k]}` : ''; };
+  const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
+  const enc = s => encodeURIComponent(s), dec = s => decodeURIComponent(s);
+  const store = { get: k => { try { return localStorage.getItem(k); } catch { return null; } }, set: (k, v) => { try { localStorage.setItem(k, v); } catch { /* bloqué */ } } };
+  const GAMES = { '7-5': 'Le Cercle du 7,5', pays: 'Trouve le pays', cote: 'Le Demi-Cercle', p4: 'Puissance 4', size: 'Size It Up', imposteur: 'L’Imposteur', bataille: 'Bataille navale', solar: 'Solar Explorer', golf: 'Mini-golf', strategy: 'Strategy Club', pinball: '3D Pinball', mines: 'Démineur Rogue', district: 'Little District', formula: 'Top Formula', chute: 'Chute Libre', prophunt: 'Prop Hunt', neon: 'Sillage Néon', fisher: 'Little Fisher', accueil: 'Accueil' };
+  const gname = g => GAMES[g] ?? g;
+  const thumb = g => (g === 'accueil' ? '' : `/previews/${g}.jpg`);
+  const img = g => (thumb(g) ? `<img class="thumb" src="${thumb(g)}" alt="">` : '<span class="thumb" style="display:grid;place-items:center">🏠</span>');
+  const PHASES = { lobby: 'Salon d’attente', waiting: 'En attente', play: 'En jeu', playing: 'En jeu', race: 'En course', countdown: 'Départ', hide: 'Cachette', hunt: 'Chasse', roundEnd: 'Fin de manche', over: 'Partie finie', results: 'Résultats', mer: 'En mer', space: 'En vol' };
+  const ago = t => { const s = Math.max(0, Math.round((Date.now() - t) / 1000)); return s < 60 ? `${s} s` : s < 3600 ? `${Math.round(s / 60)} min` : s < 86400 ? `${Math.round(s / 3600)} h` : `${Math.round(s / 86400)} j`; };
+  const value = e => e.ms != null ? `${(e.ms / 1000).toFixed(3)} s` : e.size != null ? `${e.size} cm` : e.score != null ? Number(e.score).toLocaleString('fr-FR') : (() => { const k = Object.keys(e).find(k => typeof e[k] === 'number' && !['at', 'kmh'].includes(k)); return k ? String(e[k]) : ''; })();
+  const lower = s => String(s ?? '').trim().toLowerCase();
+  const api = (path, body) => fetch(`/api/admin/${path}`, body ? { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) } : {}).then(async r => ({ ok: r.ok, status: r.status, ...(await r.json().catch(() => ({}))) })).catch(() => ({ ok: false, error: 'Serveur injoignable' }));
+
+  /* ---------- Notifications et fenêtres ---------- */
+  function toast(text, { err = false, action = null, ms = 4500 } = {}) {
+    const el = document.createElement('div'); el.className = `toast${err ? ' err' : ''}`;
+    el.innerHTML = `<span>${esc(text)}</span>`;
+    if (action) { const b = document.createElement('button'); b.textContent = action.label; b.className = 'small'; b.onclick = () => { action.run(); el.remove(); }; el.append(b); }
+    $('#toasts').append(el); setTimeout(() => el.remove(), ms);
+  }
+  // Une fenêtre qui demande confirmation ; fields : champs à remplir (raison, message…) ; renvoie leurs valeurs, ou null
+  function ask({ title, text = '', ok = 'Confirmer', danger = true, fields = [] }) {
+    fiche = null; // la fiche ouverte laisse la place à la question
+    return new Promise(done => {
+      $('#modal').innerHTML = `<div class="modal"><form class="card"><h3>${esc(title)}</h3>${text ? `<p class="muted">${text}</p>` : ''}
+        ${fields.map(f => `<label>${esc(f.label)}${f.area ? `<textarea name="${f.name}" rows="3" placeholder="${esc(f.placeholder ?? '')}">${esc(f.value ?? '')}</textarea>` : `<input name="${f.name}" placeholder="${esc(f.placeholder ?? '')}" value="${esc(f.value ?? '')}" ${f.required ? 'required' : ''}>`}</label>`).join('')}
+        <div class="row"><button type="button" data-no>Annuler</button><button class="${danger ? 'danger' : 'gold-btn'}">${esc(ok)}</button></div></form></div>`;
+      const form = $('#modal form'), close = v => { $('#modal').innerHTML = ''; done(v); };
+      form.querySelector('[data-no]').onclick = () => close(null);
+      form.parentElement.onclick = e => { if (e.target === form.parentElement) close(null); };
+      form.onsubmit = e => { e.preventDefault(); close(Object.fromEntries(new FormData(form))); };
+      (form.querySelector('input, textarea') ?? form.querySelector('button:last-child')).focus();
+    });
+  }
+  const show = html => { $('#modal').innerHTML = `<div class="modal">${html}</div>`; const m = $('#modal .modal'); m.onclick = e => { if (e.target === m || e.target.closest('[data-x]')) $('#modal').innerHTML = ''; }; };
+
+  /* ---------- État ---------- */
+  let lastHtml = '', lastMove = 0;
+  addEventListener('pointermove', () => (lastMove = Date.now()), { passive: true });
+  let S = null, tab = store.get('admin-tab') || 'home', sort = { key: 'since', asc: false }, gameFilter = '', boardSel = { game: '', key: '' }, fiche = null;
+  const TITLES = { home: 'Vue d’ensemble', players: 'Joueurs connectés', rooms: 'Salons ouverts', boards: 'Classements', activity: 'Activité', tools: 'Outils' };
+  // Toutes les entrées de classement, avec leur verdict « suspect » (signalé par le jeu, ou un écart énorme avec le 2e)
+  function allEntries() {
+    const out = [];
+    for (const [board, b] of Object.entries(S.boards)) for (const [k, list] of Object.entries(b.lists)) list.forEach((e, i) => {
+      let sus = e.suspect ?? null;
+      if (!sus && i === 0 && list[1]) {
+        if (e.ms != null && e.ms < list[1].ms * 0.85) sus = `${Math.round((1 - e.ms / list[1].ms) * 100)} % plus rapide que le 2e`;
+        if (e.score != null && e.score > list[1].score * 1.8) sus = `${(e.score / list[1].score).toFixed(1)} fois le score du 2e`;
+      }
+      out.push({ board, game: b.game, key: k, pos: i + 1, ...e, sus });
+    });
+    return out;
+  }
+  const roomsList = () => Object.entries(S.rooms).flatMap(([g, l]) => l.map(r => ({ g, ...r })));
 
   async function refresh() {
     const s = await api('state');
-    if (!s.ok) return showLogin(s.error);
-    $('#panel').hidden = false; $('#login').hidden = true; $('#logout').hidden = false;
-    $('#who').textContent = 'Connecté en tant que MrFoxi · mise à jour toutes les 5 s';
-    // présence, par jeu
-    const by = {};
-    for (const p of s.presence) (by[p.game] ??= []).push(p);
-    $('#nPresence').textContent = `${s.presence.length} onglet${s.presence.length > 1 ? 's' : ''}`;
-    $('#presence').innerHTML = Object.keys(by).length ? Object.entries(by).sort((a, b) => b[1].length - a[1].length).map(([g, list]) => `<div class="card"><h3>${esc(nameOf(g))} <span class="pill">${list.length}</span></h3><ul>${list.map(p => `<li><span class="grow">${p.pseudo ? esc(p.pseudo) : '<span class="muted">sans pseudo</span>'}</span><span class="muted small">il y a ${p.ago} s</span></li>`).join('')}</ul></div>`).join('') : '<p class="muted">Personne en ce moment.</p>';
-    // salons
-    const rooms = Object.entries(s.rooms).flatMap(([g, list]) => list.map(r => ({ g, ...r })));
-    $('#nRooms').textContent = rooms.length;
-    $('#rooms').innerHTML = rooms.length ? rooms.map(r => `<div class="card"><h3><span>${esc(nameOf(r.g))} · <code>${esc(r.code)}</code> ${r.private ? '<span class="pill">privé</span>' : ''}</span><button class="danger" data-close="${encodeURIComponent(r.g)}|${encodeURIComponent(r.code)}">Fermer</button></h3>
-      <div class="muted small">Étape : ${esc(r.phase)}</div><ul>${r.players.map(p => `<li><span class="grow ${p.connected ? 'on' : 'off'}">${esc(p.name)}</span>${p.bot ? '<span class="pill">robot</span>' : ''}</li>`).join('')}${r.spectators.map(n => `<li><span class="grow muted">👁 ${esc(n)}</span></li>`).join('')}</ul></div>`).join('') : '<p class="muted">Aucun salon ouvert.</p>';
-    // classements
-    $('#boards').innerHTML = Object.entries(s.boards).flatMap(([board, b]) => Object.entries(b.lists).filter(([, l]) => l.length).map(([k, list]) => `<div class="card"><h3>${esc(nameOf(b.game))} <span class="pill">${esc(k)}</span></h3><ul>${list.map((e, i) => `<li><span class="muted">${i + 1}.</span><span class="grow">${esc(e.name)}</span><span>${esc(value(e))}</span><button class="danger" data-drop="${encodeURIComponent(board)}|${encodeURIComponent(k)}|${encodeURIComponent(e.name)}" title="Supprimer ce temps">✕</button></li>`).join('')}</ul></div>`)).join('') || '<p class="muted">Aucun classement.</p>';
+    if (s.status === 403) return showLogin();
+    $('#live').classList.toggle('off', !s.ok);
+    if (!s.ok) return;
+    S = s;
+    $('#login').hidden = true; $('#app').hidden = false;
+    // compteurs des onglets, liste des pseudos pour la recherche
+    const sus = allEntries().filter(e => e.sus).length;
+    const counts = { players: S.presence.filter(p => p.game !== 'accueil').length, rooms: roomsList().length, boards: sus ? `⚠️ ${sus}` : '', tools: S.bans.length || '' };
+    for (const el of document.querySelectorAll('[data-count]')) { const v = counts[el.dataset.count]; el.textContent = v; el.hidden = !v; el.classList.toggle('warn', el.dataset.count === 'boards' && !!sus); }
+    const names = new Set([...S.presence.map(p => p.pseudo), ...roomsList().flatMap(r => r.players.map(p => p.name)), ...allEntries().map(e => e.name)].filter(Boolean));
+    $('#pseudos').innerHTML = [...names].sort().map(n => `<option value="${esc(n)}">`).join('');
+    // pas de nouvel affichage pendant qu'on écrit dans un champ de la page
+    const typing = document.activeElement?.closest?.('#view') && document.activeElement.matches('input, select, textarea');
+    // ni pendant que la souris bouge (on allait peut-être cliquer sur un bouton)
+    if ((!$('#modal').innerHTML || fiche) && !typing && Date.now() - lastMove > 1500) render();
+    if (fiche) openFiche(fiche, true);
   }
-  function showLogin(error) {
-    $('#panel').hidden = true; $('#login').hidden = false; $('#logout').hidden = true; $('#who').textContent = '';
-    if (error && error !== 'Réservé à l’administrateur') $('#msg').textContent = error;
+  function render() {
+    for (const b of document.querySelectorAll('[data-tab]')) b.classList.toggle('on', b.dataset.tab === tab);
+    $('#title').textContent = TITLES[tab];
+    const html = ({ home, players, rooms, boards, activity, tools })[tab]();
+    if (html === lastHtml) return; // rien n'a changé : on ne touche à rien
+    const y = scrollY;
+    $('#view').innerHTML = lastHtml = html;
+    scrollTo(0, y);
   }
-  $('#login').onsubmit = async e => {
+
+  /* ---------- Vue d'ensemble ---------- */
+  function chart() {
+    const h = S.history.slice(-288);
+    if (h.length < 2) return '<p class="empty">Le graphique se remplit au fil de la journée (un relevé toutes les 5 minutes).</p>';
+    const W = 600, H = 140, max = Math.max(1, ...h.map(p => p.total)), x = i => (i / (h.length - 1)) * W, yv = v => H - 8 - (v / max) * (H - 24);
+    const line = h.map((p, i) => `${i ? 'L' : 'M'}${x(i).toFixed(1)},${yv(p.total).toFixed(1)}`).join('');
+    return `<svg class="chart" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none"><defs><linearGradient id="g" x1="0" x2="0" y1="0" y2="1"><stop offset="0" stop-color="#f5d27a" stop-opacity=".35"/><stop offset="1" stop-color="#f5d27a" stop-opacity="0"/></linearGradient></defs>
+      <path d="${line}L${W},${H}L0,${H}Z" fill="url(#g)"/><path d="${line}" fill="none" stroke="#f5d27a" stroke-width="2" vector-effect="non-scaling-stroke"/>
+      <text x="4" y="14" fill="#a9b1ba" font-size="12">max ${max}</text></svg>
+      <div class="small muted" style="display:flex;justify-content:space-between"><span>il y a ${ago(h[0].at)}</span><span>maintenant</span></div>`;
+  }
+  function home() {
+    const day = Date.now() - 86400000, records = S.events.filter(e => e.kind === 'record' && e.at > day).length, sus = allEntries().filter(e => e.sus);
+    const week = {}; for (const d of Object.values(S.days)) for (const [g, n] of Object.entries(d)) if (g !== 'accueil') week[g] = (week[g] ?? 0) + n;
+    const top = Object.entries(week).sort((a, b) => b[1] - a[1]).slice(0, 5);
+    return `<div class="tiles">
+      <div class="card tile"><b>${S.presence.length}</b><span>personnes sur le site</span></div>
+      <div class="card tile"><b>${roomsList().length}</b><span>salons ouverts</span></div>
+      <div class="card tile"><b>${records}</b><span>records en 24 h</span></div>
+      <div class="card tile ${sus.length ? 'alert' : ''}"><b>${sus.length}</b><span>temps suspects</span></div></div>
+      <div class="two"><div class="card"><h3>Fréquentation (24 h)</h3>${chart()}</div>
+      <div class="card"><h3>Les plus joués (7 jours)</h3>${top.length ? `<ul class="list">${top.map(([g, n], i) => `<li>${img(g)}<span class="grow">${i + 1}. ${esc(gname(g))}</span><span class="pill">${n} visite${n > 1 ? 's' : ''}</span></li>`).join('')}</ul>` : '<p class="empty">Pas encore de chiffres.</p>'}</div></div>
+      <div class="two" style="margin-top:12px"><div class="card"><h3>Derniers événements <button class="small" data-go="activity">Tout voir</button></h3>${feed(S.events.slice(0, 8))}</div>
+      <div class="card"><h3>Temps suspects <button class="small" data-go="boards">Classements</button></h3>${sus.length ? `<ul class="list">${sus.map(e => `<li>${img(e.game)}<span class="grow"><button class="link" data-fiche="${enc(e.name)}">${esc(e.name)}</button> · ${esc(gname(e.game))} <span class="muted">${esc(e.key)}</span></span><span class="pill warn">⚠️ ${esc(e.sus)}</span></li>`).join('')}</ul>` : '<p class="empty">Rien de suspect 👌</p>'}</div></div>`;
+  }
+
+  /* ---------- Joueurs ---------- */
+  function players() {
+    const games = [...new Set(S.presence.map(p => p.game))].sort();
+    let list = S.presence.filter(p => !gameFilter || p.game === gameFilter);
+    const k = sort.key, dir = sort.asc ? 1 : -1;
+    list = [...list].sort((a, b) => (k === 'pseudo' ? lower(a.pseudo).localeCompare(lower(b.pseudo)) : k === 'game' ? gname(a.game).localeCompare(gname(b.game)) : k === 'mode' ? Number(a.multi) - Number(b.multi) : b.since - a.since) * dir);
+    const th = (key, label) => `<th data-sort="${key}" class="${sort.key === key ? `sorted${sort.asc ? ' asc' : ''}` : ''}">${label}</th>`;
+    return `<div class="toolbar"><select id="gameFilter"><option value="">Tous les jeux (${S.presence.length})</option>${games.map(g => `<option value="${g}" ${g === gameFilter ? 'selected' : ''}>${esc(gname(g))} (${S.presence.filter(p => p.game === g).length})</option>`).join('')}</select></div>
+      <div class="card" style="padding:0;overflow-x:auto">${list.length ? `<table><thead><tr>${th('pseudo', 'Pseudo')}${th('game', 'Jeu')}${th('mode', 'Mode')}${th('since', 'Depuis')}<th class="hide-m">État</th></tr></thead><tbody>
+      ${list.map(p => `<tr><td>${p.pseudo ? `<button class="link" data-fiche="${enc(p.pseudo)}">${esc(p.pseudo)}</button>` : '<span class="muted">sans pseudo</span>'}</td><td><span class="who">${img(p.game)}${esc(gname(p.game))}</span></td>
+        <td>${p.game === 'accueil' ? '<span class="muted">—</span>' : p.multi ? '<span class="pill gold">multi</span>' : '<span class="pill">solo</span>'}</td><td class="muted">${ago(p.since)}</td>
+        <td class="hide-m"><span class="dot ${p.hidden ? 'off' : 'on'}"></span> <span class="small muted">${p.hidden ? 'en arrière-plan' : 'actif'}</span></td></tr>`).join('')}</tbody></table>` : '<p class="empty">Personne en ce moment.</p>'}</div>`;
+  }
+
+  /* ---------- Salons ---------- */
+  function rooms() {
+    const list = roomsList();
+    if (!list.length) return '<div class="card"><p class="empty">Aucun salon ouvert.</p></div>';
+    return `<div class="grid">${list.map(r => { const id = `${enc(r.g)}|${enc(r.code)}`, humans = r.players.filter(p => !p.bot).length;
+      return `<div class="card room"><div class="cover" style="background-image:url(${thumb(r.g)})"><h3>${esc(gname(r.g))}</h3></div><div class="body">
+        <div class="meta"><span class="pill gold">${esc(r.code)}</span>${r.private ? '<span class="pill">🔒 privé</span>' : ''}<span class="pill">${esc(PHASES[r.phase] ?? r.phase)}</span><span class="pill">👥 ${r.players.length}${r.max ? ` / ${r.max}` : ''}${humans !== r.players.length ? ` · ${humans} humain${humans > 1 ? 's' : ''}` : ''}</span>${r.created ? `<span class="pill">⏱ ${ago(r.created)}</span>` : ''}</div>
+        <ul class="list">${r.players.map(p => `<li><span class="dot ${p.connected ? 'on' : 'off'}"></span><span class="grow">${p.bot ? `<span class="muted">🤖 ${esc(p.name)}</span>` : `<button class="link" data-fiche="${enc(p.name)}">${esc(p.name)}</button>`}</span>${p.bot ? '' : `<button class="icon danger small" data-kick="${id}|${enc(p.name)}" title="Exclure">✕</button>`}</li>`).join('')}
+          ${r.spectators.map(n => `<li><span class="muted">👁</span><span class="grow muted">${esc(n)}</span><button class="icon danger small" data-kick="${id}|${enc(n)}" title="Exclure">✕</button></li>`).join('')}</ul>
+        <div class="acts"><a href="/${enc(r.g)}/?salon=${enc(r.code)}" target="_blank"><button class="small">↗ Ouvrir</button></a><button class="small" data-say="${id}">📣 Message</button><button class="small danger" data-close="${id}">Fermer</button></div></div></div>`; }).join('')}</div>`;
+  }
+
+  /* ---------- Classements ---------- */
+  function boards() {
+    const all = allEntries(), games = [...new Set(all.map(e => e.game))].sort((a, b) => gname(a).localeCompare(gname(b)));
+    if (!games.length) return '<div class="card"><p class="empty">Aucun classement pour l’instant.</p></div>';
+    if (!games.includes(boardSel.game)) boardSel = { game: games[0], key: '' };
+    const keys = [...new Set(all.filter(e => e.game === boardSel.game).map(e => `${e.board}|${e.key}`))].sort();
+    if (!keys.includes(boardSel.key)) boardSel.key = keys[0];
+    const [bn, bk] = boardSel.key.split('|'), list = all.filter(e => e.board === bn && e.key === bk);
+    const susBy = g => all.filter(e => e.game === g && e.sus).length;
+    return `<div class="toolbar">${games.map(g => `<button class="${g === boardSel.game ? 'gold-btn' : ''}" data-bgame="${g}">${esc(gname(g))}${susBy(g) ? ' ⚠️' : ''}</button>`).join('')}</div>
+      <div class="toolbar"><select id="bkey">${keys.map(k => `<option value="${esc(k)}" ${k === boardSel.key ? 'selected' : ''}>${esc(k.split('|')[1])}${all.some(e => `${e.board}|${e.key}` === k && e.sus) ? ' ⚠️' : ''}</option>`).join('')}</select><span class="muted small">${keys.length} classement${keys.length > 1 ? 's' : ''}</span></div>
+      <div class="card"><h3><span>${img(boardSel.game)} ${esc(gname(boardSel.game))} · <span class="muted">${esc(bk)}</span></span></h3>
+      <ol class="rank">${list.map(e => `<li class="${e.sus ? 'sus' : ''}"><span class="pos">${e.pos}</span><span class="grow"><button class="link" data-fiche="${enc(e.name)}">${esc(e.name)}</button> ${e.sus ? `<span class="pill warn">⚠️ ${esc(e.sus)}</span>` : ''}${e.kmh ? ` <span class="pill">${e.kmh} km/h</span>` : ''}</span>
+        <span class="val">${esc(value(e))}</span><span class="small muted hide-m">${e.at ? `il y a ${ago(e.at)}` : ''}</span>
+        <span>${e.ghost ? `<button class="icon small" data-ghost="${enc(bk)}|${enc(e.name)}" title="Voir le fantôme">👻</button> ` : ''}<button class="icon danger small" data-drop="${enc(bn)}|${enc(bk)}|${enc(e.name)}" title="Supprimer ce temps">✕</button></span></li>`).join('')}</ol></div>`;
+  }
+  // Le fantôme de Top Formula : sa trajectoire, colorée selon la vitesse
+  async function ghostView(track, name) {
+    const g = await fetch(`/api/formula/ghost?track=${enc(track)}&name=${enc(name)}`).then(r => (r.ok ? r.json() : null)).catch(() => null);
+    if (!g) return toast('Fantôme introuvable', { err: true });
+    show(`<div class="card wide"><h3><span>👻 ${esc(g.name)} · ${esc(track)} · ${(g.ms / 1000).toFixed(3)} s</span><button data-x>✕</button></h3><canvas id="gcv" width="760" height="460" style="width:100%;border-radius:12px;background:#0b0e14"></canvas><p class="small muted" id="gtxt"></p></div>`);
+    const cv = $('#gcv'), c = cv.getContext('2d'), d = g.data, xs = d.map(p => p[2]), ys = d.map(p => p[3]);
+    const minX = Math.min(...xs), maxX = Math.max(...xs), minY = Math.min(...ys), maxY = Math.max(...ys), sc = Math.min((cv.width - 40) / (maxX - minX || 1), (cv.height - 40) / (maxY - minY || 1));
+    const P = (x, y) => [20 + (x - minX) * sc, 20 + (y - minY) * sc];
+    let max = 0, fast = 0;
+    c.lineWidth = 4; c.lineCap = 'round';
+    for (let k = 1; k < d.length; k++) {
+      const dt = d[k][1] - d[k - 1][1], v = dt > 0 ? Math.hypot(d[k][2] - d[k - 1][2], d[k][3] - d[k - 1][3]) / dt * 3.6 : 0;
+      max = Math.max(max, v); if (v > 310) fast++;
+      c.strokeStyle = v > 310 ? '#ff6b6b' : `hsl(${Math.max(0, 200 - v * 0.6)}, 85%, 60%)`;
+      c.beginPath(); c.moveTo(...P(d[k - 1][2], d[k - 1][3])); c.lineTo(...P(d[k][2], d[k][3])); c.stroke();
+    }
+    c.fillStyle = '#f5d27a'; c.beginPath(); c.arc(...P(xs[0], ys[0]), 6, 0, 7); c.fill();
+    $('#gtxt').innerHTML = `Vitesse max : <b>${Math.round(max)} km/h</b> (une voiture normale ne dépasse pas ~290 km/h) · ${fast ? `<span style="color:var(--red)">${fast} passages au-dessus de 310 km/h, en rouge</span>` : 'aucun passage impossible'} · bleu lent → jaune rapide · point doré : départ.`;
+  }
+
+  /* ---------- Activité ---------- */
+  const ICONS = { room: '🎲', record: '🏆', presence: '👋' };
+  const feed = list => (list.length ? `<ul class="list feed">${list.map(e => `<li><span class="ic">${ICONS[e.kind] ?? '•'}</span><span class="grow">${esc(e.text)} <span class="muted small">· ${esc(gname(e.game))}</span></span><span class="small muted">${ago(e.at)}</span></li>`).join('')}</ul>` : '<p class="empty">Rien pour l’instant.</p>');
+  let feedFilter = '';
+  function activity() {
+    const ev = S.events.filter(e => !feedFilter || e.kind === feedFilter);
+    return `<div class="two"><div class="card"><h3>Événements du site <select id="feedFilter"><option value="">Tout</option><option value="record" ${feedFilter === 'record' ? 'selected' : ''}>🏆 Records</option><option value="room" ${feedFilter === 'room' ? 'selected' : ''}>🎲 Salons</option><option value="presence" ${feedFilter === 'presence' ? 'selected' : ''}>👋 Arrivées</option></select></h3>${feed(ev)}</div>
+      <div class="card"><h3>Mes actions</h3>${S.actions.length ? `<ul class="list">${S.actions.map(a => `<li><span class="ic">🛡️</span><span class="grow" style="white-space:normal">${esc(a.text)}${a.reason ? `<br><span class="small muted">Raison : ${esc(a.reason)}</span>` : ''}</span><span class="small muted">${ago(a.at)}</span></li>`).join('')}</ul>` : '<p class="empty">Aucune action pour l’instant.</p>'}</div></div>`;
+  }
+
+  /* ---------- Outils ---------- */
+  function tools() {
+    return `<div class="two"><div class="card"><h3>📣 Annonce sur l’accueil</h3>
+        <p class="small muted">Un bandeau en haut de l’accueil, que chacun peut fermer. Laisse vide pour le retirer.</p>
+        <form id="annForm" class="toolbar"><input name="text" maxlength="200" style="flex:1;min-width:200px" placeholder="Maintenance ce soir à 22 h…" value="${esc(S.announce?.text ?? '')}"><button class="gold-btn">Publier</button></form>
+        ${S.announce ? `<p class="small muted">En ligne depuis ${ago(S.announce.at)}.</p>` : ''}</div>
+      <div class="card"><h3>⛔ Pseudos bannis</h3>
+        <form id="banForm" class="toolbar"><input name="name" maxlength="20" placeholder="Pseudo" required><input name="reason" maxlength="140" placeholder="Raison (facultatif)" style="flex:1"><button class="danger">Bannir</button></form>
+        ${S.bans.length ? `<ul class="list">${S.bans.map(b => `<li><span class="grow"><b>${esc(b.name)}</b>${b.reason ? ` <span class="muted small">· ${esc(b.reason)}</span>` : ''}</span><span class="small muted">${ago(b.at)}</span><button class="small" data-unban="${enc(b.name)}">Débannir</button></li>`).join('')}</ul>` : '<p class="empty">Personne n’est banni.</p>'}
+        <p class="small muted">Un pseudo banni ne peut plus rejoindre de salon ni envoyer de temps ; il est sorti des salons où il joue.</p></div></div>`;
+  }
+
+  /* ---------- Fiche d'un joueur ---------- */
+  function openFiche(name, quiet) {
+    if (quiet && !$('#modal').innerHTML) { fiche = null; return; }
+    fiche = name; const n = lower(name);
+    const here = S.presence.filter(p => lower(p.pseudo) === n), inRooms = roomsList().filter(r => r.players.some(p => lower(p.name) === n) || r.spectators.some(s => lower(s) === n));
+    const recs = allEntries().filter(e => lower(e.name) === n), banned = S.bans.some(b => lower(b.name) === n);
+    show(`<div class="card wide"><h3><span>👤 ${esc(name)} ${banned ? '<span class="pill warn">banni</span>' : ''}</span><button data-x>✕</button></h3>
+      <p class="muted small">${here.length ? `Connecté : ${here.map(p => `${esc(gname(p.game))} (${p.hidden ? 'en arrière-plan' : 'actif'}, depuis ${ago(p.since)})`).join(' · ')}` : 'Pas connecté en ce moment.'}</p>
+      <h3 style="font-size:1rem;margin-top:14px">🎲 Salons</h3>${inRooms.length ? `<ul class="list">${inRooms.map(r => `<li>${img(r.g)}<span class="grow">${esc(gname(r.g))} · ${esc(r.code)}</span><button class="small danger" data-kick="${enc(r.g)}|${enc(r.code)}|${enc(name)}">Exclure</button></li>`).join('')}</ul>` : '<p class="muted small">Dans aucun salon.</p>'}
+      <h3 style="font-size:1rem;margin-top:14px">🏆 Records (${recs.length})</h3>${recs.length ? `<ul class="list">${recs.map(e => `<li>${img(e.game)}<span class="grow">${esc(gname(e.game))} · <span class="muted">${esc(e.key)}</span> ${e.sus ? '<span class="pill warn">⚠️</span>' : ''}</span><span class="pill gold">${e.pos}e</span><span>${esc(value(e))}</span><button class="icon danger small" data-drop="${enc(e.board)}|${enc(e.key)}|${enc(e.name)}">✕</button></li>`).join('')}</ul>` : '<p class="muted small">Aucun record.</p>'}
+      <div class="row">${recs.length ? `<button class="danger" data-dropall="${enc(name)}">Supprimer tous ses temps</button>` : ''}${banned ? `<button data-unban="${enc(name)}">Débannir</button>` : `<button class="danger" data-ban="${enc(name)}">Bannir</button>`}</div></div>`);
+  }
+
+  /* ---------- Actions ---------- */
+  async function dropOne(board, key, name, reason) {
+    const r = await api('drop', { board, key, name, reason });
+    if (!r.ok) return toast(r.error, { err: true });
+    toast(`Temps de ${name} supprimé (${key})`, { action: { label: 'Annuler', run: async () => { const u = await api('undo', { id: r.undo }); toast(u.ok ? 'Suppression annulée' : u.error, { err: !u.ok }); refresh(); } }, ms: 18000 });
+  }
+  document.addEventListener('click', async e => {
+    const t = e.target.closest('button, [data-tab]'); if (!t) return;
+    const d = t.dataset;
+    if (d.tab) { tab = d.tab; store.set('admin-tab', tab); fiche = null; return render(); }
+    if (d.go) { tab = d.go; store.set('admin-tab', tab); return render(); }
+    if (d.fiche) return openFiche(dec(d.fiche));
+    if (d.sort) { sort = { key: d.sort, asc: sort.key === d.sort ? !sort.asc : d.sort === 'pseudo' || d.sort === 'game' }; return render(); }
+    if (d.bgame) { boardSel = { game: d.bgame, key: '' }; return render(); }
+    if (d.ghost) { const [k, n] = d.ghost.split('|').map(dec); return ghostView(k, n); }
+    if (d.close) {
+      const [game, code] = d.close.split('|').map(dec);
+      const v = await ask({ title: `Fermer le salon ${code} ?`, text: `${esc(gname(game))} · tous les joueurs seront renvoyés.`, ok: 'Fermer le salon', fields: [{ name: 'message', label: 'Message affiché aux joueurs (facultatif)', placeholder: 'Ce salon a été fermé par l’administrateur.' }, { name: 'reason', label: 'Raison, pour ton journal (facultatif)' }] });
+      if (!v) return;
+      const r = await api('close', { game, code, ...v }); toast(r.ok ? `Salon ${code} fermé` : r.error, { err: !r.ok }); return refresh();
+    }
+    if (d.kick) {
+      const [game, code, name] = d.kick.split('|').map(dec);
+      const v = await ask({ title: `Exclure ${name} ?`, text: `Du salon ${esc(code)} (${esc(gname(game))}).`, ok: 'Exclure', fields: [{ name: 'reason', label: 'Raison (facultatif)' }] });
+      if (!v) return;
+      const r = await api('kick', { game, code, name, ...v }); toast(r.ok ? `${name} exclu` : r.error, { err: !r.ok }); return refresh();
+    }
+    if (d.say) {
+      const [game, code] = d.say.split('|').map(dec);
+      const v = await ask({ title: `Message au salon ${code}`, text: 'Il s’affiche en bandeau chez chaque joueur du salon (dans les 20 secondes), et dans le fil de discussion des jeux qui en ont un.', ok: 'Envoyer', danger: false, fields: [{ name: 'text', label: 'Message', placeholder: 'Le salon ferme dans 1 minute', required: true }] });
+      if (!v) return;
+      const r = await api('say', { game, code, ...v }); return toast(r.ok ? 'Message envoyé' : r.error, { err: !r.ok });
+    }
+    if (d.drop) {
+      const [board, key, name] = d.drop.split('|').map(dec);
+      const v = await ask({ title: `Supprimer le temps de ${name} ?`, text: `Classement ${esc(key)}. Tu pourras annuler pendant quelques secondes.`, ok: 'Supprimer', fields: [{ name: 'reason', label: 'Raison (facultatif)', placeholder: 'voiture trafiquée…' }] });
+      if (!v) return;
+      await dropOne(board, key, name, v.reason); return refresh();
+    }
+    if (d.dropall) {
+      const name = dec(d.dropall), recs = allEntries().filter(x => lower(x.name) === lower(name));
+      const v = await ask({ title: `Supprimer les ${recs.length} temps de ${name} ?`, ok: 'Tout supprimer', fields: [{ name: 'reason', label: 'Raison (facultatif)' }] });
+      if (!v) return;
+      for (const x of recs) await api('drop', { board: x.board, key: x.key, name: x.name, reason: v.reason });
+      toast(`${recs.length} temps supprimés`); fiche = null; return refresh();
+    }
+    if (d.ban) {
+      const name = dec(d.ban), v = await ask({ title: `Bannir ${name} ?`, text: 'Il ne pourra plus rejoindre de salon ni envoyer de temps, et sera sorti des salons où il joue.', ok: 'Bannir', fields: [{ name: 'reason', label: 'Raison (facultatif)' }] });
+      if (!v) return;
+      const r = await api('ban', { name, ...v }); toast(r.ok ? `${name} banni` : r.error, { err: !r.ok }); fiche = null; return refresh();
+    }
+    if (d.unban) { const name = dec(d.unban), r = await api('unban', { name }); toast(r.ok ? `${name} débanni` : r.error, { err: !r.ok }); if (fiche) $('#modal').innerHTML = ''; fiche = null; return refresh(); }
+  });
+  document.addEventListener('change', e => {
+    if (e.target.id === 'gameFilter') { gameFilter = e.target.value; render(); }
+    if (e.target.id === 'bkey') { boardSel.key = e.target.value; render(); }
+    if (e.target.id === 'feedFilter') { feedFilter = e.target.value; render(); }
+    if (e.target.id === 'compact') { document.body.classList.toggle('compact', e.target.checked); store.set('admin-compact', e.target.checked ? '1' : ''); }
+  });
+  document.addEventListener('submit', async e => {
+    if (e.target.id === 'annForm') { e.preventDefault(); const r = await api('announce', { text: e.target.text.value }); toast(r.ok ? (r.announce ? 'Annonce publiée sur l’accueil' : 'Annonce retirée') : r.error, { err: !r.ok }); refresh(); }
+    if (e.target.id === 'banForm') { e.preventDefault(); const f = e.target, r = await api('ban', { name: f.name.value, reason: f.reason.value }); toast(r.ok ? `${f.name.value} banni` : r.error, { err: !r.ok }); refresh(); }
+  });
+  $('#search').addEventListener('change', e => { const v = e.target.value.trim(); if (v) { openFiche(v); e.target.value = ''; } });
+  $('#search').addEventListener('keydown', e => { if (e.key === 'Enter') e.target.dispatchEvent(new Event('change')); });
+  document.addEventListener('keydown', e => { if (e.key === 'Escape' && $('#modal').innerHTML) { $('#modal').innerHTML = ''; fiche = null; } });
+
+  /* ---------- Connexion ---------- */
+  async function showLogin() {
+    $('#app').hidden = true; $('#login').hidden = false;
+    const me = await api('me'); $('#notConfigured').hidden = me.configured !== false;
+  }
+  $('#loginForm').onsubmit = async e => {
     e.preventDefault();
     const r = await api('login', { password: e.target.password.value });
-    $('#msg').textContent = r.ok ? '' : r.error;
-    if (r.ok) { e.target.reset(); localStorage.setItem('pseudo', 'MrFoxi'); refresh(); }
+    $('#loginMsg').textContent = r.ok ? '' : r.error;
+    if (r.ok) { e.target.reset(); refresh(); }
   };
   $('#logout').onclick = async () => { await api('logout', {}); showLogin(); };
-  document.addEventListener('click', async e => {
-    const c = e.target.closest('[data-close]'), d = e.target.closest('[data-drop]');
-    if (c) { const [game, code] = c.dataset.close.split('|').map(decodeURIComponent); if (!confirm(`Fermer le salon ${code} (${nameOf(game)}) ? Tous les joueurs seront renvoyés.`)) return; const r = await api('close', { game, code }); $('#msg').textContent = r.ok ? '' : r.error; refresh(); }
-    if (d) { const [board, key, name] = d.dataset.drop.split('|').map(decodeURIComponent); if (!confirm(`Supprimer le temps de ${name} (${key}) ? C’est définitif.`)) return; const r = await api('drop', { board, key, name }); $('#msg').textContent = r.ok ? '' : r.error; refresh(); }
-  });
-  refresh(); setInterval(() => { if (!$('#panel').hidden) refresh(); }, 5000);
+  if (store.get('admin-compact')) { document.body.classList.add('compact'); $('#compact').checked = true; }
+  refresh(); setInterval(() => { if (!$('#app').hidden) refresh(); }, 5000);
 </script>
 </body>
 </html>

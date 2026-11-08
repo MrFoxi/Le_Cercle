@@ -17,13 +17,22 @@ module.exports = io => {
   const sendLobbies = () => io.emit('lobbies', list());
   // Page d'administration : voir les tables et en fermer une (tout le monde est renvoyé à l'accueil)
   admin.rooms['7-5'] = {
-    list: () => [...lobbies.values()].map(({ id, table }) => ({ code: id, private: false, phase: table.phase, players: table.players.filter(p => !p.left).map(p => ({ name: p.name, connected: p.connected !== false, bot: false })), spectators: [] })),
+    list: () => [...lobbies.values()].map(({ id, table, created }) => ({ code: id, private: false, phase: table.phase, created, max: 8, players: table.players.filter(p => !p.left).map(p => ({ name: p.name, connected: p.connected !== false, bot: false })), spectators: [] })),
     close: code => {
       const l = lobbies.get(code); if (!l) return false;
       for (const [, s] of l.sockets) { s.ejected(); s.emit('state', null); s.emit('err', 'Cette table a été fermée par l’administrateur'); }
       clearTimeout(l.timer); clearTimeout(l.turnTimer); l.graces.forEach(clearTimeout);
       lobbies.delete(code); sendLobbies(); return true;
     },
+    kick: (code, name) => {
+      const l = lobbies.get(code), real = l?.table.players.find(p => !p.left && p.name.toLowerCase() === name.toLowerCase())?.name;
+      if (!real) return false;
+      const s = l.sockets.get(real);
+      eject(l, real, false); l.table.leave(real);
+      s?.emit('err', 'Tu as été exclu de la table par l’administrateur');
+      update(l); return true;
+    },
+    say: (code, text) => { const l = lobbies.get(code); if (!l) return false; l.chat.push({ id: ++l.chatSeq, name: '📣 Administrateur', text }); if (l.chat.length > 100) l.chat.shift(); update(l); admin.notify('7-5', l.table.players.filter(p => !p.left).map(p => p.name), text); return true; },
   };
 
   // Envoie à chacun son état filtré, enchaîne la manche suivante, supprime le lobby vide.
@@ -113,7 +122,8 @@ module.exports = io => {
     socket.on('create', name => {
       name = clean(name, 30);
       if (!me || lobby || !name) return fail(new Error('Nom de lobby requis'));
-      const l = { id: Math.random().toString(36).slice(2, 10), table: new Table(name), sockets: new Map(), graces: new Map(), timer: null, chat: [], chatSeq: 0 };
+      const l = { id: Math.random().toString(36).slice(2, 10), table: new Table(name), sockets: new Map(), graces: new Map(), timer: null, chat: [], chatSeq: 0, created: Date.now() };
+      admin.event('room', '7-5', `${me} ouvre une table`);
       lobbies.set(l.id, l);
       enter(l);
     });

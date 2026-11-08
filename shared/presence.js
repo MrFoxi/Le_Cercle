@@ -2,7 +2,8 @@
 // 1. Pseudo réservé : dès qu'on écrit « MrFoxi » dans un champ, une fenêtre demande le mot de passe administrateur.
 //    Bon mot de passe : le navigateur est reconnu (cookie) ; sinon le pseudo est effacé. Sur l'accueil, l'administrateur
 //    connecté a un engrenage qui mène à la page /admin.html.
-// 2. Présence : toutes les 20 s, la page signale quel jeu est ouvert et avec quel pseudo (pour la page d'administration).
+// 2. Présence : toutes les 20 s, la page signale quel jeu est ouvert, avec quel pseudo, et si l'onglet est au premier plan.
+// 3. Annonce : le message de l'administrateur (« Maintenance ce soir… ») s'affiche en haut de l'accueil.
 (() => {
   const ADMIN = 'mrfoxi';
   const game = location.pathname.split('/')[1] || 'accueil';
@@ -75,10 +76,31 @@
   /* ---------- Présence ---------- */
   const id = Math.random().toString(36).slice(2) + Date.now().toString(36);
   const ping = () => {
-    if (document.hidden) return;
     const pseudo = get(`${game}-pseudo`) || get(`${ALIAS[game]}-pseudo`) || get('pseudo') || '';
-    fetch('/api/admin/presence', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id, game, pseudo }), keepalive: true }).catch(() => {});
+    fetch('/api/admin/presence', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id, game, pseudo, hidden: document.hidden }), keepalive: true })
+      .then(r => (r.status === 200 ? r.json() : null)).then(r => r?.messages?.forEach(message)).catch(() => {});
   };
   ping(); setInterval(ping, 20000);
   document.addEventListener('visibilitychange', ping);
+
+  // Un message de l'administrateur : un bandeau en haut de la page, avec un bouton pour le fermer
+  function message(text) {
+    const el = document.createElement('div');
+    el.style.cssText = 'position:fixed;left:50%;top:16px;transform:translateX(-50%);z-index:99998;max-width:min(560px,92vw);display:flex;gap:12px;align-items:center;padding:12px 16px;border-radius:14px;background:#181b24;color:#f4f1ea;border:1px solid #c8973a;box-shadow:0 12px 40px rgba(0,0,0,.5);font:600 15px/1.4 Inter,system-ui,sans-serif';
+    el.innerHTML = '<span style="font-size:20px">📣</span><span><b style="color:#f5d27a">Administrateur</b><br></span><button aria-label="Fermer" style="border:0;background:none;color:#a9b1ba;font-size:18px;cursor:pointer">✕</button>';
+    el.children[1].append(text);
+    el.querySelector('button').onclick = () => el.remove();
+    document.body.append(el); setTimeout(() => el.remove(), 20000);
+  }
+
+  /* ---------- Annonce de l'administrateur ---------- */
+  if (game === 'accueil') fetch('/api/admin/announce').then(r => r.json()).then(a => {
+    if (!a?.text || get('cercle-announce-seen') === String(a.at)) return;
+    const bar = document.createElement('div');
+    bar.style.cssText = 'position:sticky;top:0;z-index:9998;display:flex;gap:12px;align-items:center;justify-content:center;padding:10px 44px 10px 16px;background:linear-gradient(90deg,#8a5f1c,#c8973a,#8a5f1c);color:#1a1206;font:600 15px/1.35 Inter,system-ui,sans-serif;text-align:center';
+    bar.innerHTML = `<span>📣</span><span></span><button aria-label="Fermer" style="position:absolute;right:10px;border:0;background:none;font-size:20px;cursor:pointer;color:#1a1206">✕</button>`;
+    bar.children[1].textContent = a.text;
+    bar.querySelector('button').onclick = () => { bar.remove(); try { localStorage.setItem('cercle-announce-seen', String(a.at)); } catch { /* stockage bloqué */ } };
+    document.body.prepend(bar);
+  }).catch(() => {});
 })();

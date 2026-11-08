@@ -40,7 +40,22 @@ const board = leaderboard({
   read: b => ({ ms: b.ms }),
   check: (e, b) => checkGhost({ ...e, track: b.track, data: b.data }),
   limit: '80kb',
-  onDrop: (track, who) => { if (!ghosts[track]) return; ghosts[track] = ghosts[track].filter(g => !same(g.name, who)); store.save(`formula-ghosts-${track}`, ghosts[track]); },
+  // retirer un temps retire aussi son fantôme (et l'annulation le remet)
+  onDrop: (track, who) => {
+    if (!ghosts[track]) return null;
+    const gone = ghosts[track].filter(g => same(g.name, who));
+    ghosts[track] = ghosts[track].filter(g => !gone.includes(g)); store.save(`formula-ghosts-${track}`, ghosts[track]);
+    return () => { ghosts[track] = [...ghosts[track], ...gone].sort((x, y) => x.ms - y.ms).slice(0, 10); store.save(`formula-ghosts-${track}`, ghosts[track]); };
+  },
+  // pour la page d'administration : vitesse maximale du fantôme (une voiture normale ne dépasse pas ~290 km/h)
+  inspect: (track, e) => {
+    const g = ghosts[track]?.find(x => same(x.name, e.name));
+    if (!g) return { ghost: false };
+    let max = 0;
+    for (let k = 1; k < g.data.length; k++) { const a = g.data[k - 1], b = g.data[k], dt = b[1] - a[1]; if (dt > 0) max = Math.max(max, Math.hypot(b[2] - a[2], b[3] - a[3]) / dt); }
+    const kmh = Math.round(max * 3.6);
+    return { ghost: true, kmh, suspect: kmh > 310 ? `fantôme à ${kmh} km/h` : null };
+  },
   rank: (a, b) => a.ms - b.ms || a.at - b.at,
   announce: (e, track, place) => place === 1 && `${e.name} bat le record de ${NAMES[track]} à Top Formula (${(e.ms / 1000).toFixed(3)} s)`,
 });
@@ -80,7 +95,7 @@ ready.then(() => {
     ghosts[track] = ghosts[track].filter(g => !bad.includes(g));
     store.save(`formula-ghosts-${track}`, ghosts[track]);
     board.drop(track, e => bad.some(g => same(g.name, e.name)))
-      .then(n => console.log(`Top Formula : ${bad.map(g => g.name).join(', ')} retiré(s) du classement de ${track} (${n} temps, vitesse impossible)`));
+      .then(n => console.log(`Top Formula : ${bad.map(g => g.name).join(', ')} retiré(s) du classement de ${track} (${n.length} temps, vitesse impossible)`));
   }
 });
 
