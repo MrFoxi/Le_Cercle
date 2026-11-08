@@ -22,6 +22,7 @@
     button { border: 1px solid var(--line); background: rgba(255, 255, 255, .05); border-radius: 10px; padding: 7px 12px; cursor: pointer; transition: background .15s, border-color .15s; }
     button:hover { background: rgba(255, 255, 255, .1); }
     button.gold-btn { background: linear-gradient(180deg, var(--gold), var(--gold-2)); color: #1a1206; border: 0; font-weight: 800; }
+    .gold-btn .pill { background: rgba(0, 0, 0, .2); color: #1a1206; }
     button.danger { border-color: rgba(255, 107, 107, .35); color: #ffc2c2; background: rgba(255, 107, 107, .08); }
     button.danger:hover { background: rgba(255, 107, 107, .18); }
     button.icon { padding: 4px 8px; }
@@ -307,16 +308,34 @@
   }
 
   /* ---------- Classements ---------- */
+  // Classements à plusieurs réglages (Trouve le pays : zone|chrono|erreurs) : une rangée de boutons par réglage.
+  // Chaque rangée ne propose que ce qui existe avec les choix des rangées au-dessus, avec le nombre de scores.
+  const DIMS = ['🌍 Zone', '⏱ Chrono', '❤️ Erreurs permises'];
+  const dimLabel = (d, v) => (d === 1 ? (+v ? `${+v / 60} min` : 'Sans chrono') : d === 2 ? (+v ? `${v} erreur${+v > 1 ? 's' : ''}` : 'Sans limite') : v);
+  function dims(keys, all) {
+    const board = cut(keys[0])[0], parts = keys.map(k => cut(k)[1].split('|')), cur = cut(boardSel.key)[1].split('|');
+    const count = p => all.filter(e => e.board === board && e.key === p.join('|')).length;
+    const sus = p => all.some(e => e.board === board && e.key === p.join('|') && e.sus);
+    return DIMS.map((name, d) => {
+      const fit = parts.filter(p => p.slice(0, d).every((v, i) => v === cur[i])); // compatibles avec les choix au-dessus
+      const values = [...new Set(fit.map(p => p[d]))].sort((a, b) => (d ? a - b : a.localeCompare(b)));
+      return `<div class="toolbar"><span class="muted small" style="min-width:150px">${name}</span>${values.map(v => {
+        const these = fit.filter(p => p[d] === v), n = these.reduce((a, p) => a + count(p), 0);
+        return `<button class="small ${v === cur[d] ? 'gold-btn' : ''}" data-dim="${d}|${enc(v)}">${esc(dimLabel(d, v))} <span class="pill">${n}</span>${these.some(sus) ? ' ⚠️' : ''}</button>`;
+      }).join('')}</div>`;
+    }).join('');
+  }
   function boards() {
     const all = allEntries(), games = [...new Set(all.map(e => e.game))].sort((a, b) => gname(a).localeCompare(gname(b)));
     if (!games.length) return '<div class="card"><p class="empty">Aucun classement pour l’instant.</p></div>';
     if (!games.includes(boardSel.game)) boardSel = { game: games[0], key: '' };
     const keys = [...new Set(all.filter(e => e.game === boardSel.game).map(e => `${e.board}|${e.key}`))].sort();
-    if (!keys.includes(boardSel.key)) boardSel.key = keys[0];
+    // au départ : le classement le plus rempli (pour Trouve le pays, en général Monde sans chrono)
+    if (!keys.includes(boardSel.key)) boardSel.key = [...keys].sort((a, b) => all.filter(e => `${e.board}|${e.key}` === b).length - all.filter(e => `${e.board}|${e.key}` === a).length)[0];
     const [bn, bk] = cut(boardSel.key), list = all.filter(e => e.board === bn && e.key === bk);
     const susBy = g => all.filter(e => e.game === g && e.sus).length;
     return `<div class="toolbar">${games.map(g => `<button class="${g === boardSel.game ? 'gold-btn' : ''}" data-bgame="${g}">${esc(gname(g))}${susBy(g) ? ' ⚠️' : ''}</button>`).join('')}</div>
-      <div class="toolbar"><select id="bkey">${keys.map(k => `<option value="${esc(k)}" ${k === boardSel.key ? 'selected' : ''}>${esc(keyLabel(cut(k)[1]))}${all.some(e => `${e.board}|${e.key}` === k && e.sus) ? ' ⚠️' : ''}</option>`).join('')}</select><span class="muted small">${keys.length} classement${keys.length > 1 ? 's' : ''}</span></div>
+      ${keys.every(k => cut(k)[1].includes('|')) ? dims(keys, all) : `<div class="toolbar"><select id="bkey">${keys.map(k => `<option value="${esc(k)}" ${k === boardSel.key ? 'selected' : ''}>${esc(keyLabel(cut(k)[1]))}${all.some(e => `${e.board}|${e.key}` === k && e.sus) ? ' ⚠️' : ''}</option>`).join('')}</select><span class="muted small">${keys.length} classement${keys.length > 1 ? 's' : ''}</span></div>`}
       <div class="card"><h3><span>${img(boardSel.game)} ${esc(gname(boardSel.game))} · <span class="muted">${esc(keyLabel(bk))}</span></span></h3>
       <ol class="rank">${list.map(e => `<li class="${e.sus ? 'sus' : ''}"><span class="pos">${e.pos}</span><span class="grow"><button class="link" data-fiche="${enc(e.name)}">${esc(e.name)}</button> ${e.sus ? `<span class="pill warn">⚠️ ${esc(e.sus)}</span>` : ''}${e.kmh ? ` <span class="pill">${e.kmh} km/h</span>` : ''}</span>
         <span class="val">${esc(value(e))}</span><span class="small muted hide-m">${e.at ? `il y a ${ago(e.at)}` : ''}</span>
@@ -391,6 +410,16 @@
     if (d.fiche) return openFiche(dec(d.fiche));
     if (d.sort) { sort = { key: d.sort, asc: sort.key === d.sort ? !sort.asc : d.sort === 'pseudo' || d.sort === 'game' }; return render(); }
     if (d.bgame) { boardSel = { game: d.bgame, key: '' }; return render(); }
+    if (d.dim) { // un réglage choisi : on garde ceux d'avant, et pour la suite le premier classement qui existe
+      const [dd, v] = d.dim.split('|'), [board, key] = cut(boardSel.key), cur = key.split('|'), want = [...cur.slice(0, +dd), dec(v)];
+      const keys = allEntries().filter(e => e.board === board).map(e => e.key);
+      // parmi les classements qui ont ces choix, celui qui garde le plus des réglages suivants
+      const fit = [...new Set(keys)].filter(k => k.split('|').slice(0, want.length).join('|') === want.join('|'));
+      const keep = k => k.split('|').slice(want.length).reduce((n, v, i) => n + (v === cur[want.length + i] ? 2 ** (9 - i) : 0), 0);
+      const best = fit.sort((a, b) => keep(b) - keep(a))[0];
+      if (best) boardSel.key = `${board}|${best}`;
+      return render();
+    }
     if (d.ghost) { const [k, n] = d.ghost.split('|').map(dec); return ghostView(k, n); }
     if (d.close) {
       const [game, code] = d.close.split('|').map(dec);
