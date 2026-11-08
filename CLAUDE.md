@@ -18,7 +18,8 @@ textes, commentaires, messages de commit (`Feat : …` / `Fix : …`).
 - `shared/party.js` (sur `/shared/`) : salon côté navigateur des jeux à manches (pseudo, salons, reconnexion, joueurs, fil,
   fin de partie, sons `blip`) ; le jeu branche `onShow`/`onRoom` et lit `ui.room`.
 - `lib/admin.js` : administration. Le pseudo `MrFoxi` est réservé (mot de passe dans la variable `ADMIN_PASSWORD`, jamais
-  dans le code) ; page `/admin.html` (présence solo et multi via `shared/presence.js`, salons, classements). `lib/rooms.js`,
+  dans le code) ; taper ce pseudo dans un champ ouvre une fenêtre de mot de passe, et l'accueil montre alors
+  un engrenage vers `/admin.html` (présence solo et multi, salons, classements) ; tout est dans `shared/presence.js`. `lib/rooms.js`,
   le 7,5 et `lib/leaderboard.js` s'y inscrivent et refusent le pseudo réservé sans le cookie admin.
 - `lib/store.js` : stockage durable (Upstash Redis en ligne, `data/*.json` en local). `lib/activity.js` : bandeau de l'accueil.
 - `site/index.html` : accueil (tableau `GAMES`, `PSEUDO_KEYS`) ; `site/previews/<jeu>.jpg` : aperçus.
