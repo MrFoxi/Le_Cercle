@@ -1,0 +1,183 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Loup-Garou</title>
+  <link rel="icon" href="favicon.svg" type="image/svg+xml">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@600;700;800&family=Nunito:wght@500;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+  <script src="/socket.io/socket.io.js"></script>
+  <script src="rules.js"></script>
+  <script type="importmap">{ "imports": { "three": "/vendor/three/build/three.module.js", "three/addons/": "/vendor/three/addons/" } }</script>
+  <script type="module" src="main.js"></script>
+  <script src="/shared/presence.js" defer></script>
+</head>
+<body>
+  <canvas id="view" aria-label="Le village de Bourg-la-Lune"></canvas>
+  <div id="veil" aria-hidden="true"></div>
+  <div id="labels" aria-hidden="true"></div>
+  <div id="loading">Le village se réveille…</div>
+
+  <!-- Accueil -->
+  <section id="home" class="screen">
+    <div class="panel">
+      <a class="back" href="../">← Le Cercle</a>
+      <header class="hero">
+        <p class="kicker">Bourg-la-Lune</p>
+        <h1>Loup-Garou</h1>
+        <p class="tagline">Chaque nuit, la meute dévore un villageois. Chaque jour, le village vote. Mens, accuse… et lance des tomates.</p>
+      </header>
+      <form class="card" id="nameForm">
+        <label>Ton nom au village <input name="pseudo" maxlength="20" required autocomplete="nickname" placeholder="Pseudo"></label>
+      </form>
+      <button class="primary big wide" id="soloBtn">🌙 Jouer avec des robots</button>
+      <div class="split">
+        <form class="card" id="createForm">
+          <h2>Créer un salon</h2>
+          <div class="chips">
+            <label class="chip"><input type="radio" name="vis" value="public" checked> Public</label>
+            <label class="chip"><input type="radio" name="vis" value="private"> Privé</label>
+          </div>
+          <button class="primary">Créer</button>
+        </form>
+        <form class="card" id="joinForm">
+          <h2>Avec un code</h2>
+          <input name="code" maxlength="5" required autocomplete="off" class="code-input" placeholder="ABCDE" aria-label="Code du salon">
+          <div class="row"><button class="primary" name="mode" value="play">Entrer</button><button class="ghost" name="mode" value="watch" title="Regarder">👁</button></div>
+        </form>
+      </div>
+      <div class="card">
+        <h2>Salons ouverts</h2>
+        <ul id="rooms" class="list"></ul>
+      </div>
+      <details class="card rules">
+        <summary>Comment on joue</summary>
+        <ul>
+          <li>Chacun reçoit un rôle secret : <b>🐺 Loup-Garou</b>, <b>🔮 Voyante</b>, <b>🧪 Sorcière</b>, <b>🏹 Chasseur</b> ou <b>🧑‍🌾 Villageois</b>.</li>
+          <li><b>La nuit</b>, le village dort. Les loups choisissent ensemble une victime (et se parlent en secret), la voyante découvre un rôle, la sorcière peut sauver ou empoisonner.</li>
+          <li><b>Le jour</b>, on découvre les morts, on se promène sur la place, on discute, on s'accuse… puis on <b>vote</b> : le plus désigné est chassé du village. Égalité : personne.</li>
+          <li>Le <b>chasseur</b> qui meurt tire une dernière flèche. Les morts deviennent des fantômes : ils voient tout mais ne parlent plus.</li>
+          <li>Le village gagne quand il n'y a plus de loups ; les loups, quand ils sont aussi nombreux que les autres.</li>
+          <li>Pour s'amuser : <kbd>1</kbd>…<kbd>0</kbd> emotes, clic sur un villageois pour lui lancer une tomate, une chaussure, un poisson… ou une rose.</li>
+        </ul>
+        <p class="hint"><kbd>Z</kbd><kbd>Q</kbd><kbd>S</kbd><kbd>D</kbd> se promener (le jour) · <kbd>Maj</kbd> courir · <kbd>E</kbd> s'asseoir / se lever · glisser pour tourner la caméra · molette pour zoomer.</p>
+      </details>
+    </div>
+  </section>
+
+  <!-- Salon -->
+  <section id="room" class="screen" hidden>
+    <div class="panel">
+      <button class="back" id="leave">← Quitter le salon</button>
+      <h1 class="title">Salon <span class="code" id="roomCode"></span></h1>
+      <button class="ghost small" id="copyLink">🔗 Copier le lien</button>
+      <div class="card">
+        <h2>Villageois <small id="count"></small></h2>
+        <ul id="players" class="list"></ul>
+        <button class="ghost" id="addBot">🤖 Ajouter un robot</button>
+        <p class="hint" id="spect"></p>
+      </div>
+      <div class="card">
+        <h2>La partie</h2>
+        <p class="comp" id="comp"></p>
+        <label>Parties d'affilée <select id="rounds"><option value="1">1 partie</option><option value="2">2 parties</option><option value="3">3 parties</option></select></label>
+        <div class="split">
+          <label>Discussion <select id="dayT"><option value="60">1 min</option><option value="90">1 min 30</option><option value="120">2 min</option><option value="180">3 min</option></select></label>
+          <label>Vote <select id="voteT"><option value="20">20 s</option><option value="30">30 s</option><option value="45">45 s</option></select></label>
+        </div>
+        <p class="hint" id="roomHint"></p>
+        <button class="primary big wide" id="startBtn">🌙 Que la nuit tombe</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- Ton villageois (accueil et salon) -->
+  <aside id="dress" class="dress" hidden>
+    <button class="dress-toggle" id="dressToggle" aria-expanded="true">🎨 Ton villageois</button>
+    <div class="dress-body" id="dressBody">
+      <div id="dressRows"></div>
+      <div class="row"><button class="ghost small" id="dressRandom">🎲 Au hasard</button></div>
+      <p class="hint">Essaie tes emotes :</p>
+      <div class="emote-grid" id="tryEmotes"></div>
+    </div>
+  </aside>
+
+  <!-- En jeu -->
+  <section id="hud" hidden>
+    <div class="top-left">
+      <button class="ghost small" id="quitGame">Quitter</button>
+      <button class="role-chip" id="roleChip" title="Revoir ton rôle"></button>
+    </div>
+    <div class="phase" id="phase">
+      <div class="phase-main"><span id="phaseIcon"></span><b id="phaseTitle"></b><span class="timer" id="timer"></span></div>
+      <small id="phaseSub"></small>
+      <i class="bar"><i id="phaseBar"></i></i>
+    </div>
+    <button class="ghost small rush" id="rushBtn" hidden>⏩ On vote !</button>
+    <aside class="village" id="village">
+      <button class="village-head" id="villageToggle">🏘 Le village <span id="aliveCount"></span></button>
+      <ul id="villageList"></ul>
+    </aside>
+    <div class="chat" id="chat">
+      <ul id="chatLog"></ul>
+      <form id="chatForm"><input id="chatIn" maxlength="200" autocomplete="off" placeholder="Parler au village (Entrée)"></form>
+    </div>
+    <div class="actions" id="actions">
+      <div class="emotes" id="emoteBar"></div>
+      <span class="sep"></span>
+      <div class="items" id="itemBar"></div>
+    </div>
+    <div class="action-card" id="actionCard" hidden>
+      <h3 id="acTitle"></h3>
+      <p class="hint" id="acText"></p>
+      <div class="targets" id="acTargets"></div>
+      <div class="row center" id="acButtons"></div>
+      <ul class="pack" id="packChat"></ul>
+      <form id="packForm" hidden><input id="packIn" maxlength="160" autocomplete="off" placeholder="Chuchoter à la meute…"></form>
+    </div>
+    <div class="sleep" id="sleep" hidden></div>
+    <div class="banner" id="banner" hidden><b id="bannerTitle"></b><span id="bannerText"></span></div>
+    <ul id="feed" class="feed"></ul>
+    <p class="aim-hint" id="aimHint" hidden></p>
+    <div class="touch" id="touch" hidden>
+      <div class="stick" id="stick"><i></i></div>
+      <div class="tbtns"><button id="tSit" aria-label="S'asseoir ou se lever">🪑</button><button id="tRun" aria-label="Courir">🏃</button></div>
+    </div>
+  </section>
+
+  <!-- Menu sur un villageois -->
+  <div class="ctx" id="ctx" hidden>
+    <b id="ctxName"></b>
+    <div class="ctx-items" id="ctxItems"></div>
+    <div class="ctx-more" id="ctxMore"></div>
+  </div>
+
+  <!-- Carte du rôle -->
+  <div class="overlay" id="roleCard" hidden>
+    <div class="role-card">
+      <p class="kicker" id="rcKicker">Ton rôle</p>
+      <div class="role-icon" id="rcIcon"></div>
+      <h2 id="rcName"></h2>
+      <p class="camp" id="rcCamp"></p>
+      <p id="rcText"></p>
+      <p class="comp" id="rcComp"></p>
+      <p class="hint" id="rcMates"></p>
+      <button class="primary" id="rcOk">Compris</button>
+    </div>
+  </div>
+
+  <!-- Fin de partie -->
+  <div id="board" class="overlay" hidden>
+    <div class="card end">
+      <p class="kicker" id="boardKicker"></p>
+      <h2 id="boardTitle"></h2>
+      <ol id="boardList" class="ranking"></ol>
+      <p class="hint" id="boardHint"></p>
+      <div class="row center" id="boardButtons"></div>
+    </div>
+  </div>
+</body>
+</html>

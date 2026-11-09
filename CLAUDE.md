@@ -12,9 +12,9 @@ textes, commentaires, messages de commit (`Feat : …` / `Fix : …`).
 - `lib/rooms.js` : salons communs (codes, public/privé, reconnexion par jeton, spectateurs, chat). Un jeu fournit `Room`
   (players, spectators, get, spectator, taken, addPlayer, addSpectator, removePlayer, removeSpectator, viewFor, summary?)
   et ses actions ; `room.deadline` + `room.timeout()` pour les étapes chronométrées ; `room.notify()`, `room.emit()`
-  (volatile) et `room.send()` (fiable) sont posés par `lib/rooms.js`.
+  (volatile) et `room.send()` (fiable) sont posés par `lib/rooms.js` ; `room.canChat?(pseudo)` peut couper le fil (Loup-Garou).
 - `lib/room-base.js` : `BaseRoom` (joueurs, spectateurs, créateur) pour tous les `Room` ; `PartyRoom` (robots, réglages,
-  manches, fin de partie) pour Chute, Néon, Prop Hunt. `lib/leaderboard.js` : classements mondiaux (top 10 par pseudo).
+  manches, fin de partie) pour Chute, Néon, Prop Hunt, Loup-Garou. `lib/leaderboard.js` : classements mondiaux (top 10 par pseudo).
 - `shared/party.js` (sur `/shared/`) : salon côté navigateur des jeux à manches (pseudo, salons, reconnexion, joueurs, fil,
   fin de partie, sons `blip`) ; le jeu branche `onShow`/`onRoom` et lit `ui.room`.
 - `lib/admin.js` : administration. Le pseudo `MrFoxi` est réservé (mot de passe dans la variable `ADMIN_PASSWORD`, jamais
