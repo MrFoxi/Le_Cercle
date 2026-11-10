@@ -873,7 +873,8 @@ export function createWorld(canvas) {
   // le ciel physique est très lumineux : on l'atténue pour garder une scène bien exposée sans brume de halo
   SU.skyGain = { value: 0.24 };
   sky.material.fragmentShader = 'uniform float skyGain;' + String.fromCharCode(10) + sky.material.fragmentShader.replace('gl_FragColor = vec4( texColor, 1.0 );', 'gl_FragColor = vec4( texColor * skyGain, 1.0 );');
-  SU.turbidity.value = 4; SU.rayleigh.value = 1.6; SU.mieCoefficient.value = 0.0035; SU.mieDirectionalG.value = 0.82;
+  SU.turbidity.value = 2.5; SU.rayleigh.value = 1.6; SU.mieCoefficient.value = 0.0012; SU.mieDirectionalG.value = 0.6;
+  if (SU.showSunDisc) SU.showSunDisc.value = 0; // le disque du ciel éblouit : on le remplace par un soleil doux
   if (SU.cloudCoverage) { SU.cloudCoverage.value = 0.42; SU.cloudDensity.value = 0.5; SU.cloudScale.value = 0.00022; SU.cloudSpeed.value = 0.00003; }
   const nightU = { k: { value: 0 }, time: uTime, moonDir: { value: new THREE.Vector3() } };
   const night = new THREE.Mesh(new THREE.SphereGeometry(2800, 48, 24), new THREE.ShaderMaterial({
@@ -897,6 +898,10 @@ export function createWorld(canvas) {
   night.renderOrder = 1; scene.add(night);
   const moon = new THREE.Sprite(new THREE.SpriteMaterial({ map: TX.moon().map, color: new THREE.Color(2.6, 2.5, 2.2), transparent: true, fog: false, depthWrite: false }));
   moon.scale.setScalar(110); moon.renderOrder = 2; scene.add(moon);
+  // Soleil : un disque doux, assez lumineux pour être vu, pas assez pour aveugler
+  const sunTex = paint('sunDisc', 256, (x, n) => { const g = x.createRadialGradient(n / 2, n / 2, 0, n / 2, n / 2, n / 2); g.addColorStop(0, 'rgba(255,255,255,1)'); g.addColorStop(0.16, 'rgba(255,250,235,1)'); g.addColorStop(0.2, 'rgba(255,240,210,.25)'); g.addColorStop(0.45, 'rgba(255,220,170,.04)'); g.addColorStop(1, 'rgba(255,220,170,0)'); x.fillStyle = g; x.fillRect(0, 0, n, n); }, { repeat: false }).map;
+  const sunDisc = new THREE.Sprite(new THREE.SpriteMaterial({ map: sunTex, color: new THREE.Color(1.15, 1.05, 0.9), transparent: true, fog: false, depthWrite: false }));
+  sunDisc.scale.setScalar(260); sunDisc.renderOrder = 2; scene.add(sunDisc);
 
   /* ---------------- Yeux de loups dans la forêt ---------------- */
   const wolfEyes = [];
@@ -1088,6 +1093,7 @@ export function createWorld(canvas) {
     lerpC(A.fog, B.fog, f, scene.fog.color); scene.fog.density = L('fd');
     renderer.toneMappingExposure = L('exp');
     moon.position.copy(moonDir).multiplyScalar(2500); moon.material.opacity = smooth(0.6, 0.95, k);
+    sunDisc.position.copy(sunDir).multiplyScalar(2500); sunDisc.material.opacity = 1 - smooth(0.5, 0.62, k);
     for (const l of lampLights) l.on = L('lamp') * 7 * l.power;
     for (const g of GLOW) g.m.emissiveIntensity = g.curve(k);
     if (bloom) bloom.strength = L('bloom');
