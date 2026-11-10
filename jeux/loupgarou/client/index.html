@@ -63,7 +63,7 @@
           <li>Le village gagne quand il n'y a plus de loups ; les loups, quand ils sont aussi nombreux que les autres.</li>
           <li>Pour s'amuser : <kbd>1</kbd>…<kbd>0</kbd> emotes, clic sur un villageois pour lui lancer une tomate, une chaussure, un poisson… ou une rose.</li>
         </ul>
-        <p class="hint">Tu vois le village par les yeux de ton villageois. Clic dans l'image : la souris tourne ton regard (<kbd>Échap</kbd> pour la libérer). <kbd>Z</kbd><kbd>Q</kbd><kbd>S</kbd><kbd>D</kbd> se promener (le jour) · <kbd>Maj</kbd> courir · <kbd>E</kbd> s'asseoir · clic : lancer l'objet choisi sur celui que tu vises · molette : changer d'objet · <kbd>F</kbd> accuser · <kbd>V</kbd> voter · clic droit : menu.</p>
+        <p class="hint">Tu vois le village par les yeux de ton villageois. Clic dans l'image : la souris tourne ton regard (<kbd>Échap</kbd> pour la libérer). <kbd>Z</kbd><kbd>Q</kbd><kbd>S</kbd><kbd>D</kbd> se promener (le jour) · <kbd>Maj</kbd> courir · <kbd>E</kbd> s'asseoir · clic : lancer l'objet choisi sur celui que tu vises · molette : changer d'objet · <kbd>F</kbd> accuser · <kbd>V</kbd> voter · clic droit : menu · maintiens <kbd>G</kbd> pour la roue des emotes (tu te vois les faire).</p>
       </details>
     </div>
   </section>
@@ -152,6 +152,9 @@
       <div class="tbtns"><button id="tSit" aria-label="S'asseoir ou se lever">🪑</button><button id="tRun" aria-label="Courir">🏃</button></div>
     </div>
   </section>
+
+  <!-- Roue des emotes -->
+  <div class="wheel" id="wheel" hidden><div class="wheel-center" id="wheelLabel"></div></div>
 
   <!-- Menu sur un villageois -->
   <div class="ctx" id="ctx" hidden>

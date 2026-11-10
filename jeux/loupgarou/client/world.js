@@ -16,7 +16,7 @@ import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js'
 import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js';
 import { SMAAPass } from 'three/addons/postprocessing/SMAAPass.js';
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
-import { makeCharacter, setGhost, animate, play, hitBy, splat, makeItem } from './characters.js';
+import { makeCharacter, makeFPArm, pose, HANDS, setGhost, animate, play, hitBy, splat, makeItem } from './characters.js';
 
 const LG = window.LG;
 const TAU = Math.PI * 2;
@@ -268,7 +268,7 @@ export function createWorld(canvas) {
   Object.assign(sun.shadow.camera, { left: -32, right: 32, top: 32, bottom: -32, near: 1, far: 220 });
   sun.shadow.bias = -0.00025; sun.shadow.normalBias = 0.025; sun.shadow.radius = 3;
   sun.userData.dir = new THREE.Vector3(0.5, 0.8, 0.3).normalize();
-  scene.add(sun, sun.target);
+  scene.add(sun, sun.target, camera); // la caméra porte mon bras à la première personne
   const uTime = { value: 0 };
 
   /* ---------------- Terrain ---------------- */
@@ -981,12 +981,41 @@ export function createWorld(canvas) {
   const talk = (name, t, sec) => { const c = chars.get(name); if (c) c.ch.talkUntil = t + sec; };
   const poof = (name, color) => { const c = chars.get(name); if (c) { spawn('poof', c.ch.root.position, { color }); spawn('sparkle', c.ch.root.position); } };
   // Objet lancé : de la main du lanceur (ou de devant ma caméra si c'est moi), en cloche jusqu'à la tête de la cible.
+  // Mon bras droit, vu à la première personne quand je lance : il arme, puis lance, l'objet en main.
+  const fp = { arm: null, key: '', anim: null, held: null };
+  function setFPLook(look, color) {
+    const key = `${look.join(',')}|${color}`;
+    if (fp.key === key) return;
+    if (fp.arm) camera.remove(fp.arm.group);
+    fp.key = key; fp.arm = makeFPArm(look, color);
+    fp.arm.group.position.set(0.3, -0.44, -0.18); fp.arm.group.visible = false;
+    camera.add(fp.arm.group);
+  }
+  function fpThrow(item, t) {
+    if (!fp.arm) return;
+    if (fp.held) fp.held.parent?.remove(fp.held);
+    fp.held = makeItem(item); fp.held.scale.setScalar(0.85); fp.arm.arm.anchor.add(fp.held);
+    fp.anim = { t0: t };
+  }
+  function animateFP(t) {
+    const a = fp.arm; if (!a) return;
+    const u = fp.anim ? t - fp.anim.t0 : 9;
+    a.group.visible = u < 0.95;
+    if (!a.group.visible) return;
+    const k = (u0, u1) => Math.max(0, Math.min(1, (u - u0) / (u1 - u0))), ease = x => x * x * (3 - 2 * x);
+    const up = ease(k(0, 0.32)), swing = ease(k(0.34, 0.44)), down = ease(k(0.46, 0.9));
+    const th = 0.6 + up * 1.8 - swing * 0.7 - down * 1.0, el = up * 0.6 - swing * 0.55 + down * 0.25;
+    a.arm.sh.rotation.set(th, 0, 0.15 - swing * 0.1);
+    a.arm.el.rotation.x = -el; a.arm.wr.rotation.set(-0.4 + swing * 0.5, 0, 0);
+    pose(a.arm, u < 0.4 ? HANDS.fist : HANDS.open);
+  }
   function toss(from, to, item, t, onHit, fromEye = false) {
     const a = chars.get(from), b = chars.get(to);
     if (!b || (!a && !fromEye)) return;
-    if (!fromEye) play(a.ch, 'lancer', t, to);
-    delayed.push({ at: t + (fromEye ? 0.05 : 0.24), go: () => {
-      const start = fromEye ? camera.localToWorld(new THREE.Vector3(0.25, -0.25, -0.5)) : a.ch.arms[1].a.localToWorld(new THREE.Vector3(0, -0.36, 0));
+    if (fromEye) fpThrow(item, t); else play(a.ch, 'lancer', t, to);
+    delayed.push({ at: t + (fromEye ? 0.4 : 0.24), go: () => {
+      const start = fromEye && fp.held ? fp.held.getWorldPosition(new THREE.Vector3()) : a ? a.ch.anchors.handR.getWorldPosition(new THREE.Vector3()) : camera.localToWorld(new THREE.Vector3(0.25, -0.25, -0.5));
+      if (fromEye && fp.held) { fp.held.parent?.remove(fp.held); fp.held = null; }
       const mesh = makeItem(item); mesh.position.copy(start); scene.add(mesh);
       const d = start.distanceTo(b.ch.root.position);
       flights.push({ mesh, start, to: b, item, dur: 0.42 + d * 0.035, h: 0.5 + d * 0.1, spin: new THREE.Vector3(Math.random() * 14, Math.random() * 14, Math.random() * 6), onHit, began: null });
@@ -1004,7 +1033,7 @@ export function createWorld(canvas) {
     for (const [, x] of chars) { x.ch.ring.material.color.set(x.mark === 'target' ? '#ff3b30' : x.mark === 'hover' ? '#ffffff' : x.key.split('|')[1]); x.ch.ring.material.opacity = x.mark ? 0.95 : 0.5; }
   }
   const tmp = new THREE.Vector3();
-  const headAt = (name, out = new THREE.Vector3()) => { const c = chars.get(name); return c ? c.ch.head.localToWorld(out.set(0, 0.85, 0)) : null; };
+  const headAt = (name, out = new THREE.Vector3()) => { const c = chars.get(name); return c ? c.ch.anchors.top.getWorldPosition(out) : null; };
   const project = v => { tmp.copy(v).project(camera); return { x: (tmp.x * 0.5 + 0.5) * innerWidth, y: (-tmp.y * 0.5 + 0.5) * innerHeight, ok: tmp.z < 1 && Math.abs(tmp.x) < 1.1 && Math.abs(tmp.y) < 1.1 }; };
 
   /* ---------------- Tombes des morts de la partie ---------------- */
@@ -1111,6 +1140,7 @@ export function createWorld(canvas) {
       r.visible = s.visible !== false;
       if (!r.visible) continue;
       setGhost(ch, !!s.ghost);
+      ch.ring.visible = !s.ghost && s.ring !== false;
       if (s.x !== undefined) { r.position.x = s.x; r.position.z = s.z; }
       let yaw = s.ry ?? r.rotation.y;
       const target = ch.emote?.target && chars.get(ch.emote.target);
@@ -1123,7 +1153,7 @@ export function createWorld(canvas) {
     for (let i = flights.length - 1; i >= 0; i--) {
       const f = flights[i];
       f.began ??= t;
-      const u = Math.min(1, (t - f.began) / f.dur), end = f.to.ch.head.localToWorld(tmp.set(0, 0.3, 0.15));
+      const u = Math.min(1, (t - f.began) / f.dur), end = f.to.ch.anchors.face.getWorldPosition(tmp);
       f.mesh.position.lerpVectors(f.start, end, u); f.mesh.position.y += f.h * 4 * u * (1 - u);
       if (f.item === 'fleche') f.mesh.lookAt(end); else { f.mesh.rotation.x += f.spin.x * dt; f.mesh.rotation.y += f.spin.y * dt; f.mesh.rotation.z += f.spin.z * dt; }
       if (u >= 1) { scene.remove(f.mesh); hitBy(f.to.ch, f.item, t); splat(f.to.ch, f.item); spawn('splash', end, { item: f.item }); f.onHit?.(f.item); flights.splice(i, 1); }
@@ -1163,10 +1193,11 @@ export function createWorld(canvas) {
       const want = new THREE.Vector3(cam.target.x + Math.sin(cam.showYaw) * Math.cos(cam.showPitch) * cam.dist, cam.target.y + Math.sin(cam.showPitch) * cam.dist, cam.target.z + Math.cos(cam.showYaw) * Math.cos(cam.showPitch) * cam.dist);
       camPos.lerp(want, 1 - Math.exp(-dt * 8));
       camera.position.copy(camPos); camera.lookAt(cam.target);
-      cam.yaw = Math.atan2(camera.position.x - cam.target.x, camera.position.z - cam.target.z);
     }
     if (Math.abs(camera.fov - cam.fov) > 0.01) { camera.fov += (cam.fov - camera.fov) * Math.min(1, dt * 6); camera.updateProjectionMatrix(); }
-    sun.target.position.set(camera.position.x - Math.sin(cam.yaw) * 10, 0, camera.position.z - Math.cos(cam.yaw) * 10);
+    animateFP(t);
+    const look = camera.getWorldDirection(tmp);
+    sun.target.position.set(camera.position.x + look.x * 10, 0, camera.position.z + look.z * 10);
     sun.position.copy(sun.userData.dir).multiplyScalar(90).add(sun.target.position);
     grade.uniforms.time.value = t % 100;
     composer.render();
@@ -1176,6 +1207,7 @@ export function createWorld(canvas) {
   applyTime();
   return {
     renderer, scene, camera, cam, env, chars, resize, update, syncPlayers, place, emote, talk, poof, toss, pick, mark, headAt, project, spawn, heightAt, setGraves,
+    setFPLook,
     setTime(k, speed = 0.25) { env.target = k; env.speed = speed; },
   };
 }

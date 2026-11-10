@@ -157,6 +157,17 @@ kbd { display: inline-block; min-width: 20px; padding: 0 5px; margin: 0 1px; bor
 .aim-hint { position: absolute; left: 50%; bottom: 70px; transform: translateX(-50%); background: var(--glass2); padding: 6px 14px; border-radius: 999px; font-weight: 700; font-size: .9rem; margin: 0; }
 .top-left .ghost, .rush { backdrop-filter: blur(10px); }
 
+/* ---------- Roue des emotes ---------- */
+.wheel { position: fixed; left: 50%; top: 50%; width: 380px; height: 380px; margin: -190px 0 0 -190px; z-index: 6; border-radius: 50%; background: radial-gradient(circle, rgba(14, 16, 32, .35) 0 28%, rgba(14, 16, 32, .78) 29% 70%, rgba(14, 16, 32, 0) 71%); backdrop-filter: blur(6px); animation: wheelIn .18s ease-out; }
+@keyframes wheelIn { from { transform: scale(.7); opacity: 0; } }
+.wheel button { position: absolute; width: 66px; height: 66px; margin: -33px 0 0 -33px; padding: 0; border-radius: 50%; font-size: 2rem; line-height: 1; background: rgba(255, 255, 255, .08); box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .12); transition: transform .12s, background .12s; }
+.wheel button.on, .wheel button:hover { background: rgba(232, 184, 74, .35); box-shadow: inset 0 0 0 2px var(--gold), 0 0 24px rgba(232, 184, 74, .5); transform: scale(1.22); }
+.wheel-center { position: absolute; left: 50%; top: 50%; width: 130px; transform: translate(-50%, -50%); text-align: center; font: 700 1rem var(--serif); color: #fff3d8; display: grid; gap: 2px; pointer-events: none; }
+.wheel-center b { font-size: 2.4rem; }
+.wheel-center small { font: 600 .8rem var(--font); color: var(--muted); }
+.actions .wide-btn { width: auto; padding: 0 14px; font: 800 .92rem var(--font); display: flex; gap: 8px; align-items: center; }
+.actions .wide-btn small { position: static; }
+
 /* ---------- Première personne ---------- */
 .cross { position: absolute; left: 50%; top: 50%; width: 6px; height: 6px; margin: -3px; border-radius: 50%; background: rgba(255, 255, 255, .85); box-shadow: 0 0 0 1px rgba(0, 0, 0, .5); transition: transform .12s; }
 .cross::before, .cross::after { content: ''; position: absolute; left: 50%; top: 50%; border: 2px solid rgba(255, 255, 255, .6); border-radius: 50%; width: 26px; height: 26px; margin: -13px; opacity: 0; transition: opacity .12s, transform .12s; transform: scale(.6); }

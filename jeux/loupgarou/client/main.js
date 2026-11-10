@@ -95,6 +95,7 @@ function refreshChars() {
   const s = ui.room;
   if (!s) return view.syncPlayers([{ name: PREVIEW, look, color: '#e8b84a' }]);
   view.syncPlayers(s.players.map(p => (p.name === s.me ? { ...p, look } : p)));
+  view.setFPLook(look, s.players.find(p => p.name === s.me)?.color ?? '#e8b84a');
 }
 
 /* ---------------- État reçu ---------------- */
@@ -339,7 +340,7 @@ function screenSplat(item) {
 function selfEmote(icon) { const el = $('#selfEmote'); el.textContent = icon ?? ''; el.hidden = true; void el.offsetWidth; el.hidden = false; clearTimeout(selfEmote.t); selfEmote.t = setTimeout(() => (el.hidden = true), 1600); }
 socket.on('fx', f => {
   const t = now();
-  if (f.kind === 'emote') { view.emote(f.who, f.e, f.to, t); if (f.who === S?.me) selfEmote(LG.EMOTES[f.e]?.icon); else emojiPop(f.who, LG.EMOTES[f.e]?.icon); SFX[f.e]?.(); }
+  if (f.kind === 'emote') { view.emote(f.who, f.e, f.to, t); emojiPop(f.who, LG.EMOTES[f.e]?.icon); if (f.who === S?.me) selfView = { until: now() + LG.EMOTES[f.e].ms / 1000 + 0.35, fresh: true }; SFX[f.e]?.(); }
   if (f.kind === 'toss') { SFX.whoosh(); view.toss(f.who, f.to, f.item, t, item => { SFX[HIT_SFX[item]]?.(); if (f.to === S?.me) toast(`${LG.ITEMS[item].icon} ${f.who} t’a lancé ${item === 'oeuf' ? 'un œuf' : item === 'rose' ? 'une rose' : item === 'chaussure' ? 'une chaussure' : item === 'tomate' ? 'une tomate' : item === 'chou' ? 'un chou' : 'un poisson'} !`); if (f.to === S?.me) screenSplat(item); }, f.who === S?.me); }
   if (f.kind === 'say') { speak(f.who, f.text); line(`<b style="--c:${colorOf(f.who)}">${esc(f.who)}</b> ${esc(f.text)}`); }
   if (f.kind === 'shot') { SFX.whoosh(); view.toss(f.who, f.to, 'fleche', t, () => SFX.thud()); }
@@ -414,11 +415,19 @@ function doToss(item, to) {
   socket.emit('toss', item, to);
 }
 function renderBars() {
-  $('#emoteBar').innerHTML = EMOTE_LIST.map((e, k) => `<button data-e="${e}" title="${LG.EMOTES[e].name} (${(k + 1) % 10})">${LG.EMOTES[e].icon}<small>${(k + 1) % 10}</small></button>`).join('');
+  $('#emoteBar').innerHTML = '<button id="emoteBtn" class="wide-btn" title="Emotes : maintiens G, vise, relâche">😀 Emotes<small>G</small></button>';
   $('#itemBar').innerHTML = ITEM_LIST.map(i => `<button data-i="${i}" class="${held === i ? 'on' : ''}" title="Lancer : ${LG.ITEMS[i].name} (molette pour changer)">${LG.ITEMS[i].icon}</button>`).join('');
 }
 renderBars();
-$('#emoteBar').onclick = e => { const b = e.target.closest('[data-e]'); if (b) { audio(); doEmote(b.dataset.e); } };
+$('#emoteBar').onclick = e => { if (e.target.closest('#emoteBtn')) { audio(); wheel.open ? closeWheel(false) : openWheel(); } };
+// Roue des emotes : maintenir G (ou le bouton), viser une emote avec la souris, relâcher (ou cliquer).
+const wheel = { open: false, sel: -1, vx: 0, vy: 0 };
+$('#wheel').insertAdjacentHTML('afterbegin', EMOTE_LIST.map((e, k) => { const a = -Math.PI / 2 + (k * Math.PI * 2) / EMOTE_LIST.length; return `<button data-k="${k}" style="left:${50 + Math.cos(a) * 37}%;top:${50 + Math.sin(a) * 37}%" title="${LG.EMOTES[e].name}">${LG.EMOTES[e].icon}</button>`; }).join(''));
+function wheelSel(k) { wheel.sel = k; [...$('#wheel').querySelectorAll('[data-k]')].forEach(b => b.classList.toggle('on', +b.dataset.k === k)); $('#wheelLabel').innerHTML = k >= 0 ? `<b>${LG.EMOTES[EMOTE_LIST[k]].icon}</b>${LG.EMOTES[EMOTE_LIST[k]].name}` : '<small>Vise une emote<br>puis relâche</small>'; }
+function openWheel() { if (!socialOk()) return toast('Pas maintenant…'); if (wheel.open) return; wheel.open = true; wheel.vx = wheel.vy = 0; wheelSel(-1); $('#wheel').hidden = false; }
+function closeWheel(fire) { if (!wheel.open) return; wheel.open = false; $('#wheel').hidden = true; if (fire && wheel.sel >= 0) { audio(); doEmote(EMOTE_LIST[wheel.sel], hover); } }
+$('#wheel').addEventListener('pointerover', e => { const b = e.target.closest('[data-k]'); if (b) wheelSel(+b.dataset.k); });
+$('#wheel').addEventListener('click', e => { const b = e.target.closest('[data-k]'); if (b) { wheelSel(+b.dataset.k); closeWheel(true); } else closeWheel(false); });
 $('#itemBar').onclick = e => {
   const b = e.target.closest('[data-i]'); if (!b) return;
   held = b.dataset.i; aiming = locked() ? null : held; renderBars();
@@ -453,6 +462,7 @@ function turn(dx, dy, k) {
 }
 const aimed = () => { const n = view.pick(innerWidth / 2, innerHeight / 2); return n && n !== S?.me && n !== PREVIEW ? n : null; };
 function click(x, y) {
+  if (wheel.open) { closeWheel(true); return; }
   const n = locked() ? aimed() : view.pick(x, y), my = S?.me;
   if (locked()) { if (n) doToss(held, n); return; }
   if (!n || n === my || n === PREVIEW) { closeCtx(); if (fp() && !coarse && playing()) canvas.requestPointerLock?.(); return; }
@@ -467,7 +477,14 @@ canvas.addEventListener('contextmenu', e => {
   if (lock) document.exitPointerLock();
   openCtx(n, lock ? innerWidth / 2 : e.clientX, lock ? innerHeight / 2 : e.clientY);
 });
-addEventListener('mousemove', e => { if (locked()) turn(e.movementX, e.movementY, 0.0022); });
+addEventListener('mousemove', e => {
+  if (!locked()) return;
+  if (!wheel.open) return turn(e.movementX, e.movementY, 0.0022);
+  wheel.vx += e.movementX; wheel.vy += e.movementY;
+  const l = Math.hypot(wheel.vx, wheel.vy);
+  if (l > 120) { wheel.vx *= 120 / l; wheel.vy *= 120 / l; }
+  if (l > 25) { const a = Math.atan2(wheel.vy, wheel.vx) + Math.PI / 2, n = EMOTE_LIST.length; wheelSel(((Math.round(a / ((Math.PI * 2) / n)) % n) + n) % n); }
+});
 addEventListener('pointermove', e => {
   if (locked()) return;
   if (drag && e.pointerId === drag.id) {
@@ -494,7 +511,7 @@ setInterval(() => {
 }, 100);
 addEventListener('keydown', e => {
   if (e.target.closest?.('input, select, textarea')) { if (e.key === 'Escape') e.target.blur(); return; }
-  if (e.key === 'Escape') { closeCtx(); aiming = null; renderBars(); $('#roleCard').hidden = true; return; }
+  if (e.key === 'Escape') { closeWheel(false); closeCtx(); aiming = null; renderBars(); $('#roleCard').hidden = true; return; }
   if (e.key === 'Enter' && !$('#chatIn').disabled && screen === 'game') { e.preventDefault(); $('#chatIn').focus(); return; }
   if (!playing()) return;
   if (['Space', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.code)) e.preventDefault();
@@ -503,10 +520,11 @@ addEventListener('keydown', e => {
   const d = /^(Digit|Numpad)(\d)$/.exec(e.code);
   if (d) { const k = (Number(d[2]) + 9) % 10; if (EMOTE_LIST[k]) { audio(); doEmote(EMOTE_LIST[k]); } }
   if (e.code === 'KeyE') toggleSit();
+  if (e.code === 'KeyG') openWheel();
   if (e.code === 'KeyF') { const n = locked() ? aimed() : hover; if (n) doEmote('pointer', n); }
   if (e.code === 'KeyV' && S?.phase === 'vote') { const n = locked() ? aimed() : hover; if (n) castVote(n); }
 });
-addEventListener('keyup', e => keys.delete(e.code));
+addEventListener('keyup', e => { keys.delete(e.code); if (e.code === 'KeyG') closeWheel(true); });
 addEventListener('blur', () => keys.clear());
 // Tactile : joystick et boutons
 $('#touch').hidden = !coarse;
@@ -553,15 +571,16 @@ function frame(t0) {
   const wide = innerWidth > 820, c = view.cam;
   if (!s) {
     // Accueil : mon villageois au milieu de la place, vu de face
-    list.push({ name: PREVIEW, x: 0, z: 3, ry: 0, visible: true, color: '#e8b84a' });
-    c.mode = 'show'; c.want.set(wide ? -1.5 : 0, wide ? 1.1 : 1.5, 3); c.wantDist = wide ? 5 : 6.2;
+    list.push({ name: PREVIEW, x: 0, z: 3, ry: 0, visible: true, color: '#e8b84a', ring: false });
+    c.mode = 'show'; c.want.set(wide ? -0.75 : 0, wide ? 1.12 : 1.35, 3); c.wantDist = wide ? 2.7 : 3.6;
+    if (window.lg?.close) { c.want.set(0, window.lg.close[0], 3); c.wantDist = window.lg.close[1]; } // captures de test
     if (!drag) { c.showYaw += (0 - c.showYaw) * dt * 0.8; c.showPitch += (0.1 - c.showPitch) * dt * 0.8; }
     fpKey = '';
   } else if (!inGame(s)) {
     // Salon : tout le monde debout en cercle ; je vois par mes yeux
     s.players.forEach((p, k) => { const st = LG.SEATS[k]; list.push({ name: p.name, x: st.x * 0.86, z: st.z * 0.86, ry: st.ry, visible: p.name !== s.me, color: p.color, bot: p.bot }); });
     const st = LG.SEATS[Math.max(0, s.players.findIndex(p => p.name === s.me))];
-    if (s.spectator) floatGhost(s, dt); else { c.mode = 'fp'; c.eye.set(st.x * 0.86, 1.45, st.z * 0.86); }
+    if (s.spectator) floatGhost(s, dt); else { c.mode = 'fp'; c.eye.set(st.x * 0.86, 1.52, st.z * 0.86); }
     faceCenter(`salon${s.code}`, st);
   } else {
     const night = s.phase === 'night', live = alive(s, s.me) && !s.spectator;
@@ -587,8 +606,8 @@ function frame(t0) {
       list.push({ name: p.name, x: r.x, z: r.z, ry: r.ry, seated: r.sit >= 0 && alive(s, p.name), ghost: !alive(s, p.name), visible: !night && p.name !== s.me, color: p.color, bot: p.bot });
     }
     // Mes yeux : là où je marche, ou assis à ma place ; fantôme ou spectateur : je flotte au-dessus du village
-    if (me && s.phase === 'day') { c.mode = 'fp'; c.eye.set(me.x, me.sit >= 0 ? 1.12 : 1.46 + Math.sin(me.bob ?? 0) * 0.025, me.z); }
-    else if (live) { const r = remoteAt(s.me, now() - 0.1) ?? seatOf(s, s.me); c.mode = 'fp'; c.eye.set(r.x, 1.12, r.z); }
+    if (me && s.phase === 'day') { c.mode = 'fp'; c.eye.set(me.x, me.sit >= 0 ? 1.24 : 1.52 + Math.sin(me.bob ?? 0) * 0.025, me.z); }
+    else if (live) { const r = remoteAt(s.me, now() - 0.1) ?? seatOf(s, s.me); c.mode = 'fp'; c.eye.set(r.x, 1.24, r.z); }
     else floatGhost(s, dt);
     // Le regard se tourne tout seul vers ce qui se passe (sauf si je bouge la souris)
     const focus = s.phase === 'verdict' ? s.verdict?.name : s.phase === 'hunter' ? (s.shot?.who ?? s.hunter) : s.phase === 'dawn' ? s.deaths?.[0]?.name : null;
@@ -596,6 +615,13 @@ function frame(t0) {
     $('#veil').classList.toggle('sleep', night && live && s.role !== 'loup' && $('#actionCard').hidden);
     hud(s, t);
   }
+  // Pendant mon emote : je me vois, de face
+  const mine = s && list.find(o => o.name === s.me);
+  if (selfView && now() < selfView.until && mine && c.mode === 'fp') {
+    mine.visible = true;
+    c.mode = 'show'; c.want.set(mine.x, mine.seated ? 0.95 : 1.2, mine.z); c.wantDist = 2.6; c.showYaw = mine.ry; c.showPitch = 0.1;
+    if (selfView.fresh) { selfView.fresh = false; c.target.copy(c.want); c.dist = 2.6; }
+  } else selfView = null;
   // Vitesse de chacun (pour l'animation de marche)
   for (const o of list) {
     const lp = lastPos.get(o.name), d = lp ? Math.hypot(o.x - lp.x, o.z - lp.z) : 0;
@@ -609,13 +635,13 @@ function frame(t0) {
   if (sound() && t > ambientAt) { ambientAt = t + 2 + Math.random() * 5; const k = view.env.k; if (k < 0.45) SFX.chirp(); else if (k > 0.8) (Math.random() < 0.15 ? SFX.owl : SFX.cricket)(); }
   if (!loaded) { loaded = true; $('#loading').classList.add('done'); }
 }
-let loaded = false, fpKey = '';
+let loaded = false, fpKey = '', selfView = null;
 // Regarder vers le centre de la place depuis sa place (une fois, en arrivant)
 function faceCenter(key, st) { if (fpKey === key) return; fpKey = key; view.cam.yaw = Math.atan2(st.x, st.z); view.cam.pitch = -0.08; }
 // Tourner la tête vers quelqu'un, en douceur
 function lookToward(n, dt) {
   const h = view.headAt(n); if (!h) return;
-  const c = view.cam, dx = h.x - c.eye.x, dy = h.y - 0.6 - c.eye.y, dz = h.z - c.eye.z;
+  const c = view.cam, dx = h.x - c.eye.x, dy = h.y - 0.42 - c.eye.y, dz = h.z - c.eye.z;
   let dyaw = Math.atan2(-dx, -dz) - c.yaw; dyaw = Math.atan2(Math.sin(dyaw), Math.cos(dyaw));
   const f = Math.min(1, dt * 2.5);
   c.yaw += dyaw * f; c.pitch += (clampP(Math.atan2(dy, Math.hypot(dx, dz))) - c.pitch) * f;
@@ -656,6 +682,6 @@ function hud(s, t) {
   $('#rushBtn').classList.toggle('on', s.ready.includes(s.me));
   $('#actions').classList.toggle('off', !socialOk());
 }
-if (location.hostname === 'localhost') window.lg = { view, look: v => { look = v; lookChanged(); } }; // pour les captures de test
+if (location.hostname === 'localhost') window.lg = { view, look: v => { look = v; lookChanged(); }, toss: (i, n) => doToss(i, n), emote: e => doEmote(e), state: () => S }; // pour les captures de test
 requestAnimationFrame(frame);
 show('home');
