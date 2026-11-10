@@ -12,6 +12,7 @@ html, body { margin: 0; height: 100%; font-family: var(--font); color: var(--ink
 #loading.done { opacity: 0; pointer-events: none; }
 #veil { position: fixed; inset: 0; pointer-events: none; background: radial-gradient(ellipse at center, transparent 45%, rgba(6, 8, 24, .75)); opacity: 0; transition: opacity 2s; z-index: 1; }
 #veil.on { opacity: 1; }
+#veil.sleep { opacity: 1; background: rgba(3, 4, 14, .84); box-shadow: inset 0 0 22vmin 10vmin rgba(0, 0, 0, .9); }
 #veil.wolf { background: radial-gradient(ellipse at center, transparent 40%, rgba(70, 0, 10, .6)); }
 
 /* ---------- Panneaux de l'accueil et du salon ---------- */
@@ -155,6 +156,20 @@ kbd { display: inline-block; min-width: 20px; padding: 0 5px; margin: 0 1px; bor
 @keyframes fadeIn { from { opacity: 0; transform: translateX(20px); } }
 .aim-hint { position: absolute; left: 50%; bottom: 70px; transform: translateX(-50%); background: var(--glass2); padding: 6px 14px; border-radius: 999px; font-weight: 700; font-size: .9rem; margin: 0; }
 .top-left .ghost, .rush { backdrop-filter: blur(10px); }
+
+/* ---------- Première personne ---------- */
+.cross { position: absolute; left: 50%; top: 50%; width: 6px; height: 6px; margin: -3px; border-radius: 50%; background: rgba(255, 255, 255, .85); box-shadow: 0 0 0 1px rgba(0, 0, 0, .5); transition: transform .12s; }
+.cross::before, .cross::after { content: ''; position: absolute; left: 50%; top: 50%; border: 2px solid rgba(255, 255, 255, .6); border-radius: 50%; width: 26px; height: 26px; margin: -13px; opacity: 0; transition: opacity .12s, transform .12s; transform: scale(.6); }
+.cross.on { transform: scale(1.3); background: var(--gold); }
+.cross.on::before { opacity: 1; transform: scale(1); border-color: var(--gold); }
+.aim-name { position: absolute; left: 50%; top: calc(50% + 24px); transform: translateX(-50%); margin: 0; background: var(--glass2); padding: 4px 12px; border-radius: 999px; font-weight: 700; font-size: .82rem; white-space: nowrap; }
+.lock-hint { position: absolute; left: 50%; bottom: 64px; transform: translateX(-50%); margin: 0; background: var(--glass); padding: 5px 14px; border-radius: 999px; font-size: .8rem; color: var(--muted); white-space: nowrap; }
+.self-emote { position: absolute; left: 50%; bottom: 90px; transform: translateX(-50%); font-size: 4rem; animation: emojiPop 1.6s ease-out forwards; filter: drop-shadow(0 6px 14px rgba(0, 0, 0, .6)); }
+.splat { position: absolute; inset: 0; pointer-events: none; animation: splatFade 2.6s ease-in forwards;
+  background: radial-gradient(circle at 46% 44%, rgba(var(--c), .92) 0 12%, transparent 13%), radial-gradient(circle at 58% 50%, rgba(var(--c), .9) 0 9%, transparent 10%), radial-gradient(circle at 40% 56%, rgba(var(--c), .85) 0 7%, transparent 8%), radial-gradient(circle at 63% 36%, rgba(var(--c), .85) 0 4%, transparent 5%), radial-gradient(circle at 33% 38%, rgba(var(--c), .8) 0 3%, transparent 4%), radial-gradient(ellipse at 50% 70%, rgba(var(--c), .7) 0 3%, transparent 12%); }
+.splat.bonk { background: radial-gradient(circle at 50% 50%, rgba(255, 255, 255, .55), transparent 40%); animation-duration: .6s; }
+@keyframes splatFade { 0% { opacity: 0; transform: scale(1.2); } 6% { opacity: 1; transform: scale(1); } 60% { opacity: .9; transform: translateY(2%); } 100% { opacity: 0; transform: translateY(8%); } }
+@media (pointer: coarse) { .lock-hint { display: none; } }
 
 /* ---------- Étiquettes au-dessus des têtes ---------- */
 #labels { position: fixed; inset: 0; pointer-events: none; z-index: 2; }

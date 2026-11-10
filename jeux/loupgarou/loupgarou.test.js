@@ -71,7 +71,8 @@ function setup(roles) {
   r.at(r.now() + 500); r.move('Eve', { x: s.x + 1, z: s.z, ry: 0, s: -1 });
   assert(Math.abs(b.x - (s.x + 1)) < 0.5 && b.sit === -1);
   r.at(r.now() + 100); r.move('Eve', { x: s.x + 30, z: s.z, ry: 0 }); assert(b.x < s.x + 2, 'téléportation refusée');
-  r.at(r.now() + 100); r.move('Eve', { x: 0, z: 0.5, ry: 0 }); assert(Math.hypot(b.x, b.z) >= 2.3, 'pas dans la fontaine');
+  const l = LG.LANTERNS[0];
+  r.at(r.now() + 3000); r.move('Eve', { x: l.x, z: l.z, ry: 0 }); assert(Math.hypot(b.x - l.x, b.z - l.z) >= 0.6, 'pas dans une lanterne');
   const other = LG.SEATS[r.seats.Fox];
   r.at(r.now() + 3000); r.move('Eve', { x: other.x, z: other.z, ry: 0, s: r.seats.Fox }); assert.strictEqual(b.sit, -1, 'siège déjà pris');
   // emotes et objets lancés : relayés, avec une attente entre deux

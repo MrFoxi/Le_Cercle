@@ -1,5 +1,5 @@
 // Loup-Garou : ce que le serveur et le navigateur partagent (script classique : window.LG ou require).
-// Rôles et composition, emotes, objets à lancer, apparence des personnages, sièges autour de la fontaine et place du village.
+// Rôles et composition, emotes, objets à lancer, apparence des personnages, sièges en cercle et place du village.
 (function (root, factory) {
   const LG = factory();
   if (typeof module === 'object' && module.exports) module.exports = LG;
@@ -58,7 +58,7 @@
   const validLook = a => Array.isArray(a) && a.length === LOOK_KEYS.length && a.every((v, k) => Number.isInteger(v) && v >= 0 && v < LOOK[LOOK_KEYS[k]].length);
   const randomLook = (rng = Math.random) => LOOK_KEYS.map(k => Math.floor(rng() * LOOK[k].length));
 
-  // La place : un disque pavé autour d'une fontaine, des sièges en cercle (tournés vers la fontaine), des lanternes.
+  // La place : un disque pavé avec une rosace au centre, des sièges en cercle (tournés vers le centre), des lanternes.
   const AREA = 12.5, R = 0.35, SPEED = 3.2, RUN = 5.2;
   const SEAT_KINDS = ['banc', 'chaise', 'souche', 'tonneau', 'tabouret', 'chaise'];
   const SEATS = Array.from({ length: MAX_PLAYERS }, (_, k) => {
@@ -66,8 +66,8 @@
     return { x, z, ry: Math.atan2(-x, -z), kind: SEAT_KINDS[k % SEAT_KINDS.length] };
   });
   const LANTERNS = Array.from({ length: 6 }, (_, k) => { const a = ((k + 0.5) / 6) * Math.PI * 2; return { x: Math.sin(a) * 9.6, z: Math.cos(a) * 9.6 }; });
-  const COLLIDERS = [{ x: 0, z: 0, r: 2.3 }, ...LANTERNS.map(l => ({ ...l, r: 0.25 }))];
-  // Repousse hors de la fontaine et des lanternes, et garde sur la place.
+  const COLLIDERS = LANTERNS.map(l => ({ ...l, r: 0.3 }));
+  // Repousse hors des lanternes, et garde sur la place (le centre est dégagé).
   function collide(p, r = R) {
     for (const c of COLLIDERS) {
       let dx = p.x - c.x, dz = p.z - c.z, d = Math.hypot(dx, dz);

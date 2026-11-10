@@ -63,7 +63,7 @@
           <li>Le village gagne quand il n'y a plus de loups ; les loups, quand ils sont aussi nombreux que les autres.</li>
           <li>Pour s'amuser : <kbd>1</kbd>…<kbd>0</kbd> emotes, clic sur un villageois pour lui lancer une tomate, une chaussure, un poisson… ou une rose.</li>
         </ul>
-        <p class="hint"><kbd>Z</kbd><kbd>Q</kbd><kbd>S</kbd><kbd>D</kbd> se promener (le jour) · <kbd>Maj</kbd> courir · <kbd>E</kbd> s'asseoir / se lever · glisser pour tourner la caméra · molette pour zoomer.</p>
+        <p class="hint">Tu vois le village par les yeux de ton villageois. Clic dans l'image : la souris tourne ton regard (<kbd>Échap</kbd> pour la libérer). <kbd>Z</kbd><kbd>Q</kbd><kbd>S</kbd><kbd>D</kbd> se promener (le jour) · <kbd>Maj</kbd> courir · <kbd>E</kbd> s'asseoir · clic : lancer l'objet choisi sur celui que tu vises · molette : changer d'objet · <kbd>F</kbd> accuser · <kbd>V</kbd> voter · clic droit : menu.</p>
       </details>
     </div>
   </section>
@@ -142,6 +142,11 @@
     <div class="banner" id="banner" hidden><b id="bannerTitle"></b><span id="bannerText"></span></div>
     <ul id="feed" class="feed"></ul>
     <p class="aim-hint" id="aimHint" hidden></p>
+    <div class="cross" id="cross" hidden></div>
+    <p class="aim-name" id="aimName" hidden></p>
+    <p class="lock-hint" id="lockHint">Clique dans l’image pour regarder autour de toi à la souris · Échap pour retrouver le curseur</p>
+    <div class="self-emote" id="selfEmote" hidden></div>
+    <div class="splat" id="splat" hidden></div>
     <div class="touch" id="touch" hidden>
       <div class="stick" id="stick"><i></i></div>
       <div class="tbtns"><button id="tSit" aria-label="S'asseoir ou se lever">🪑</button><button id="tRun" aria-label="Courir">🏃</button></div>

@@ -8,7 +8,6 @@ const LG = window.LG;
 const socket = io('/loupgarou');
 const view = createWorld($('#view'));
 const coarse = matchMedia('(pointer: coarse)').matches;
-view.setQuality(store.get('loupgarou-quality') ?? (coarse ? 'low' : 'high'));
 addEventListener('resize', () => view.resize());
 const now = () => performance.now() / 1000;
 const EMOTE_LIST = Object.keys(LG.EMOTES), ITEM_LIST = Object.keys(LG.ITEMS);
@@ -80,7 +79,7 @@ const PREVIEW = ' moi';
 let screen = 'home';
 const ui = party({
   id: 'loupgarou', socket, max: LG.MAX_PLAYERS, bots: 7, busy: '🌙 en jeu', onError: text => toast(text),
-  onShow: sc => { if (sc !== screen) view.cam.userYaw = false; screen = sc; $('#dress').hidden = sc === 'game'; if (sc === 'home') { ui.room = null; refreshChars(); } },
+  onShow: sc => { if (sc !== screen) { fpKey = ''; ghost = null; if (sc === 'home' && document.pointerLockElement) document.exitPointerLock(); } screen = sc; $('#dress').hidden = sc === 'game'; if (sc === 'home') { ui.room = null; refreshChars(); } },
   onRoom: (s, host) => {
     $('#dayT').disabled = $('#voteT').disabled = !host; $('#dayT').value = s.settings.day; $('#voteT').value = s.settings.vote;
     $('#startBtn').disabled = s.players.length < LG.MIN_PLAYERS;
@@ -112,7 +111,7 @@ socket.on('state', s => {
   refreshChars();
   show(inGame(s) ? 'game' : 'room');
   ui.renderRoom();
-  if (!inGame(s)) { $('#board').hidden = true; $('#roleCard').hidden = true; closeCtx(); phaseKey = ''; }
+  if (!inGame(s)) { view.setGraves([]); $('#board').hidden = true; $('#roleCard').hidden = true; closeCtx(); phaseKey = ''; }
   else game(s, old);
   chatSync(s, old);
 });
@@ -140,6 +139,7 @@ function game(s, old) {
   if (key !== phaseKey) { phaseKey = key; enter(s); }
   if (old?.life && old.round === s.round && old.roundNo === s.roundNo) for (const n of Object.keys(s.life)) if (old.life[n] && !s.life[n]) died(n, s);
   renderVillage(s); renderAction(s); renderRoleChip(s);
+  view.setGraves(s.players.filter(p => !alive(s, p.name)).map(p => ({ name: p.name, sub: LG.ROLES[s.roles[p.name]]?.name ?? '' })));
   if (['roundEnd', 'over'].includes(s.phase)) { if (Date.now() > boardAt) showBoard(s); else setTimeout(() => S === s && showBoard(s), boardAt - Date.now()); }
   else $('#board').hidden = true;
 }
@@ -147,7 +147,8 @@ function enter(s) {
   const p = s.phase;
   phaseT0 = s.now; closeCtx(); aiming = null; renderBars();
   const seat = seatOf(s, s.me);
-  if (seat && !['night', 'day'].includes(p)) view.cam.yaw = Math.atan2(seat.x, seat.z);
+  if (seat && !['night', 'day'].includes(p) && alive(s, s.me)) { view.cam.yaw = Math.atan2(seat.x, seat.z); view.cam.pitch = -0.1; }
+  if (alive(s, s.me) && !s.spectator) ghost = null;
   if (p === 'reveal') { view.setTime(0.38, 0.3); seerPick = null; $('#feed').innerHTML = ''; openRole(s); SFX.mystery(); }
   if (p === 'night') {
     view.setTime(1, 0.22); $('#roleCard').hidden = true; seerPick = null;
@@ -329,10 +330,17 @@ $('#chatForm').onsubmit = e => {
 };
 
 /* ---------------- Effets reçus ---------------- */
+// Touché en plein visage (je vois par mes yeux) : la tache coule sur l'écran
+function screenSplat(item) {
+  const el = $('#splat'), col = { tomate: '200,22,10', oeuf: '255,216,74', chou: '108,178,74', poisson: '160,210,240' }[item];
+  if (!col) { el.className = 'splat bonk'; } else { el.className = 'splat'; el.style.setProperty('--c', col); }
+  el.hidden = true; void el.offsetWidth; el.hidden = false; clearTimeout(screenSplat.t); screenSplat.t = setTimeout(() => (el.hidden = true), 2600);
+}
+function selfEmote(icon) { const el = $('#selfEmote'); el.textContent = icon ?? ''; el.hidden = true; void el.offsetWidth; el.hidden = false; clearTimeout(selfEmote.t); selfEmote.t = setTimeout(() => (el.hidden = true), 1600); }
 socket.on('fx', f => {
   const t = now();
-  if (f.kind === 'emote') { view.emote(f.who, f.e, f.to, t); emojiPop(f.who, LG.EMOTES[f.e]?.icon); SFX[f.e]?.(); }
-  if (f.kind === 'toss') { SFX.whoosh(); view.toss(f.who, f.to, f.item, t, item => { SFX[HIT_SFX[item]]?.(); if (f.to === S?.me) toast(`${LG.ITEMS[item].icon} ${f.who} t’a lancé ${item === 'oeuf' ? 'un œuf' : item === 'rose' ? 'une rose' : item === 'chaussure' ? 'une chaussure' : item === 'tomate' ? 'une tomate' : item === 'chou' ? 'un chou' : 'un poisson'} !`); }); }
+  if (f.kind === 'emote') { view.emote(f.who, f.e, f.to, t); if (f.who === S?.me) selfEmote(LG.EMOTES[f.e]?.icon); else emojiPop(f.who, LG.EMOTES[f.e]?.icon); SFX[f.e]?.(); }
+  if (f.kind === 'toss') { SFX.whoosh(); view.toss(f.who, f.to, f.item, t, item => { SFX[HIT_SFX[item]]?.(); if (f.to === S?.me) toast(`${LG.ITEMS[item].icon} ${f.who} t’a lancé ${item === 'oeuf' ? 'un œuf' : item === 'rose' ? 'une rose' : item === 'chaussure' ? 'une chaussure' : item === 'tomate' ? 'une tomate' : item === 'chou' ? 'un chou' : 'un poisson'} !`); if (f.to === S?.me) screenSplat(item); }, f.who === S?.me); }
   if (f.kind === 'say') { speak(f.who, f.text); line(`<b style="--c:${colorOf(f.who)}">${esc(f.who)}</b> ${esc(f.text)}`); }
   if (f.kind === 'shot') { SFX.whoosh(); view.toss(f.who, f.to, 'fleche', t, () => SFX.thud()); }
 });
@@ -383,7 +391,7 @@ function labels(list) {
 
 /* ---------------- Commandes ---------------- */
 const keys = new Set(), canvas = $('#view');
-let hover = null, ctxWho = null, aiming = null, lastThrow = 0, lastEmote = 0, zoom = 1, drag = null, hoverAt = 0;
+let hover = null, ctxWho = null, aiming = null, held = 'tomate', lastThrow = 0, lastEmote = 0, drag = null, hoverAt = 0, lookAt = 0, ghost = null;
 const touch = { x: 0, y: 0, run: false };
 const playing = () => document.body.classList.contains('playing') || screen === 'room';
 const socialOk = () => {
@@ -407,14 +415,14 @@ function doToss(item, to) {
 }
 function renderBars() {
   $('#emoteBar').innerHTML = EMOTE_LIST.map((e, k) => `<button data-e="${e}" title="${LG.EMOTES[e].name} (${(k + 1) % 10})">${LG.EMOTES[e].icon}<small>${(k + 1) % 10}</small></button>`).join('');
-  $('#itemBar').innerHTML = ITEM_LIST.map(i => `<button data-i="${i}" class="${aiming === i ? 'on' : ''}" title="Lancer : ${LG.ITEMS[i].name}">${LG.ITEMS[i].icon}</button>`).join('');
+  $('#itemBar').innerHTML = ITEM_LIST.map(i => `<button data-i="${i}" class="${held === i ? 'on' : ''}" title="Lancer : ${LG.ITEMS[i].name} (molette pour changer)">${LG.ITEMS[i].icon}</button>`).join('');
 }
 renderBars();
 $('#emoteBar').onclick = e => { const b = e.target.closest('[data-e]'); if (b) { audio(); doEmote(b.dataset.e); } };
 $('#itemBar').onclick = e => {
   const b = e.target.closest('[data-i]'); if (!b) return;
-  aiming = aiming === b.dataset.i ? null : b.dataset.i; renderBars();
-  if (aiming) toast(`Clique sur un villageois pour lui lancer ${LG.ITEMS[aiming].icon} (Échap : annuler)`, 2500);
+  held = b.dataset.i; aiming = locked() ? null : held; renderBars();
+  toast(`${LG.ITEMS[held].icon} prêt : vise un villageois et clique`, 2200);
 };
 function openCtx(n, x, y) {
   const s = S; if (!s) return;
@@ -432,27 +440,58 @@ function openCtx(n, x, y) {
 function closeCtx() { $('#ctx').hidden = true; if (ctxWho) view.mark(ctxWho, null); ctxWho = null; }
 $('#ctxItems').onclick = e => { const b = e.target.closest('[data-i]'); if (b && ctxWho) { doToss(b.dataset.i, ctxWho); closeCtx(); } };
 $('#ctxMore').onclick = e => { const b = e.target.closest('[data-a]'); if (!b || !ctxWho) return; if (b.dataset.a === 'vote') castVote(ctxWho); else doEmote('pointer', ctxWho); closeCtx(); };
+// Vue à la première personne : un clic dans l'image capture la souris (elle tourne le regard, Échap la libère).
+// Souris capturée : viseur au centre ; clic = lancer l'objet choisi sur celui qu'on vise ; clic droit = son menu ; molette = objet.
+// Souris libre ou tactile : glisser pour tourner la tête, cliquer sur quelqu'un pour son menu.
+const fp = () => view.cam.mode === 'fp';
+const locked = () => document.pointerLockElement === canvas;
+const clampP = v => Math.max(-1.35, Math.min(1.35, v));
+function turn(dx, dy, k) {
+  const c = view.cam;
+  if (fp()) { c.yaw -= dx * k; c.pitch = clampP(c.pitch - dy * k); } else { c.showYaw -= dx * k * 1.4; c.showPitch = Math.max(-0.1, Math.min(0.9, c.showPitch + dy * k)); }
+  lookAt = now();
+}
+const aimed = () => { const n = view.pick(innerWidth / 2, innerHeight / 2); return n && n !== S?.me && n !== PREVIEW ? n : null; };
 function click(x, y) {
-  const n = view.pick(x, y), my = S?.me;
-  if (!n || n === my || n === PREVIEW) { closeCtx(); return; }
+  const n = locked() ? aimed() : view.pick(x, y), my = S?.me;
+  if (locked()) { if (n) doToss(held, n); return; }
+  if (!n || n === my || n === PREVIEW) { closeCtx(); if (fp() && !coarse && playing()) canvas.requestPointerLock?.(); return; }
   if (aiming) { doToss(aiming, n); return; }
   openCtx(n, x, y);
 }
-canvas.addEventListener('pointerdown', e => { audio(); drag = { id: e.pointerId, x: e.clientX, y: e.clientY, sx: e.clientX, sy: e.clientY, moved: false }; });
+canvas.addEventListener('pointerdown', e => { if (e.button === 2) return; audio(); drag = { id: e.pointerId, x: e.clientX, y: e.clientY, sx: e.clientX, sy: e.clientY, moved: false }; });
+canvas.addEventListener('contextmenu', e => {
+  e.preventDefault();
+  const lock = locked(), n = lock ? aimed() : view.pick(e.clientX, e.clientY);
+  if (!n || n === S?.me || n === PREVIEW) return;
+  if (lock) document.exitPointerLock();
+  openCtx(n, lock ? innerWidth / 2 : e.clientX, lock ? innerHeight / 2 : e.clientY);
+});
+addEventListener('mousemove', e => { if (locked()) turn(e.movementX, e.movementY, 0.0022); });
 addEventListener('pointermove', e => {
+  if (locked()) return;
   if (drag && e.pointerId === drag.id) {
     const dx = e.clientX - drag.x, dy = e.clientY - drag.y;
     if (Math.hypot(e.clientX - drag.sx, e.clientY - drag.sy) > 6) drag.moved = true;
-    if (drag.moved) { view.cam.userYaw = true; view.cam.yaw -= dx * 0.006; view.cam.pitch = Math.max(0.04, Math.min(1.25, view.cam.pitch + dy * 0.004)); }
+    if (drag.moved) turn(dx, dy, 0.005);
     drag.x = e.clientX; drag.y = e.clientY;
   } else if (e.target === canvas && e.pointerType === 'mouse' && performance.now() - hoverAt > 80) {
     hoverAt = performance.now();
     const n = view.pick(e.clientX, e.clientY), h = n && n !== S?.me && n !== PREVIEW ? n : null;
-    if (h !== hover) { if (hover && hover !== ctxWho) view.mark(hover, null); hover = h; if (h && h !== ctxWho) view.mark(h, 'hover'); canvas.style.cursor = h ? (aiming ? 'crosshair' : 'pointer') : 'grab'; }
+    if (h !== hover) { if (hover && hover !== ctxWho) view.mark(hover, null); hover = h; if (h && h !== ctxWho) view.mark(h, 'hover'); canvas.style.cursor = h ? (aiming ? 'crosshair' : 'pointer') : fp() ? 'crosshair' : 'grab'; }
   }
 });
 addEventListener('pointerup', e => { if (drag && e.pointerId === drag.id) { if (!drag.moved) click(e.clientX, e.clientY); drag = null; } });
-canvas.addEventListener('wheel', e => { e.preventDefault(); zoom = Math.max(0.45, Math.min(2.2, zoom * (e.deltaY > 0 ? 1.1 : 0.9))); }, { passive: false });
+canvas.addEventListener('wheel', e => { e.preventDefault(); const k = ITEM_LIST.indexOf(held), n = ITEM_LIST.length; held = ITEM_LIST[(k + (e.deltaY > 0 ? 1 : -1) + n) % n]; renderBars(); toast(`${LG.ITEMS[held].icon} ${LG.ITEMS[held].name}`, 900); }, { passive: false });
+document.addEventListener('pointerlockchange', () => { if (locked()) { aiming = null; closeCtx(); } $('#cross').hidden = !locked(); $('#lockHint').hidden = locked(); });
+// Ce que je vise au centre de l'écran (souris capturée)
+setInterval(() => {
+  if (!locked()) { $('#aimName').hidden = true; return; }
+  const n = aimed();
+  if (n !== hover) { if (hover && hover !== ctxWho) view.mark(hover, null); hover = n; if (n) view.mark(n, 'hover'); }
+  $('#cross').classList.toggle('on', !!n);
+  $('#aimName').hidden = !n; if (n) $('#aimName').textContent = `${n} · clic : ${LG.ITEMS[held].icon} · F : accuser${S?.phase === 'vote' ? ' · V : voter' : ''} · clic droit : menu`;
+}, 100);
 addEventListener('keydown', e => {
   if (e.target.closest?.('input, select, textarea')) { if (e.key === 'Escape') e.target.blur(); return; }
   if (e.key === 'Escape') { closeCtx(); aiming = null; renderBars(); $('#roleCard').hidden = true; return; }
@@ -464,6 +503,8 @@ addEventListener('keydown', e => {
   const d = /^(Digit|Numpad)(\d)$/.exec(e.code);
   if (d) { const k = (Number(d[2]) + 9) % 10; if (EMOTE_LIST[k]) { audio(); doEmote(EMOTE_LIST[k]); } }
   if (e.code === 'KeyE') toggleSit();
+  if (e.code === 'KeyF') { const n = locked() ? aimed() : hover; if (n) doEmote('pointer', n); }
+  if (e.code === 'KeyV' && S?.phase === 'vote') { const n = locked() ? aimed() : hover; if (n) castVote(n); }
 });
 addEventListener('keyup', e => keys.delete(e.code));
 addEventListener('blur', () => keys.clear());
@@ -509,49 +550,50 @@ function frame(t0) {
   requestAnimationFrame(frame);
   const dt = Math.min(0.1, (t0 - last) / 1000); last = t0;
   const t = t0 / 1000, s = ui.room, list = [];
-  const wide = innerWidth > 820;
+  const wide = innerWidth > 820, c = view.cam;
   if (!s) {
-    // Accueil : mon villageois devant la fontaine
-    list.push({ name: PREVIEW, x: 0, z: 8.6, ry: 0, visible: true, color: '#e8b84a' });
-    view.cam.want.set(wide ? -1.5 : 0, wide ? 1.15 : 1.55, 8.6); view.cam.wantDist = (wide ? 5.4 : 6.4) * zoom;
-    if (!drag) view.cam.yaw += (0 - view.cam.yaw) * dt * 0.8;
+    // Accueil : mon villageois au milieu de la place, vu de face
+    list.push({ name: PREVIEW, x: 0, z: 3, ry: 0, visible: true, color: '#e8b84a' });
+    c.mode = 'show'; c.want.set(wide ? -1.5 : 0, wide ? 1.1 : 1.5, 3); c.wantDist = wide ? 5 : 6.2;
+    if (!drag) { c.showYaw += (0 - c.showYaw) * dt * 0.8; c.showPitch += (0.1 - c.showPitch) * dt * 0.8; }
+    fpKey = '';
   } else if (!inGame(s)) {
-    // Salon : tout le monde debout autour de la fontaine
-    s.players.forEach((p, k) => { const st = LG.SEATS[k]; list.push({ name: p.name, x: st.x * 0.86, z: st.z * 0.86, ry: st.ry, visible: true, color: p.color, bot: p.bot }); });
-    const my = Math.max(0, s.players.findIndex(p => p.name === s.me)), st = LG.SEATS[my];
-    if (!drag && screen === 'room' && !view.cam.userYaw) view.cam.yaw = Math.atan2(st.x, st.z) + Math.sin(t * 0.1) * 0.25;
-    const r = view.cam.yaw;
-    view.cam.want.set(wide ? -Math.cos(r) * 3.4 : 0, 1.2, wide ? Math.sin(r) * 3.4 : 0); view.cam.wantDist = 14 * zoom;
+    // Salon : tout le monde debout en cercle ; je vois par mes yeux
+    s.players.forEach((p, k) => { const st = LG.SEATS[k]; list.push({ name: p.name, x: st.x * 0.86, z: st.z * 0.86, ry: st.ry, visible: p.name !== s.me, color: p.color, bot: p.bot }); });
+    const st = LG.SEATS[Math.max(0, s.players.findIndex(p => p.name === s.me))];
+    if (s.spectator) floatGhost(s, dt); else { c.mode = 'fp'; c.eye.set(st.x * 0.86, 1.45, st.z * 0.86); }
+    faceCenter(`salon${s.code}`, st);
   } else {
-    const night = s.phase === 'night';
+    const night = s.phase === 'night', live = alive(s, s.me) && !s.spectator;
     // Moi, quand je me promène
     if (me && s.phase === 'day') {
-      const k = c => keys.has(c);
+      const k = x => keys.has(x);
       let fwd = (k('KeyW') || k('ArrowUp') ? 1 : 0) - (k('KeyS') || k('ArrowDown') ? 1 : 0) - touch.y;
       let side = (k('KeyD') || k('ArrowRight') ? 1 : 0) - (k('KeyA') || k('ArrowLeft') ? 1 : 0) + touch.x;
       const l = Math.hypot(fwd, side);
       if (l > 0.1) {
         fwd /= Math.max(1, l); side /= Math.max(1, l);
-        const y = view.cam.yaw, fx = -Math.sin(y), fz = -Math.cos(y), sp = (k('ShiftLeft') || k('ShiftRight') || touch.run ? LG.RUN : LG.SPEED) * dt;
+        const y = c.yaw, fx = -Math.sin(y), fz = -Math.cos(y), run = k('ShiftLeft') || k('ShiftRight') || touch.run, sp = (run ? LG.RUN : LG.SPEED) * dt;
         const vx = (fx * fwd - fz * side) * sp, vz = (fz * fwd + fx * side) * sp;
-        me.x += vx; me.z += vz; me.ry = Math.atan2(vx, vz); me.sit = -1;
+        me.x += vx; me.z += vz; me.sit = -1; me.bob = (me.bob ?? 0) + dt * (run ? 13 : 9);
         LG.collide(me);
       }
+      if (me.sit < 0) me.ry = c.yaw + Math.PI; // mon corps suit mon regard
       sendPos();
     }
     for (const p of s.players) {
       const mine = p.name === s.me && me && s.phase === 'day';
       const r = mine ? me : remoteAt(p.name, now() - 0.1) ?? { ...seatOf(s, p.name), sit: s.seats?.[p.name] };
-      list.push({ name: p.name, x: r.x, z: r.z, ry: r.ry, seated: r.sit >= 0 && alive(s, p.name), ghost: !alive(s, p.name), visible: !night, color: p.color, bot: p.bot });
+      list.push({ name: p.name, x: r.x, z: r.z, ry: r.ry, seated: r.sit >= 0 && alive(s, p.name), ghost: !alive(s, p.name), visible: !night && p.name !== s.me, color: p.color, bot: p.bot });
     }
-    // Caméra selon le moment
-    const c = view.cam, focus = n => { const o = list.find(x => x.name === n); return o ? [o.x, o.z] : [0, 0]; };
-    if (night) { c.yaw += dt * 0.035; c.want.set(0, 2.5, 0); c.wantDist = 32 * zoom; c.pitch += (0.42 - c.pitch) * dt * 0.5; }
-    else if (me && s.phase === 'day') { c.want.set(me.x, 1.35, me.z); c.wantDist = 7.5 * zoom; }
-    else if (s.phase === 'verdict' && s.verdict?.name) { const [x, z] = focus(s.verdict.name); c.want.set(x, 1.3, z); c.wantDist = 7 * zoom; }
-    else if (s.phase === 'hunter' && s.hunter) { const [x, z] = focus(s.shot?.who ?? s.hunter); c.want.set(x, 1.3, z); c.wantDist = 8 * zoom; }
-    else if (s.phase === 'dawn' && s.deaths?.length) { const [x, z] = focus(s.deaths[0].name); c.want.set(x, 1.4, z); c.wantDist = 9 * zoom; }
-    else { c.want.set(0, 1.1, 0); c.wantDist = 13.5 * zoom; if (s.spectator || !alive(s, s.me)) c.yaw += dt * 0.03; }
+    // Mes yeux : là où je marche, ou assis à ma place ; fantôme ou spectateur : je flotte au-dessus du village
+    if (me && s.phase === 'day') { c.mode = 'fp'; c.eye.set(me.x, me.sit >= 0 ? 1.12 : 1.46 + Math.sin(me.bob ?? 0) * 0.025, me.z); }
+    else if (live) { const r = remoteAt(s.me, now() - 0.1) ?? seatOf(s, s.me); c.mode = 'fp'; c.eye.set(r.x, 1.12, r.z); }
+    else floatGhost(s, dt);
+    // Le regard se tourne tout seul vers ce qui se passe (sauf si je bouge la souris)
+    const focus = s.phase === 'verdict' ? s.verdict?.name : s.phase === 'hunter' ? (s.shot?.who ?? s.hunter) : s.phase === 'dawn' ? s.deaths?.[0]?.name : null;
+    if (focus && focus !== s.me && now() - lookAt > 1.5) lookToward(focus, dt);
+    $('#veil').classList.toggle('sleep', night && live && s.role !== 'loup' && $('#actionCard').hidden);
     hud(s, t);
   }
   // Vitesse de chacun (pour l'animation de marche)
@@ -567,7 +609,28 @@ function frame(t0) {
   if (sound() && t > ambientAt) { ambientAt = t + 2 + Math.random() * 5; const k = view.env.k; if (k < 0.45) SFX.chirp(); else if (k > 0.8) (Math.random() < 0.15 ? SFX.owl : SFX.cricket)(); }
   if (!loaded) { loaded = true; $('#loading').classList.add('done'); }
 }
-let loaded = false;
+let loaded = false, fpKey = '';
+// Regarder vers le centre de la place depuis sa place (une fois, en arrivant)
+function faceCenter(key, st) { if (fpKey === key) return; fpKey = key; view.cam.yaw = Math.atan2(st.x, st.z); view.cam.pitch = -0.08; }
+// Tourner la tête vers quelqu'un, en douceur
+function lookToward(n, dt) {
+  const h = view.headAt(n); if (!h) return;
+  const c = view.cam, dx = h.x - c.eye.x, dy = h.y - 0.6 - c.eye.y, dz = h.z - c.eye.z;
+  let dyaw = Math.atan2(-dx, -dz) - c.yaw; dyaw = Math.atan2(Math.sin(dyaw), Math.cos(dyaw));
+  const f = Math.min(1, dt * 2.5);
+  c.yaw += dyaw * f; c.pitch += (clampP(Math.atan2(dy, Math.hypot(dx, dz))) - c.pitch) * f;
+}
+// Fantôme ou spectateur : on flotte librement au-dessus de la place (ZQSD, Espace pour monter, C pour descendre)
+function floatGhost(s, dt) {
+  const c = view.cam;
+  if (!ghost) { const st = seatOf(s, s.me) ?? { x: 0, z: 9 }; ghost = { x: st.x * 1.2, z: st.z * 1.2, y: 2.6 }; c.yaw = Math.atan2(ghost.x, ghost.z); c.pitch = -0.2; }
+  const k = x => keys.has(x), fwd = (k('KeyW') || k('ArrowUp') ? 1 : 0) - (k('KeyS') || k('ArrowDown') ? 1 : 0) - touch.y, side = (k('KeyD') || k('ArrowRight') ? 1 : 0) - (k('KeyA') || k('ArrowLeft') ? 1 : 0) + touch.x;
+  const y = c.yaw, fx = -Math.sin(y), fz = -Math.cos(y), sp = 5 * dt;
+  ghost.x += (fx * fwd - fz * side) * sp; ghost.z += (fz * fwd + fx * side) * sp;
+  ghost.y = Math.max(0.8, Math.min(8, ghost.y + ((k('Space') ? 1 : 0) - (k('KeyC') ? 1 : 0)) * sp));
+  const d = Math.hypot(ghost.x, ghost.z); if (d > 30) { ghost.x *= 30 / d; ghost.z *= 30 / d; }
+  c.mode = 'fp'; c.eye.set(ghost.x, ghost.y + Math.sin(performance.now() / 900) * 0.05, ghost.z);
+}
 const PHASE = {
   reveal: s => ['🃏', 'Les rôles sont distribués', 'Regarde bien ta carte…'],
   night: s => ['🌙', `Nuit ${s.dayNo}`, s.step === 'witch' ? 'La sorcière se réveille' : 'Les loups-garous choisissent leur victime'],
@@ -593,7 +656,6 @@ function hud(s, t) {
   $('#rushBtn').classList.toggle('on', s.ready.includes(s.me));
   $('#actions').classList.toggle('off', !socialOk());
 }
-view.cam.userYaw = false;
 if (location.hostname === 'localhost') window.lg = { view, look: v => { look = v; lookChanged(); } }; // pour les captures de test
 requestAnimationFrame(frame);
 show('home');

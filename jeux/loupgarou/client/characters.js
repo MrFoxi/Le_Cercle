@@ -26,7 +26,7 @@ const live = m => ((m.userData.live = true), m);
 
 // Contour encré : la même forme, gonflée le long des normales, vue de l'intérieur.
 const OUTLINE = new THREE.MeshBasicMaterial({ color: '#2a170f', side: THREE.BackSide });
-OUTLINE.onBeforeCompile = sh => { sh.vertexShader = sh.vertexShader.replace('#include <begin_vertex>', 'vec3 transformed = position + normal * 0.016;'); };
+OUTLINE.onBeforeCompile = sh => { sh.vertexShader = sh.vertexShader.replace('#include <begin_vertex>', 'vec3 transformed = position + normal * 0.011;'); };
 
 // Fusionne les pièces fixes d'un membre (une seule pièce par matière) : beaucoup moins d'objets à dessiner.
 function merge(pivot, outlined, outlines) {
@@ -36,7 +36,7 @@ function merge(pivot, outlined, outlines) {
     m.updateMatrix();
     const g = m.geometry.index ? m.geometry.toNonIndexed() : m.geometry.clone();
     g.applyMatrix4(m.matrix);
-    for (const k of Object.keys(g.attributes)) if (k !== 'position' && k !== 'normal') g.deleteAttribute(k);
+    for (const k of Object.keys(g.attributes)) if (!['position', 'normal', 'uv'].includes(k)) g.deleteAttribute(k);
     if (!by.has(m.material)) by.set(m.material, []);
     by.get(m.material).push(g);
     pivot.remove(m);
@@ -49,6 +49,13 @@ function merge(pivot, outlined, outlines) {
   }
 }
 
+// Tissu tissé (relief) et iris des yeux, peints une fois
+const canvasTex = (n, draw, srgb = true) => { const c = document.createElement('canvas'); c.width = c.height = n; draw(c.getContext('2d'), n); const t = new THREE.CanvasTexture(c); if (srgb) t.colorSpace = THREE.SRGBColorSpace; t.wrapS = t.wrapT = THREE.RepeatWrapping; t.anisotropy = 8; return t; };
+const WEAVE = canvasTex(128, (x, n) => { x.fillStyle = '#808080'; x.fillRect(0, 0, n, n); for (let y = 0; y < n; y += 4) for (let k = 0; k < n; k += 4) { x.fillStyle = (y + k) % 8 ? '#a0a0a0' : '#606060'; x.fillRect(k, y, 3, 3); } }, false);
+WEAVE.repeat.set(6, 6);
+const IRIS = canvasTex(128, (x, n) => { const g = x.createRadialGradient(n / 2, n / 2, 4, n / 2, n / 2, n / 2); g.addColorStop(0, '#ffffff'); g.addColorStop(0.6, '#c8c8c8'); g.addColorStop(0.95, '#606060'); g.addColorStop(1, '#202020'); x.fillStyle = g; x.fillRect(0, 0, n, n); for (let k = 0; k < 60; k++) { const a = (k / 60) * TAU; x.strokeStyle = `rgba(0,0,0,${0.15 + Math.random() * 0.2})`; x.beginPath(); x.moveTo(n / 2 + Math.cos(a) * 14, n / 2 + Math.sin(a) * 14); x.lineTo(n / 2 + Math.cos(a) * 58, n / 2 + Math.sin(a) * 58); x.stroke(); } });
+const EYE_COLORS = ['#5a8ac8', '#6a4a2a', '#4a8a5a', '#8a6a3a', '#3a6aa8', '#7a7a8a'];
+
 /* ---------------- Un villageois ---------------- */
 export function makeCharacter(look, color) {
   const [skin, hair, hairC, outfit, outfitC, hat, extra] = look;
@@ -56,13 +63,14 @@ export function makeCharacter(look, color) {
   const dark = (c, k) => '#' + new THREE.Color(c).multiplyScalar(k).getHexString();
   const cloth = LG.LOOK.outfitColor[outfitC], hairCol = LG.LOOK.hairColor[hairC];
   const M = {
-    skin: std(LG.LOOK.skin[skin], { roughness: 0.62 }), hair: std(hairCol, { roughness: 0.6 }), cloth: std(cloth, { roughness: 0.9 }),
-    trim: std(dark(cloth, 0.55)), pants: std('#5b4636', { roughness: 0.95 }), boots: std('#3b2a20', { roughness: 0.7 }),
+    skin: std(LG.LOOK.skin[skin], { roughness: 0.62 }), hair: std(hairCol, { roughness: 0.5 }), cloth: std(cloth, { roughness: 0.92, bumpMap: WEAVE, bumpScale: 1.5 }),
+    trim: std(dark(cloth, 0.55), { bumpMap: WEAVE, bumpScale: 1.2 }), pants: std('#5b4636', { roughness: 0.95, bumpMap: WEAVE, bumpScale: 1.5 }), boots: std('#3b2a20', { roughness: 0.7 }),
     white: std('#ffffff', { roughness: 0.25 }), pupil: std('#1b1311', { roughness: 0.15 }), mouth: std('#6e2320', { roughness: 0.5 }),
     cheek: new THREE.MeshBasicMaterial({ color: '#ff8f8a', transparent: true, opacity: 0.4, depthWrite: false }),
     brow: std(dark(hair === 6 ? '#6b3e22' : hairCol, 0.7)), metal: std('#b9bec7', { metalness: 0.75, roughness: 0.3 }),
     straw: std('#e2c069', { roughness: 1 }), accent: std(color, { roughness: 0.6 }), gold: std('#e0b24a', { metalness: 0.7, roughness: 0.3 }),
-    leaf: std('#5f9e45'), white2: std('#f6f1e6', { roughness: 0.95 }),
+    leaf: std('#5f9e45'), white2: std('#f6f1e6', { roughness: 0.95, bumpMap: WEAVE, bumpScale: 1 }),
+    iris: std(EYE_COLORS[(skin * 3 + hairC * 5 + outfitC) % EYE_COLORS.length], { map: IRIS, roughness: 0.15 }), button: std('#d8c8a0', { roughness: 0.5 }),
   };
   const outlined = new Set([M.skin, M.hair, M.cloth, M.trim, M.pants, M.boots, M.straw, M.metal, M.accent]);
   const outlines = [];
@@ -88,6 +96,7 @@ export function makeCharacter(look, color) {
   put(torso, G.torus(0.225, 0.026), M.trim, 0, robe ? 0.18 : 0.12, 0, Math.PI / 2);
   put(torso, G.box(0.07, 0.06, 0.03), M.gold, 0, robe ? 0.18 : 0.12, 0.235);
   put(torso, G.torus(0.12, 0.03), M.trim, 0, 0.48, 0, Math.PI / 2);
+  if (outfit !== 1) for (const y of [0.22, 0.32, 0.42]) put(torso, G.sphere(0.018, 8, 6), M.button, 0, y, 0.235 - (y - 0.22) * 0.12);
   if (outfit === 2) { // cape
     put(torso, G.cyl(0.25, 0.36, 0.66, 18, true, Math.PI * 0.62, Math.PI * 0.76), M.trim, 0, 0.16, -0.01);
     put(torso, G.sphere(0.04), M.gold, 0, 0.47, 0.13);
@@ -105,7 +114,8 @@ export function makeCharacter(look, color) {
     const a = new THREE.Group(); a.position.set(side * 0.235, 0.4, 0); torso.add(a);
     put(a, G.capsule(0.07, 0.19), M.cloth, 0, -0.13, 0);
     put(a, G.torus(0.068, 0.018), M.trim, 0, -0.25, 0, Math.PI / 2);
-    put(a, G.sphere(0.084, 14, 10), M.skin, 0, -0.32, 0);
+    put(a, G.sphere(0.084, 18, 14), M.skin, 0, -0.32, 0);
+    put(a, G.capsule(0.028, 0.05), M.skin, -side * 0.055, -0.3, 0.05, 0.4, 0, side * 0.6);
     const finger = live(put(a, G.capsule(0.022, 0.08), M.skin, 0, -0.42, 0));
     finger.visible = false;
     merge(a, outlined, outlines);
@@ -114,7 +124,7 @@ export function makeCharacter(look, color) {
 
   // Tête : grands yeux, sourcils et bouche qui changent selon l'humeur
   const head = new THREE.Group(); head.position.y = 0.5; torso.add(head);
-  put(head, G.sphere(0.3, 28, 20), M.skin, 0, 0.27, 0, 0, 0, 0, 1.04, 0.96, 0.98);
+  put(head, G.sphere(0.3, 40, 30), M.skin, 0, 0.27, 0, 0, 0, 0, 1.04, 0.96, 0.98);
   put(head, G.sphere(0.055), M.skin, 0, 0.22, 0.29);
   for (const s of [1, -1]) put(head, G.sphere(0.065), M.skin, s * 0.295, 0.26, 0, 0, 0, 0, 0.55, 1, 0.9);
   for (const s of [1, -1]) put(head, new THREE.CircleGeometry(0.05, 18), M.cheek, s * 0.17, 0.19, 0.24, 0, s * 0.6, 0);
@@ -122,9 +132,11 @@ export function makeCharacter(look, color) {
   const pupils = [];
   for (const s of [1, -1]) {
     if (extra === 5 && s === -1) { put(head, G.sphere(0.07, 16, 10), M.pupil, s * 0.105, 0.31, 0.25, 0, 0, 0, 1, 1, 0.45); continue; } // cache-œil
-    put(eyes, G.sphere(0.078, 18, 14), M.white, s * 0.105, 0.31, 0.26, 0, 0, 0, 1, 1.18, 0.6);
-    pupils.push(put(eyes, G.sphere(0.045, 14, 10), M.pupil, s * 0.1, 0.3, 0.29, 0, 0, 0, 1, 1.25, 0.6));
-    put(eyes, G.sphere(0.015, 8, 6), M.white, s * 0.085, 0.33, 0.315);
+    put(eyes, G.sphere(0.078, 24, 18), M.white, s * 0.105, 0.31, 0.26, 0, 0, 0, 1, 1.18, 0.6);
+    put(eyes, G.sphere(0.048, 20, 14), M.iris, s * 0.1, 0.3, 0.287, 0, 0, 0, 1, 1.22, 0.5);
+    pupils.push(put(eyes, G.sphere(0.024, 14, 10), M.pupil, s * 0.1, 0.3, 0.305, 0, 0, 0, 1, 1.22, 0.45));
+    put(eyes, G.sphere(0.013, 8, 6), M.white, s * 0.088, 0.325, 0.318);
+    put(eyes, G.sphere(0.006, 6, 4), M.white, s * 0.112, 0.285, 0.318);
   }
   const closed = live(new THREE.Group()); head.add(closed); closed.visible = false;
   for (const s of [1, -1]) if (!(extra === 5 && s === -1)) put(closed, G.torus(0.05, 0.013, Math.PI), M.pupil, s * 0.105, 0.29, 0.285);
@@ -166,7 +178,7 @@ export function makeCharacter(look, color) {
 
   // Anneau à sa couleur sous les pieds, et cylindre invisible pour viser le personnage
   const ring = new THREE.Mesh(new THREE.RingGeometry(0.42, 0.5, 40), new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.55, depthWrite: false }));
-  ring.rotation.x = -Math.PI / 2; ring.position.y = 0.025; root.add(ring);
+  ring.rotation.x = -Math.PI / 2; ring.position.y = 0.085; root.add(ring);
   const hit = new THREE.Mesh(new THREE.CylinderGeometry(0.45, 0.45, 1.8, 10), new THREE.MeshBasicMaterial({ visible: false }));
   hit.position.y = 0.9; root.add(hit);
 
