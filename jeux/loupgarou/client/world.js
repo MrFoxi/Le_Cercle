@@ -871,9 +871,9 @@ export function createWorld(canvas) {
   const sky = new Sky(); sky.scale.setScalar(3000); scene.add(sky);
   const SU = sky.material.uniforms;
   // le ciel physique est très lumineux : on l'atténue pour garder une scène bien exposée sans brume de halo
-  SU.skyGain = { value: 0.32 };
+  SU.skyGain = { value: 0.24 };
   sky.material.fragmentShader = 'uniform float skyGain;' + String.fromCharCode(10) + sky.material.fragmentShader.replace('gl_FragColor = vec4( texColor, 1.0 );', 'gl_FragColor = vec4( texColor * skyGain, 1.0 );');
-  SU.turbidity.value = 4; SU.rayleigh.value = 1.6; SU.mieCoefficient.value = 0.006; SU.mieDirectionalG.value = 0.82;
+  SU.turbidity.value = 4; SU.rayleigh.value = 1.6; SU.mieCoefficient.value = 0.0035; SU.mieDirectionalG.value = 0.82;
   if (SU.cloudCoverage) { SU.cloudCoverage.value = 0.42; SU.cloudDensity.value = 0.5; SU.cloudScale.value = 0.00022; SU.cloudSpeed.value = 0.00003; }
   const nightU = { k: { value: 0 }, time: uTime, moonDir: { value: new THREE.Vector3() } };
   const night = new THREE.Mesh(new THREE.SphereGeometry(2800, 48, 24), new THREE.ShaderMaterial({
@@ -1061,8 +1061,8 @@ export function createWorld(canvas) {
   /* ---------------- Jour et nuit ---------------- */
   // k : 0 plein jour, 0.45 soleil couchant, 0.62 crépuscule, 1 nuit noire.
   const PAL = [
-    { k: 0, el: 48, light: '#fff3e0', li: 3.4, hs: '#cfe4ff', hg: '#6a5a3c', hi: 0.85, exp: 1.0, fog: '#b8cad6', fd: 0.0032, lamp: 0, bloom: 0.15, sat: 1.1 },
-    { k: 0.45, el: 7, light: '#ffb878', li: 3.0, hs: '#ffd2b0', hg: '#5a4050', hi: 0.65, exp: 1.05, fog: '#d8a080', fd: 0.0045, lamp: 0.3, bloom: 0.3, sat: 1.15 },
+    { k: 0, el: 48, light: '#fff3e0', li: 2.3, hs: '#cfe4ff', hg: '#6a5a3c', hi: 0.95, exp: 0.9, fog: '#b8cad6', fd: 0.0032, lamp: 0, bloom: 0.15, sat: 1.1 },
+    { k: 0.45, el: 7, light: '#ffb878', li: 2.1, hs: '#ffd2b0', hg: '#5a4050', hi: 0.7, exp: 0.95, fog: '#d8a080', fd: 0.0045, lamp: 0.3, bloom: 0.3, sat: 1.15 },
     { k: 0.62, el: -1.5, light: '#ff8a5a', li: 1.1, hs: '#8a6aa8', hg: '#2a2030', hi: 0.5, exp: 1.25, fog: '#4a3a5a', fd: 0.007, lamp: 0.8, bloom: 0.5, sat: 1.05 },
     { k: 1, el: -14, light: '#9fb2ff', li: 0.8, hs: '#3a4a90', hg: '#141420', hi: 0.42, exp: 1.5, fog: '#0c1228', fd: 0.01, lamp: 1, bloom: 0.75, sat: 0.95 },
   ];
