@@ -169,6 +169,31 @@ assert(launch(120) > launch(0) * 2, 'éjection bien plus forte à 120 de dégât
   assert.strictEqual(r.world.frame - f0, 3, '50 ms = 3 images');
 }
 
+// Signatures : chaque arme a ses coups légers et son trio de coups lourds ; on les charge en gardant la touche.
+{
+  const M = BR.MOVES.gromm;
+  assert.notDeepStrictEqual(M.marteau.jab.hits[0].w, M.mains.jab.hits[0].w, 'coup léger propre à l’arme');
+  assert(['nHeavy', 'sHeavy', 'dHeavy'].every(k => M.hache[k].sig && M.hache[k].fx), 'signatures avec effet');
+  const hitWith = charge => {
+    const a = BR.fighter('a', 'gromm', [0, 0]), b = BR.fighter('b', 'fenna', [70, 0]);
+    settle(a); settle(b); a.facing = 1;
+    const ev = [];
+    for (let k = 0; k < 160 && !ev.length; k++) { BR.step(a, k === 0 || k < charge ? IN.HEAVY | (k === 0 ? IN.R : 0) : 0, A); BR.step(b, 0, A); BR.resolve([a, b], ev); }
+    assert(ev.length, 'la signature touche');
+    return b.dmg;
+  };
+  assert(hitWith(60) > hitWith(1) * 1.3, 'chargée, elle fait plus mal');
+}
+
+// Coup en plusieurs touches : les gantelets enchaînent leurs trois coups sur la même cible.
+{
+  const a = BR.fighter('a', 'gromm', [0, 0]), b = BR.fighter('b', 'fenna', [60, 0]);
+  settle(a); settle(b); a.facing = 1; a.weapon = 'gantelets';
+  const ev = [];
+  for (let k = 0; k < 60; k++) { BR.step(a, k === 0 ? IN.LIGHT | IN.R : 0, A); BR.step(b, 0, A); BR.resolve([a, b], ev); }
+  assert(ev.length >= 2, `plusieurs touches (${ev.length})`);
+}
+
 // Parties complètes entre robots : chaque manche se termine (un seul debout, ou le temps), la partie aussi.
 for (let game = 0; game < 8; game++) {
   let now = 0;

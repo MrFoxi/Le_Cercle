@@ -28,6 +28,8 @@ const SFX = {
   land: () => noise(0.08, 300, 0.12, 'lowpass'),
   dodge: () => noise(0.2, 2400, 0.08, 'highpass'),
   pound: () => { noise(0.35, 400, 0.4, 'lowpass', 60); blip(90, 40, 0.3, 'sine', 0.3); },
+  sig: fx => { if (fx === 'fire') noise(0.4, 600, 0.35, 'lowpass', 150); if (fx === 'lightning') { noise(0.25, 4000, 0.3, 'highpass'); blip(1200, 200, 0.2, 'sawtooth', 0.08); } if (fx === 'shock') { blip(70, 35, 0.5, 'sine', 0.35); noise(0.4, 300, 0.4, 'lowpass', 60); } if (fx === 'wind') noise(0.35, 1200, 0.2, 'bandpass', 3000); if (fx === 'slash') noise(0.18, 3000, 0.25, 'highpass'); if (fx === 'ice') { blip(2000, 3200, 0.15, 'sine', 0.06); blip(2600, 3800, 0.15, 'sine', 0.05, 0.06); } },
+  charge: () => blip(200, 700, 0.6, 'sawtooth', 0.05),
   ko: () => { noise(0.9, 1200, 0.6, 'lowpass', 80); blip(220, 40, 0.9, 'sawtooth', 0.12); },
   tick: () => blip(660, 660, 0.12, 'square', 0.07),
   go: () => { blip(523, 1046, 0.4, 'square', 0.09); blip(784, 1568, 0.4, 'triangle', 0.06, 0.05); },
@@ -113,6 +115,7 @@ function onEvent(e, me) {
   }
   if (e.t === 'pick') { R.fx.ring(e.x, e.y - 20, '#ffe07a', 10, 260); blip(600, 1200, 0.15, 'triangle', 0.07); if (e.id === me) toast(`${BR.WEAPONS[e.weapon].icon} ${BR.WEAPONS[e.weapon].name} ! (E pour la lancer)`); return; }
   if (e.t === 'throw') { SFX.whoosh(); return; }
+  if (e.t === 'charge') { SFX.charge(); return; }
   if (e.t === 'shot') { blip(900, 300, 0.08, 'square', 0.05); return; }
   if (e.t === 'item') { blip(1200, 1600, 0.2, 'sine', 0.05); return; }
   if (e.t === 'ledge' || e.t === 'climb') { if (e.id !== me) R.fx.dust(e.x, e.y, 4); return; }
@@ -122,6 +125,7 @@ function onEvent(e, me) {
     if (e.combo > 1) R.fx.combo(e.x, e.y, e.combo, P[e.a]?.color ?? '#ffffff');
     if (e.big) { R.fx.focus(e.x, e.y); SFX.ko(); }
     SFX.hit(e.heavy);
+    if (e.fx) SFX.sig(e.fx);
     flashes[e.b] = 1;
     const card = cards[e.b]; if (card) { card.classList.remove('shake'); void card.offsetWidth; card.classList.add('shake'); }
     return;

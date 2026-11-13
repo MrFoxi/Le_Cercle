@@ -56,6 +56,7 @@ function poseOf(f, t) {
   if (f.state === 'hitstun') { const w = t * 30; return P({ lF: [Math.sin(w) * 40 - 20, 40], lB: [Math.cos(w) * 40 + 20, 50], aF: [140 + Math.sin(w * 1.3) * 30, 30], aB: [-120 + Math.cos(w) * 30, 30], lean: -20, face: 'hurt', tumble: true }); }
   if (f.state === 'attack' && MOVE_POSES[f.move]) {
     const m = BR.movesOf(f)[f.move], h = m.hits[0], P2 = MOVE_POSES[f.move], mt = f.mt;
+    if (f.charge > 0 && mt <= 1) { const W = mix(BASE, P2.W, 1), k = Math.sin(t * 60) * Math.min(1, f.charge / 20) * 3; return { ...W, lean: W.lean + k, bob: W.bob + 4 }; }
     if (mt < h.s) return mix(BASE, P2.W, ease(clamp(mt / Math.max(1, h.s), 0, 1)));
     if (mt <= h.e || m.pound) return mix(P2.W, P2.K, ease(clamp((mt - h.s + 1) / 2.5, 0, 1)));
     return mix(P2.K, BASE, ease(clamp((mt - h.e) / Math.max(1, m.f - h.e), 0, 1)));
@@ -90,7 +91,8 @@ export function drawFighter(c, f, t, o = {}) {
   // vol plané : le corps tourne avec la vitesse
   let spin = 0;
   if (p.tumble) spin = (f.spinA ?? 0);
-  if (p.spin && f.state === 'attack') { const m = BR.movesOf(f)[f.move], h = m.hits[0]; spin = clamp((f.mt - h.s) / Math.max(1, h.e - h.s), 0, 1) * TAU; }
+  const mv = f.state === 'attack' ? BR.movesOf(f)[f.move] : null;
+  if ((p.spin || mv?.spin) && mv) { const h0 = mv.hits[0], h1 = mv.hits.at(-1); spin = clamp((f.mt - h0.s) / Math.max(1, h1.e - h0.s), 0, 1) * TAU * (mv.hits.length > 2 ? 3 : 1); }
   c.scale(f.facing, 1);
   const hipY = -40 + p.bob;
   c.translate(0, hipY);
@@ -283,6 +285,12 @@ export function createRenderer(canvas) {
   const cam = { x: 0, y: -150, z: 0.8 };
   const fx = {
     hit(e, colA) {
+      if (e.fx) {
+        const col = FXC[e.fx];
+        for (let k = 0; k < 30; k++) { const a = Math.random() * TAU, s = 6 + Math.random() * 12; parts.push(e.fx === 'fire' ? { k: 'flame', x: e.x, y: e.y, vx: Math.cos(a) * s * 0.5, vy: Math.sin(a) * s * 0.5 - 1, r: 10 + Math.random() * 10, life: 0.5, max: 0.5 } : e.fx === 'shock' ? { k: 'rock', x: e.x, y: e.y, vx: Math.cos(a) * s * 0.6, vy: -Math.abs(Math.sin(a) * s), r: 4 + Math.random() * 6, life: 0.8, max: 0.8, rot: a } : { k: 'spark', x: e.x, y: e.y, vx: Math.cos(a) * s, vy: Math.sin(a) * s, life: 0.4, max: 0.4, c: col, w: 7 }); }
+        parts.push({ k: 'ring', x: e.x, y: e.y, r: 14, vr: 700, life: 0.35, max: 0.35, c: col });
+        flash = Math.max(flash, e.fx === 'lightning' ? 0.25 : 0.08);
+      }
       const n = e.heavy ? 22 : 12;
       for (let k = 0; k < n; k++) { const a = rnd() * TAU, s = (e.heavy ? 9 : 6) * (0.5 + rnd()); parts.push({ k: 'spark', x: e.x, y: e.y, vx: Math.cos(a) * s, vy: Math.sin(a) * s, life: 0.3 + rnd() * 0.2, max: 0.5, c: k % 3 ? '#fff3a0' : colA }); }
       parts.push({ k: 'ring', x: e.x, y: e.y, r: 8, vr: e.heavy ? 520 : 320, life: 0.25, max: 0.25, c: '#ffffff' });
@@ -312,6 +320,57 @@ export function createRenderer(canvas) {
 
   // Une image : caméra qui cadre tout le monde, décor en couches, combattants, effets.
   let gulls = Array.from({ length: 5 }, () => ({ x: rnd() * 2000 - 1000, y: -500 - rnd() * 250, s: 0.6 + rnd() * 0.5, v: 30 + rnd() * 30 }));
+  // Effets des coups lourds signatures, dessinés là où le coup est actif (identiques pour tous les joueurs).
+  const FXC = { fire: '#ff8a2a', wind: '#7ff0e0', slash: '#ffffff', shock: '#e8c890', lightning: '#bfe6ff', ice: '#9fdcff' };
+  function moveFx(f, t) {
+    for (const [x0, y0, x1, y1, h] of BR.activeHits(f)) {
+      if (!h.fx) continue;
+      const cx = (x0 + x1) / 2, cy = (y0 + y1) / 2, w = x1 - x0, hh = y1 - y0, col = FXC[h.fx];
+      c.save(); c.globalCompositeOperation = 'lighter';
+      if (h.fx === 'slash') {
+        const r = Math.max(w, hh) * 0.65, a0 = f.facing > 0 ? -1.3 : Math.PI - 1.3;
+        for (let k = 0; k < 4; k++) { c.strokeStyle = `rgba(255,255,255,${0.75 - k * 0.17})`; c.lineWidth = 18 - k * 4; c.beginPath(); c.arc(f.x, cy, r - k * 9, a0 + k * 0.08, a0 + 2.6 - k * 0.08); c.stroke(); }
+        if (Math.random() < 0.6) parts.push({ k: 'spark', x: cx + (Math.random() - 0.5) * w, y: cy + (Math.random() - 0.5) * hh, vx: f.facing * 6, vy: (Math.random() - 0.5) * 3, life: 0.25, max: 0.25, c: '#ffffff' });
+      }
+      if (h.fx === 'wind') {
+        for (let k = 0; k < 4; k++) { c.strokeStyle = `rgba(127,240,224,${0.6 - k * 0.12})`; c.lineWidth = 6 - k; c.beginPath(); c.ellipse(cx, cy, (w / 2) * (0.55 + k * 0.15), (hh / 2) * (0.3 + k * 0.2), 0, t * 14 + k, t * 14 + k + 3.6); c.stroke(); }
+        if (Math.random() < 0.5) parts.push({ k: 'leafy', x: cx + (Math.random() - 0.5) * w, y: cy + hh / 2, vx: (Math.random() - 0.5) * 6, vy: -4 - Math.random() * 4, life: 0.5, max: 0.5, c: col, r: 3 });
+      }
+      if (h.fx === 'fire') {
+        const g = c.createRadialGradient(cx, cy, 0, cx, cy, Math.max(w, hh) * 0.6); g.addColorStop(0, 'rgba(255,240,170,.7)'); g.addColorStop(0.4, 'rgba(255,130,40,.45)'); g.addColorStop(1, 'rgba(255,60,20,0)');
+        c.fillStyle = g; c.beginPath(); c.arc(cx, cy, Math.max(w, hh) * 0.6, 0, TAU); c.fill();
+        for (let k = 0; k < 3; k++) parts.push({ k: 'flame', x: cx + (Math.random() - 0.5) * w * 0.8, y: cy + (Math.random() - 0.3) * hh * 0.8, vx: (Math.random() - 0.5) * 2, vy: -3 - Math.random() * 3, r: 8 + Math.random() * 10, life: 0.45, max: 0.45 });
+      }
+      if (h.fx === 'shock') {
+        c.strokeStyle = 'rgba(255,230,180,.8)'; c.lineWidth = 8; c.beginPath(); c.ellipse(cx, y1, w * 0.55, hh * 0.7, 0, Math.PI, TAU); c.stroke();
+        c.strokeStyle = 'rgba(255,200,120,.4)'; c.lineWidth = 16; c.beginPath(); c.ellipse(cx, y1, w * 0.75, hh * 0.9, 0, Math.PI, TAU); c.stroke();
+        if (Math.random() < 0.7) parts.push({ k: 'rock', x: cx + (Math.random() - 0.5) * w, y: y1 - 4, vx: (Math.random() - 0.5) * 5, vy: -5 - Math.random() * 6, r: 4 + Math.random() * 6, life: 0.7, max: 0.7, rot: Math.random() * 6 });
+        if (Math.random() < 0.5) parts.push({ k: 'dust', x: cx, y: y1 - 4, vx: (Math.random() - 0.5) * 3, vy: -1, r: 10, life: 0.5, max: 0.5, c: 'rgba(240,220,190,' });
+      }
+      if (h.fx === 'lightning') {
+        for (let k = 0; k < 3; k++) { c.strokeStyle = k ? 'rgba(160,210,255,.6)' : '#ffffff'; c.lineWidth = k ? 7 : 3; c.beginPath(); let x = x0 + Math.random() * w, y = y0; c.moveTo(x, y); while (y < y1) { y += 14 + Math.random() * 14; x += (Math.random() - 0.5) * 30; c.lineTo(x, y); } c.stroke(); }
+        const g = c.createRadialGradient(cx, cy, 0, cx, cy, Math.max(w, hh) * 0.7); g.addColorStop(0, 'rgba(190,230,255,.45)'); g.addColorStop(1, 'rgba(120,180,255,0)'); c.fillStyle = g; c.fillRect(x0 - w, y0 - hh, w * 3, hh * 3);
+      }
+      if (h.fx === 'ice') {
+        for (let k = 0; k < 5; k++) { const sx = x0 + (k + 0.5) * (w / 5), sh = hh * (0.6 + ((k * 37) % 5) / 10); c.fillStyle = k % 2 ? 'rgba(170,225,255,.85)' : 'rgba(230,248,255,.9)'; c.beginPath(); c.moveTo(sx - 9, y1); c.lineTo(sx, y1 - sh); c.lineTo(sx + 9, y1); c.closePath(); c.fill(); }
+        if (Math.random() < 0.5) parts.push({ k: 'spark', x: cx, y: y1 - hh * 0.5, vx: (Math.random() - 0.5) * 6, vy: -3, life: 0.3, max: 0.3, c: '#dff6ff' });
+      }
+      c.restore();
+    }
+  }
+  // Pendant la charge : une aura qui grossit et des étincelles qui convergent.
+  function chargeAura(f, t) {
+    if (f.state !== 'attack' || !(f.charge > 0) || f.mt > 1) return;
+    const k = Math.min(1, f.charge / 45), col = FXC[BR.movesOf(f)[f.move]?.fx] ?? '#ffffff', cx = f.x, cy = f.y - 48;
+    c.save(); c.globalCompositeOperation = 'lighter';
+    const r = 48 + k * 46 + Math.sin(t * 24) * 5, g = c.createRadialGradient(cx, cy, 0, cx, cy, r);
+    g.addColorStop(0, col + '00'); g.addColorStop(0.6, col + '55'); g.addColorStop(1, col + '00');
+    c.fillStyle = g; c.beginPath(); c.arc(cx, cy, r, 0, TAU); c.fill();
+    c.strokeStyle = col; c.globalAlpha = 0.4 + k * 0.5; c.lineWidth = 3 + k * 4; c.beginPath(); c.arc(cx, cy, r * 0.85, t * 6, t * 6 + TAU * k); c.stroke();
+    c.restore();
+    if (Math.random() < 0.6) { const a = Math.random() * TAU; parts.push({ k: 'spark', x: cx + Math.cos(a) * 90, y: cy + Math.sin(a) * 90, vx: -Math.cos(a) * 5, vy: -Math.sin(a) * 5, life: 0.25, max: 0.25, c: col }); }
+    if (k >= 1 && Math.random() < 0.3) parts.push({ k: 'star', x: cx + (Math.random() - 0.5) * 30, y: cy - 50, r: 14, life: 0.1, max: 0.1, c: '#ffffff' });
+  }
   function draw(list, dt, t, colors, items = [], shots = []) {
     // caméra
     const live = list.filter(f => f.state !== 'out' && f.state !== 'dead');
@@ -361,7 +420,8 @@ export function createRenderer(canvas) {
       c.restore();
     }
     for (const [, kind, sx, sy, svx, svy, sw, spin] of shots) {
-      if (kind === 'balle') { c.save(); c.globalCompositeOperation = 'lighter'; c.strokeStyle = '#ffe07a'; c.lineWidth = 6; c.beginPath(); c.moveTo(sx, sy); c.lineTo(sx - svx * 2.2, sy - svy * 2.2); c.stroke(); c.fillStyle = '#ffffff'; c.beginPath(); c.arc(sx, sy, 4, 0, TAU); c.fill(); c.restore(); }
+      if (kind === 'boulet') { c.save(); c.globalCompositeOperation = 'lighter'; const g = c.createRadialGradient(sx, sy, 0, sx, sy, 26); g.addColorStop(0, '#fff6c0'); g.addColorStop(0.4, 'rgba(255,140,40,.8)'); g.addColorStop(1, 'rgba(255,60,0,0)'); c.fillStyle = g; c.beginPath(); c.arc(sx, sy, 26, 0, TAU); c.fill(); c.restore(); parts.push({ k: 'flame', x: sx, y: sy, vx: -svx * 0.1, vy: -1, r: 12, life: 0.35, max: 0.35 }); }
+      else if (kind === 'balle') { c.save(); c.globalCompositeOperation = 'lighter'; c.strokeStyle = '#ffe07a'; c.lineWidth = 6; c.beginPath(); c.moveTo(sx, sy); c.lineTo(sx - svx * 2.2, sy - svy * 2.2); c.stroke(); c.fillStyle = '#ffffff'; c.beginPath(); c.arc(sx, sy, 4, 0, TAU); c.fill(); c.restore(); }
       else { c.save(); c.translate(sx, sy); drawWeapon(c, sw, { x: 0, y: -30, a: spin * 57.3 }); c.restore(); }
     }
     // ombres au sol et combattants
@@ -374,7 +434,9 @@ export function createRenderer(canvas) {
       if (f.state === 'dodge') c.globalAlpha = 0.6;
       // anneau à la couleur du joueur
       c.strokeStyle = col; c.lineWidth = 4; c.beginPath(); c.ellipse(f.x, f.y + 2, 24, 6, 0, 0, TAU); c.stroke();
+      chargeAura(f, t);
       const fo = {}, tip = drawFighter(c, f, t, fo);
+      moveFx(f, t);
       const tr = (trails[f.id] ??= []);
       if (tip && f.state === 'attack') { tr.push({ ...tip, t }); if (tr.length > 8) tr.shift(); } else tr.length = 0;
       c.globalAlpha = 1;
@@ -390,6 +452,9 @@ export function createRenderer(canvas) {
       if (p.k === 'spark') { p.x += p.vx * dt * 60; p.y += p.vy * dt * 60; p.vx *= 0.9; p.vy *= 0.9; c.strokeStyle = p.c; c.globalAlpha = a; c.lineWidth = (p.w ?? 4) * a + 1; c.beginPath(); c.moveTo(p.x, p.y); c.lineTo(p.x - p.vx * 2, p.y - p.vy * 2); c.stroke(); }
       if (p.k === 'ring') { p.r += p.vr * dt; c.strokeStyle = p.c; c.globalAlpha = a; c.lineWidth = 6 * a; c.beginPath(); c.arc(p.x, p.y, p.r, 0, TAU); c.stroke(); }
       if (p.k === 'star') { c.fillStyle = p.c; c.globalAlpha = a; c.beginPath(); for (let k = 0; k < 16; k++) { const r = k % 2 ? p.r * 0.35 : p.r; c.lineTo(p.x + Math.cos((k / 16) * TAU) * r, p.y + Math.sin((k / 16) * TAU) * r); } c.fill(); }
+      if (p.k === 'flame') { p.x += p.vx; p.y += p.vy; p.r *= 0.96; c.save(); c.globalCompositeOperation = 'lighter'; const g = c.createRadialGradient(p.x, p.y, 0, p.x, p.y, p.r); g.addColorStop(0, `rgba(255,240,170,${a})`); g.addColorStop(0.5, `rgba(255,120,30,${a * 0.7})`); g.addColorStop(1, 'rgba(255,50,0,0)'); c.fillStyle = g; c.beginPath(); c.arc(p.x, p.y, p.r, 0, TAU); c.fill(); c.restore(); }
+      if (p.k === 'rock') { p.x += p.vx; p.y += p.vy; p.vy += 0.5; p.rot += 0.2; c.save(); c.translate(p.x, p.y); c.rotate(p.rot); c.fillStyle = '#8a7058'; c.strokeStyle = INK; c.lineWidth = 2; c.globalAlpha = Math.min(1, a * 2); c.beginPath(); c.moveTo(-p.r, -p.r * 0.4); c.lineTo(-p.r * 0.2, -p.r); c.lineTo(p.r, -p.r * 0.3); c.lineTo(p.r * 0.6, p.r); c.lineTo(-p.r * 0.7, p.r * 0.7); c.closePath(); c.fill(); c.stroke(); c.restore(); }
+      if (p.k === 'leafy') { p.x += p.vx; p.y += p.vy; c.fillStyle = p.c; c.globalAlpha = a; c.beginPath(); c.arc(p.x, p.y, p.r, 0, TAU); c.fill(); }
       if (p.k === 'dust') { p.x += p.vx; p.y += p.vy; p.r += dt * 18; c.fillStyle = p.c + (0.6 * a) + ')'; c.globalAlpha = 1; c.beginPath(); c.arc(p.x, p.y, p.r, 0, TAU); c.fill(); }
       if (p.k === 'ghost') { c.globalAlpha = a * 0.5; drawFighter(c, p.f, t); }
       if (p.k === 'streak') { c.strokeStyle = p.c; c.globalAlpha = a * 0.8; c.lineWidth = 5 * a; c.beginPath(); c.moveTo(p.x, p.y); c.lineTo(p.x - p.vx * 3, p.y - p.vy * 3); c.stroke(); }

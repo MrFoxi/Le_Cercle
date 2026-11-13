@@ -13,6 +13,8 @@
   const IN = { L: 1, R: 2, U: 4, D: 8, JUMP: 16, LIGHT: 32, HEAVY: 64, DODGE: 128, PICK: 256 };
   const HW = 22, HH = 86; // demi-largeur et hauteur du corps (pieds en y)
   const BUFMASK = IN.JUMP | IN.LIGHT | IN.HEAVY | IN.DODGE | IN.PICK;
+  const CHARGE = 45; // images de charge au plus
+  const chargeK = f => 1 + ((f.charge ?? 0) / CHARGE) * 0.45;
 
   /* ---------------- Arène ---------------- */
   const ARENAS = {
@@ -52,25 +54,112 @@
     return m;
   }
 
-  /* ---------------- Armes ---------------- */
-  // Chaque famille change la vitesse, la force, la portée et parfois la forme des coups.
+  /* ---------------- Armes : des coups légers propres à chacune ---------------- */
+  // hit(s, e, x, y, l, h, dégâts, recul, croissance, dx, dy, options) ; options : g (coup en plusieurs touches : un groupe
+  // par touche), move (la boîte avance de n px par image), fx (effet : feu, vent, taille, onde, foudre, glace), both, shot.
   const WEAPONS = {
-    epee: { name: 'Épée', icon: '🗡️', k: { spd: 0.92, pow: 1.05, reach: 1.3 } },
-    lance: { name: 'Lance', icon: '🔱', k: { spd: 1.08, pow: 1.0, reach: 1.6 }, tweak: m => { m.sLight.vel = [[2, 13, null]]; } },
-    pistolets: {
-      name: 'Pistolets', icon: '🔫', k: { spd: 0.95, pow: 0.95, reach: 1 },
-      tweak: (m, hit) => {
-        const shot = (s, dx, dy) => hit(s, s, 30, -60, 14, 10, 4, 2.6, 0.02, dx, dy, { shot: { speed: 17, life: 32 } });
-        m.jab.hits = [shot(5, 1, -0.15)]; m.sLight = { f: 26, vel: [[2, -4, null]], hits: [shot(6, 1, -0.2), shot(12, 1, -0.2)] };
-        m.sAir.hits = [shot(6, 1, 0)]; m.nAir.hits = [shot(6, 1, 0), shot(6, -1, 0)];
-        m.dAir.hits = [hit(7, 7, 0, 10, 14, 10, 5, 3, 0.03, 0, 1, { shot: { speed: 17, life: 26, down: true } })];
-      },
-    },
-    marteau: { name: 'Marteau', icon: '🔨', k: { spd: 1.25, pow: 1.5, reach: 1.35 } },
-    hache: { name: 'Hache', icon: '🪓', k: { spd: 1.12, pow: 1.3, reach: 1.3, lift: -0.35 } },
-    gantelets: { name: 'Gantelets', icon: '🥊', k: { spd: 0.8, pow: 0.9, reach: 1.05 }, tweak: (m, hit) => { m.jab.hits = [hit(3, 7, 50, -56, 70, 34, 3.5, 2, 0.01, 1, -0.2), hit(10, 15, 54, -56, 74, 34, 4.5, 3.6, 0.03, 1, -0.4)]; m.jab.f = 24; } },
+    epee: { name: 'Épée', icon: '🗡️', k: { spd: 0.92, pow: 1.05 }, lights: (hit, T) => ({
+      jab: { f: T(20), hits: [hit(3, 7, 60, -58, 90, 30, 4, 3, 0.02, 1, -0.3, { g: 0 }), hit(9, 13, 60, -50, 90, 30, 4, 3.4, 0.03, 1, -0.35, { g: 1 })] },
+      sLight: { f: T(26), vel: [[3, 13, null]], hits: [hit(5, 13, 70, -52, 110, 30, 7, 4, 0.045, 1, -0.3)] },
+      dLight: { f: T(28), vel: [[2, 12, null]], hits: [hit(4, 14, 60, -12, 120, 22, 6, 4.5, 0.035, 0.5, -1)] },
+      nAir: { f: T(28), air: true, land: 5, hits: [hit(4, 16, 0, -46, 150, 110, 8, 4, 0.05, 0.6, -0.8, { both: true })] },
+      sAir: { f: T(28), air: true, land: 6, hits: [hit(5, 15, 70, -50, 120, 50, 9, 5, 0.07, 1, -0.25)] },
+      dAir: { f: T(30), air: true, land: 7, vel: [[4, 4, 10]], hits: [hit(5, 18, 30, 0, 70, 50, 9, 5, 0.06, 0.3, 1, { spike: true })] },
+    }) },
+    lance: { name: 'Lance', icon: '🔱', k: { spd: 1.08, pow: 1.0 }, lights: (hit, T) => ({
+      jab: { f: T(24), hits: [hit(5, 12, 100, -58, 150, 24, 6, 3.6, 0.03, 1, -0.25)] },
+      sLight: { f: T(30), vel: [[3, 14, null]], hits: [hit(6, 16, 110, -54, 170, 26, 8, 4.5, 0.05, 1, -0.3)] },
+      dLight: { f: T(30), hits: [hit(6, 15, 90, -10, 180, 22, 7, 4.5, 0.04, 0.6, -1)] },
+      nAir: { f: T(30), air: true, land: 6, hits: [hit(6, 16, 0, -110, 80, 140, 8, 4, 0.05, 0.2, -1)] },
+      sAir: { f: T(30), air: true, land: 6, hits: [hit(6, 16, 100, -46, 170, 26, 9, 5, 0.07, 1, -0.2)] },
+      dAir: { f: T(32), air: true, land: 7, hits: [hit(6, 20, 10, 40, 40, 120, 10, 5, 0.07, 0.2, 1, { spike: true })] },
+    }) },
+    pistolets: { name: 'Pistolets', icon: '🔫', k: { spd: 0.95, pow: 0.95 }, lights: (hit, T) => {
+      const shot = (s, dx, dy, o = {}) => hit(s, s, 30, -60, 14, 10, 4, 2.6, 0.02, dx, dy, { shot: { speed: 17, life: 32, ...o } });
+      return {
+        jab: { f: T(20), hits: [shot(5, 1, -0.15)] },
+        sLight: { f: T(26), vel: [[2, -4, null]], hits: [{ ...shot(6, 1, -0.2), g: 0 }, { ...shot(12, 1, -0.2), g: 1 }] },
+        dLight: { f: T(26), vel: [[2, 11, null]], hits: [hit(4, 13, 50, -12, 90, 24, 6, 4.5, 0.035, 0.5, -1)] },
+        nAir: { f: T(26), air: true, land: 5, hits: [{ ...shot(6, 1, 0), g: 0 }, { ...shot(6, -1, 0), g: 1 }] },
+        sAir: { f: T(26), air: true, land: 5, hits: [shot(6, 1, 0)] },
+        dAir: { f: T(28), air: true, land: 6, hits: [hit(7, 7, 0, 10, 14, 10, 5, 3, 0.03, 0, 1, { shot: { speed: 17, life: 26, down: true } })] },
+      };
+    } },
+    marteau: { name: 'Marteau', icon: '🔨', k: { spd: 1.2, pow: 1.3 }, lights: (hit, T) => ({
+      jab: { f: T(28), hits: [hit(9, 15, 60, -40, 110, 90, 8, 4.5, 0.05, 0.6, -0.8)] },
+      sLight: { f: T(32), vel: [[4, 8, null]], hits: [hit(9, 18, 70, -50, 130, 60, 9, 5, 0.06, 1, -0.4)] },
+      dLight: { f: T(34), hits: [hit(10, 16, 0, -14, 200, 28, 8, 5, 0.05, 1, -0.7, { both: true, fx: 'shock' })] },
+      nAir: { f: T(32), air: true, land: 7, hits: [hit(7, 18, 0, -70, 130, 120, 9, 5, 0.06, 0.3, -1)] },
+      sAir: { f: T(32), air: true, land: 7, hits: [hit(8, 18, 70, -46, 120, 70, 10, 5.5, 0.08, 1, -0.35)] },
+      dAir: { f: T(34), air: true, land: 9, vel: [[6, 0, 14]], hits: [hit(6, 24, 0, 10, 90, 50, 11, 6, 0.08, 0.4, 1, { spike: true })] },
+    }) },
+    hache: { name: 'Hache', icon: '🪓', k: { spd: 1.1, pow: 1.2 }, lights: (hit, T) => ({
+      jab: { f: T(24), hits: [hit(5, 11, 50, -70, 90, 90, 6, 4, 0.04, 0.3, -1)] },
+      sLight: { f: T(28), vel: [[3, 10, null]], hits: [hit(6, 14, 70, -50, 110, 40, 7, 4.2, 0.045, -0.4, -0.6)] }, // crochet qui ramène vers soi
+      dLight: { f: T(30), hits: [hit(6, 14, 60, -12, 130, 24, 7, 4.5, 0.04, 0.6, -1)] },
+      nAir: { f: T(30), air: true, land: 6, hits: [hit(4, 18, 0, -46, 140, 130, 8, 4, 0.05, 0.4, -1, { both: true })] },
+      sAir: { f: T(30), air: true, land: 6, hits: [hit(6, 16, 70, -46, 110, 60, 9, 5, 0.07, 0.8, -0.6)] },
+      dAir: { f: T(32), air: true, land: 7, hits: [hit(7, 18, 30, 10, 80, 50, 10, 5, 0.07, 0.3, 1, { spike: true })] },
+    }) },
+    gantelets: { name: 'Gantelets', icon: '🥊', k: { spd: 0.8, pow: 0.9 }, lights: (hit, T) => ({
+      jab: { f: T(24), hits: [hit(3, 7, 50, -56, 70, 34, 3.5, 2, 0.01, 1, -0.2, { g: 0 }), hit(10, 15, 54, -56, 74, 34, 4.5, 3.6, 0.03, 1, -0.4, { g: 1 })] },
+      sLight: { f: T(30), vel: [[2, 11, null], [10, 8, null]], hits: [hit(3, 6, 50, -56, 70, 34, 2.5, 1.5, 0, 1, -0.1, { g: 0 }), hit(9, 12, 50, -56, 70, 34, 2.5, 1.5, 0, 1, -0.1, { g: 1 }), hit(15, 19, 56, -56, 80, 34, 5, 4.2, 0.04, 1, -0.4, { g: 2 })] },
+      dLight: { f: T(26), hits: [hit(4, 10, 40, -60, 70, 90, 6, 4, 0.04, 0.2, -1)] },
+      nAir: { f: T(30), air: true, land: 5, hits: [0, 1, 2].map(k => hit(4 + k * 5, 7 + k * 5, 30, -50, 90, 70, 2.5, 1.2, 0, 0.3, -0.5, { g: k })).concat([hit(20, 24, 30, -50, 100, 80, 5, 4.5, 0.05, 0.6, -0.8, { g: 3 })]) },
+      sAir: { f: T(26), air: true, land: 5, hits: [hit(5, 14, 55, -40, 80, 40, 8, 4.5, 0.06, 1, -0.3)] },
+      dAir: { f: T(30), air: true, land: 6, vel: [[4, 0, 12]], hits: [hit(5, 10, 10, 6, 60, 40, 4, 2, 0.01, 0, 1, { g: 0 }), hit(14, 22, 10, 6, 70, 44, 7, 5, 0.06, 0.3, 1, { g: 1, spike: true })] },
+    }) },
   };
   const WEAPON_IDS = Object.keys(WEAPONS);
+
+  /* ---------------- Coups lourds signatures : un trio par personnage et par arme ---------------- */
+  // Au sol, on peut les charger en gardant la touche (jusqu'à 3/4 de seconde) : plus de dégâts et d'éjection.
+  const SIGS = {
+    fenna: {
+      mains: (hit, T) => ({
+        nHeavy: { f: T(44), spin: true, vel: [[T(10), 2, -6]], hits: [hit(10, 16, 10, -90, 90, 90, 5, 2, 0.01, 0.1, -1, { g: 0, fx: 'wind' }), hit(18, 26, 10, -110, 100, 100, 9, 6.5, 0.11, 0.15, -1, { g: 1, fx: 'wind' })] },
+        sHeavy: { f: T(46), vel: [[T(12), 16, -2]], hits: [hit(12, 24, 60, -60, 100, 50, 14, 7, 0.13, 1, -0.35, { fx: 'slash' })] },
+        dHeavy: { f: T(44), spin: true, hits: [hit(12, 26, 0, -20, 220, 40, 13, 6.5, 0.11, 1, -0.55, { both: true, fx: 'wind' })] },
+      }),
+      epee: (hit, T) => ({
+        nHeavy: { f: T(50), spin: true, vel: [[T(8), 0, -10]], hits: [0, 1, 2].map(k => hit(8 + k * 6, 12 + k * 6, 0, -80 - k * 10, 120, 110, 3, 1.5, 0, 0, -1, { g: k, both: true, fx: 'wind' })).concat([hit(26, 32, 0, -110, 130, 120, 9, 7, 0.12, 0.2, -1, { g: 3, both: true, fx: 'wind' })]) },
+        sHeavy: { f: T(48), vel: [[T(11), 20, null]], hits: [hit(11, 22, 40, -56, 110, 70, 15, 7.5, 0.13, 1, -0.38, { fx: 'slash' })] },
+        dHeavy: { f: T(50), hits: [hit(12, 32, 40, -30, 60, 60, 13, 6.5, 0.11, 0.5, -1, { move: 9, fx: 'ice' })] },
+      }),
+      lance: (hit, T) => ({
+        nHeavy: { f: T(48), hits: [hit(12, 24, 30, -150, 70, 200, 15, 7, 0.12, 0.1, -1, { fx: 'lightning' })] },
+        sHeavy: { f: T(50), vel: [[T(12), 18, null]], hits: [hit(12, 26, 130, -54, 210, 40, 15, 7.5, 0.13, 1, -0.32, { fx: 'lightning' })] },
+        dHeavy: { f: T(48), spin: true, hits: [hit(12, 18, 0, -16, 300, 30, 6, 3, 0.02, 1, -0.4, { g: 0, both: true, fx: 'wind' }), hit(22, 30, 0, -16, 300, 30, 10, 6.5, 0.11, 1, -0.6, { g: 1, both: true, fx: 'wind' })] },
+      }),
+      pistolets: (hit, T) => ({
+        nHeavy: { f: T(46), hits: [hit(12, 22, 10, -140, 80, 150, 14, 7, 0.12, 0.1, -1, { fx: 'fire' })] },
+        sHeavy: { f: T(48), vel: [[T(14), -6, null]], hits: [hit(14, 14, 40, -58, 30, 30, 14, 7.5, 0.13, 1, -0.35, { fx: 'fire', shot: { speed: 22, life: 40, big: true } })] },
+        dHeavy: { f: T(46), vel: [[T(10), 0, -10]], hits: [hit(14, 14, 20, -40, 24, 24, 9, 6, 0.1, 1, -0.5, { g: 0, fx: 'fire', shot: { speed: 20, life: 30, dir: [1, 1], big: true } }), hit(14, 14, 20, -40, 24, 24, 9, 6, 0.1, -1, -0.5, { g: 1, fx: 'fire', shot: { speed: 20, life: 30, dir: [-1, 1], big: true } })] },
+      }),
+    },
+    gromm: {
+      mains: (hit, T) => ({
+        nHeavy: { f: T(44), vel: [[T(10), 2, -5]], hits: [hit(10, 20, 24, -100, 90, 110, 14, 6.5, 0.11, 0.15, -1, { fx: 'fire' })] },
+        sHeavy: { f: T(48), vel: [[T(12), 15, null]], hits: [hit(12, 26, 40, -52, 80, 70, 16, 7, 0.13, 1, -0.42, { fx: 'shock' })] },
+        dHeavy: { f: T(50), hits: [hit(14, 30, 30, -20, 60, 50, 13, 6.5, 0.11, 1, -0.7, { g: 0, move: 8, fx: 'shock' }), hit(14, 30, -30, -20, 60, 50, 13, 6.5, 0.11, -1, -0.7, { g: 1, move: -8, fx: 'shock' })] },
+      }),
+      marteau: (hit, T) => ({
+        nHeavy: { f: T(46), hits: [hit(12, 22, 30, -110, 150, 140, 15, 7, 0.12, 0.2, -1, { fx: 'fire' })] },
+        sHeavy: { f: T(54), spin: true, vel: [[T(8), 9, null], [T(20), 9, null]], hits: [hit(8, 14, 30, -50, 150, 90, 4, 2, 0.01, 0.4, -0.4, { g: 0, both: true, fx: 'wind' }), hit(16, 22, 30, -50, 150, 90, 4, 2, 0.01, 0.4, -0.4, { g: 1, both: true, fx: 'wind' }), hit(24, 32, 40, -50, 160, 90, 11, 7.5, 0.13, 1, -0.45, { g: 2, fx: 'fire' })] },
+        dHeavy: { f: T(54), hits: [hit(16, 36, 40, -24, 80, 60, 15, 7, 0.12, 1, -0.75, { g: 0, move: 10, fx: 'shock' }), hit(16, 36, -40, -24, 80, 60, 15, 7, 0.12, -1, -0.75, { g: 1, move: -10, fx: 'shock' })] },
+      }),
+      hache: (hit, T) => ({
+        nHeavy: { f: T(48), vel: [[T(8), 0, -8]], hits: [hit(8, 14, 40, -90, 110, 90, 5, 2.5, 0.01, 0.2, -1, { g: 0, fx: 'fire' }), hit(18, 26, 30, -120, 120, 120, 11, 7, 0.12, 0.15, -1, { g: 1, fx: 'fire' })] },
+        sHeavy: { f: T(50), spin: true, vel: [[T(12), 13, -4]], hits: [hit(12, 26, 50, -60, 120, 100, 16, 7.5, 0.13, 0.9, -0.6, { fx: 'fire' })] },
+        dHeavy: { f: T(50), hits: [hit(16, 34, 60, -26, 70, 60, 14, 7, 0.12, 0.4, -1, { move: 7, fx: 'shock' })] },
+      }),
+      gantelets: (hit, T) => ({
+        nHeavy: { f: T(44), vel: [[T(8), 2, -13]], hits: [hit(8, 20, 20, -100, 70, 110, 13, 7, 0.12, 0.15, -1, { fx: 'lightning' })] },
+        sHeavy: { f: T(46), vel: [[T(10), 24, null]], hits: [hit(10, 22, 50, -56, 80, 50, 15, 7.5, 0.13, 1, -0.35, { fx: 'lightning' })] },
+        dHeavy: { f: T(46), hits: [hit(12, 20, 0, -20, 180, 40, 6, 3, 0.02, 1, -0.3, { g: 0, both: true, fx: 'shock' }), hit(22, 30, 0, -20, 220, 44, 11, 6.5, 0.11, 1, -0.65, { g: 1, both: true, fx: 'shock' })] },
+      }),
+    },
+  };
 
   /* ---------------- Personnages ---------------- */
   const CHARS = {
@@ -78,11 +167,19 @@
     gromm: { name: 'Gromm', title: 'l’ours forgeron', weight: 118, run: 7.8, accel: 1.25, airSpeed: 6.8, airAccel: 0.62, jump: 15.8, airJump: 12.8, grav: 0.67, fall: 13.5, fastFall: 21, k: { spd: 1.18, pow: 1.28, reach: 1.15 }, weapons: ['marteau', 'hache', 'gantelets'], stats: { vitesse: 2, force: 5, poids: 5, portée: 4 } },
   };
   const CHAR_IDS = Object.keys(CHARS);
-  // Coups de chaque personnage, à mains nues et avec chacune de ses armes
+  // Coups de chaque personnage, à mains nues et avec chacune de ses armes : base, coups légers de l'arme, signatures.
   const MOVES = {};
   for (const [id, c] of Object.entries(CHARS)) {
-    MOVES[id] = { mains: moveset(c.k) };
-    for (const w of WEAPON_IDS) { const W = WEAPONS[w]; MOVES[id][w] = moveset({ spd: c.k.spd * W.k.spd, pow: c.k.pow * W.k.pow, reach: c.k.reach * W.k.reach, lift: W.k.lift }, W.tweak); }
+    MOVES[id] = {};
+    for (const w of ['mains', ...WEAPON_IDS]) {
+      const W = WEAPONS[w], k = W ? { spd: c.k.spd * W.k.spd, pow: c.k.pow * W.k.pow, reach: c.k.reach } : c.k;
+      MOVES[id][w] = moveset(k, (m, hit, T) => {
+        if (W) Object.assign(m, W.lights(hit, T));
+        const sig = (SIGS[id][w] ?? SIGS[id].mains)(hit, T);
+        for (const v of Object.values(sig)) { v.heavy = true; v.sig = true; v.fx = v.hits.find(h => h.fx)?.fx; }
+        Object.assign(m, sig);
+      });
+    }
     c.moves = MOVES[id].mains;
   }
   const movesOf = f => MOVES[f.char][f.weapon ?? 'mains'];
@@ -90,12 +187,12 @@
 
   /* ---------------- Un combattant ---------------- */
   function fighter(id, char, [x, y], facing = 1) {
-    return { id, char, x, y, vx: 0, vy: 0, facing, state: 'air', move: null, mt: 0, ground: false, jumps: 2, wallJumps: 3, coyote: 0, drop: 0, dmg: 0, stocks: 3, hitstun: 0, hitlag: 0, invuln: 0, dodgeCd: 0, airDodge: false, recovery: true, prevIn: 0, hitIds: [], lag: 0, dead: 0, wall: 0, lastHit: null, kos: 0, falls: 0, weapon: null, ledgeT: 0, ledgeCd: 0, combo: 0, buf: 0, bufT: 0 };
+    return { id, char, x, y, vx: 0, vy: 0, facing, state: 'air', move: null, mt: 0, ground: false, jumps: 2, wallJumps: 3, coyote: 0, drop: 0, dmg: 0, stocks: 3, hitstun: 0, hitlag: 0, invuln: 0, dodgeCd: 0, airDodge: false, recovery: true, prevIn: 0, hitIds: [], lag: 0, dead: 0, wall: 0, lastHit: null, kos: 0, falls: 0, weapon: null, ledgeT: 0, ledgeCd: 0, combo: 0, buf: 0, bufT: 0, charge: 0 };
   }
   const C = f => CHARS[f.char];
 
   function startMove(f, id) {
-    f.state = 'attack'; f.move = id; f.mt = 0; f.hitIds = [];
+    f.state = 'attack'; f.move = id; f.mt = 0; f.hitIds = []; f.charge = 0;
     if (movesOf(f)[id].once) f.recovery = false;
   }
   function pickMove(f, inp, heavy) {
@@ -174,10 +271,11 @@
       else { f.vx *= 0.75; if (f.mt > 22) f.state = f.ground ? 'idle' : 'air'; }
     } else if (f.state === 'attack') {
       const m = M[f.move];
-      f.mt++;
+      if (m.sig && !m.air && f.mt === 1 && f.ground && inp & IN.HEAVY && f.charge < CHARGE) { f.charge++; f.vx *= 0.8; if (f.charge === 1) f.events?.push('charge'); } // charge du coup lourd
+      else f.mt++;
       if (f.mt <= 3 && dir && !f.hitIds.length && !m.pound) f.facing = dir; // on peut encore se retourner
       for (const [fr, vx, vy] of m.vel ?? []) if (fr === f.mt) { if (vx !== null) f.vx = vx * f.facing; if (vy !== null) f.vy = vy; }
-      for (const h of m.hits) if (h.shot && f.mt === h.s) f.spawn?.push({ kind: 'balle', x: f.x + h.x * f.facing * h.dx, y: f.y + (h.shot.down ? -10 : h.y), vx: h.shot.down ? 0 : h.shot.speed * Math.sign(h.dx) * f.facing, vy: h.shot.down ? h.shot.speed : 0, life: h.shot.life, h });
+      for (const h of m.hits) if (h.shot && f.mt === h.s) { const sh = h.shot, [sx, sy] = sh.dir ?? (sh.down ? [0, 1] : [Math.sign(h.dx), 0]), l = Math.hypot(sx, sy); f.spawn?.push({ kind: sh.big ? 'boulet' : 'balle', x: f.x + h.x * f.facing * Math.sign(sx), y: f.y + (sh.down ? -10 : h.y), vx: (sx / l) * sh.speed * f.facing, vy: (sy / l) * sh.speed, life: sh.life, h, ck: chargeK(f) }); }
       if (f.ground && !m.air) f.vx *= 0.9;
       else { f.vx += dir * c.airAccel * 0.5; f.vx = Math.max(-c.airSpeed, Math.min(c.airSpeed, f.vx)); }
       if (m.grav !== undefined && f.mt < m.f * 0.6) grav = c.grav * m.grav;
@@ -259,17 +357,17 @@
     const m = M[f.state === 'lag' ? 'pound' : f.move], out = [];
     for (const h of m.hits) {
       if (h.shot || (f.state === 'attack' && (f.mt < h.s || f.mt > h.e))) continue;
-      const cx = f.x + h.x * f.facing, cy = f.y + h.y;
+      const cx = f.x + (h.x + (h.move ? (f.mt - h.s) * h.move : 0)) * f.facing, cy = f.y + h.y;
       out.push([cx - h.w / 2, cy - h.h / 2, cx + h.w / 2, cy + h.h / 2, h]);
     }
     return out;
   }
   // Un coup qui touche : dégâts, éjection (plus forte avec les dégâts déjà subis), gel, compteur de combo.
   // Un coup qui éjecte très fort gèle plus longtemps (le navigateur zoome dessus).
-  function applyHit(a, b, h, dx, dy, x, y, events, by) {
-    b.dmg = Math.min(999, b.dmg + h.dmg);
+  function applyHit(a, b, h, dx, dy, x, y, events, by, ck = 1) {
+    b.dmg = Math.min(999, b.dmg + h.dmg * ck);
     if (dy > 0 && b.ground) dy = -dy * 0.7; // un coup vers le bas sur quelqu'un au sol le fait rebondir
-    const l = Math.hypot(dx, dy) || 1, v = (h.kb + b.dmg * h.ks) * (100 / C(b).weight);
+    const l = Math.hypot(dx, dy) || 1, v = (h.kb + b.dmg * h.ks) * ck * (100 / C(b).weight);
     b.combo = b.state === 'hitstun' ? b.combo + 1 : 1;
     b.vx = (dx / l) * v; b.vy = (dy / l) * v;
     b.state = 'hitstun'; b.hitstun = Math.round(Math.min(75, 8 + v * 2.3)); b.move = null; b.ground = false; b.lastHit = by; b.recovery = true;
@@ -278,7 +376,7 @@
     if (a) a.hitlag = lag;
     b.hitlag = lag;
     if (b.facing === Math.sign(dx)) b.facing = -b.facing;
-    events.push({ t: 'hit', a: by, b: b.id, x: Math.round(x), y: Math.round(y), dmg: h.dmg, v: +v.toFixed(1), heavy: h.ks >= 0.08, big, combo: b.combo });
+    events.push({ t: 'hit', a: by, b: b.id, x: Math.round(x), y: Math.round(y), dmg: h.dmg, v: +v.toFixed(1), heavy: h.ks >= 0.08, big, combo: b.combo, fx: h.fx ?? null });
   }
   const foe = (a, b) => b !== a && b.state !== 'out' && b.dead === 0 && b.invuln === 0 && !(a.team && a.team === b.team);
   function resolve(list, events) {
@@ -286,11 +384,12 @@
       if (a.hitlag > 0) continue;
       for (const [x0, y0, x1, y1, h] of activeHits(a)) {
         for (const b of list) {
-          if (!foe(a, b) || a.hitIds.includes(b.id)) continue;
+          const key = h.g === undefined ? b.id : `${b.id}/${h.g}`;
+          if (!foe(a, b) || a.hitIds.includes(key)) continue;
           if (b.x + HW < x0 || b.x - HW > x1 || b.y < y0 || b.y - HH > y1) continue;
-          a.hitIds.push(b.id);
+          a.hitIds.push(key);
           const dx = h.both ? Math.sign(b.x - a.x || a.facing) * Math.abs(h.dx) : h.dx * a.facing;
-          applyHit(a, b, h, dx, h.dy, (Math.max(x0, b.x - HW) + Math.min(x1, b.x + HW)) / 2, b.y - HH / 2, events, a.id);
+          applyHit(a, b, h, dx, h.dy, (Math.max(x0, b.x - HW) + Math.min(x1, b.x + HW)) / 2, b.y - HH / 2, events, a.id, chargeK(a));
         }
       }
     }
@@ -324,7 +423,7 @@
       f.events = []; f.spawn = []; f.wantPick = false;
       step(f, inputs[f.id] ?? 0, A);
       for (const e of f.events) events.push({ t: e, id: f.id, x: Math.round(f.x), y: Math.round(f.y) });
-      for (const s of f.spawn) { w.shots.push({ ...s, id: ++w.seq, owner: f.id, team: f.team }); if (s.kind === 'balle') events.push({ t: 'shot', id: f.id, x: Math.round(s.x), y: Math.round(s.y) }); }
+      for (const s of f.spawn) { w.shots.push({ ...s, id: ++w.seq, owner: f.id, team: f.team }); if (s.kind !== 'arme') events.push({ t: 'shot', big: s.kind === 'boulet', id: f.id, x: Math.round(s.x), y: Math.round(s.y) }); }
       if (f.wantPick) {
         const it = w.items.find(i => i.ground && Math.abs(i.x - f.x) < 46 && Math.abs(i.y - f.y) < 60);
         if (it) { const list = C(f).weapons; f.weapon = list[(w.frame + it.id) % list.length]; w.items.splice(w.items.indexOf(it), 1); events.push({ t: 'pick', id: f.id, weapon: f.weapon, x: Math.round(it.x), y: Math.round(it.y) }); }
@@ -349,7 +448,7 @@
       for (const b of w.fighters) {
         if (!foe(owner, b) || s.life <= 0) continue;
         if (s.x < b.x - HW - 6 || s.x > b.x + HW + 6 || s.y < b.y - HH - 6 || s.y > b.y + 6) continue;
-        applyHit(null, b, s.h, Math.sign(s.vx || 1) * Math.max(0.3, Math.abs(s.h.dx)), s.kind === 'arme' ? -0.6 : s.h.dy, s.x, s.y, events, s.owner);
+        applyHit(null, b, s.h, Math.sign(s.vx || 1) * Math.max(0.3, Math.abs(s.h.dx)), s.kind === 'arme' ? -0.6 : s.h.dy, s.x, s.y, events, s.owner, s.ck ?? 1);
         s.life = 0;
       }
     }
@@ -370,7 +469,7 @@
   const alive = w => w.fighters.filter(f => f.state !== 'out');
 
   // Combattant envoyé sur le réseau (et rejoué tel quel par le navigateur)
-  const KEYS = ['x', 'y', 'vx', 'vy', 'facing', 'state', 'move', 'mt', 'ground', 'jumps', 'wallJumps', 'coyote', 'drop', 'dmg', 'stocks', 'hitstun', 'hitlag', 'invuln', 'dodgeCd', 'airDodge', 'recovery', 'prevIn', 'lag', 'dead', 'wall', 'kos', 'falls', 'weapon', 'ledgeT', 'ledgeCd', 'combo', 'buf', 'bufT'];
+  const KEYS = ['x', 'y', 'vx', 'vy', 'facing', 'state', 'move', 'mt', 'ground', 'jumps', 'wallJumps', 'coyote', 'drop', 'dmg', 'stocks', 'hitstun', 'hitlag', 'invuln', 'dodgeCd', 'airDodge', 'recovery', 'prevIn', 'lag', 'dead', 'wall', 'kos', 'falls', 'weapon', 'ledgeT', 'ledgeCd', 'combo', 'buf', 'bufT', 'charge'];
   const pack = f => { const o = { id: f.id, char: f.char, team: f.team }; for (const k of KEYS) o[k] = typeof f[k] === 'number' ? Math.round(f[k] * 100) / 100 : f[k]; o.hitIds = f.hitIds; return o; };
   const packItems = w => ({ items: w.items.map(i => [i.id, Math.round(i.x), Math.round(i.y), i.ground ? 1 : 0]), shots: w.shots.map(s => [s.id, s.kind, Math.round(s.x), Math.round(s.y), +s.vx.toFixed(1), +s.vy.toFixed(1), s.weapon ?? '', +(s.spin ?? 0).toFixed(2), s.owner]) });
 
