@@ -78,6 +78,8 @@ kbd { display: inline-block; min-width: 24px; padding: 0 6px; margin: 0 2px; bor
 .pcard .dmg::after { content: '%'; font-size: .9rem; }
 .pcard .stocks { display: block; font-size: .8rem; letter-spacing: -1px; }
 .pcard.out { filter: grayscale(1); opacity: .6; }
+.pcard.worn::after { animation: blink .5s infinite alternate; }
+@keyframes blink { to { opacity: .3; } }
 .pcard { position: relative; }
 .pcard[data-weapon]:not([data-weapon=''])::after { content: attr(data-weapon); position: absolute; top: -12px; right: -8px; font-size: 1.4rem; filter: drop-shadow(2px 2px 0 var(--ink)); animation: pop .4s; }
 .pcard.shake { animation: shake .3s; }

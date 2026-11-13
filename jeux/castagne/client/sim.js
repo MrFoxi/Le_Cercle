@@ -10,10 +10,12 @@
   else root.BR = BR;
 })(this, () => {
   const FPS = 60;
-  const IN = { L: 1, R: 2, U: 4, D: 8, JUMP: 16, LIGHT: 32, HEAVY: 64, DODGE: 128, PICK: 256 };
+  const IN = { L: 1, R: 2, U: 4, D: 8, JUMP: 16, LIGHT: 32, HEAVY: 64, DODGE: 128, PICK: 256, SHIELD: 512 };
   const HW = 22, HH = 86; // demi-largeur et hauteur du corps (pieds en y)
   const BUFMASK = IN.JUMP | IN.LIGHT | IN.HEAVY | IN.DODGE | IN.PICK;
   const CHARGE = 45; // images de charge au plus
+  const SHIELD = 60; // résistance de la garde
+  const ITEM_KINDS = ['arme', 'arme', 'arme', 'potion', 'plume', 'bombe', 'neige'];
   const chargeK = f => 1 + ((f.charge ?? 0) / CHARGE) * 0.45;
 
   /* ---------------- Arène ---------------- */
@@ -187,7 +189,7 @@
 
   /* ---------------- Un combattant ---------------- */
   function fighter(id, char, [x, y], facing = 1) {
-    return { id, char, x, y, vx: 0, vy: 0, facing, state: 'air', move: null, mt: 0, ground: false, jumps: 2, wallJumps: 3, coyote: 0, drop: 0, dmg: 0, stocks: 3, hitstun: 0, hitlag: 0, invuln: 0, dodgeCd: 0, airDodge: false, recovery: true, prevIn: 0, hitIds: [], lag: 0, dead: 0, wall: 0, lastHit: null, kos: 0, falls: 0, weapon: null, ledgeT: 0, ledgeCd: 0, combo: 0, buf: 0, bufT: 0, charge: 0 };
+    return { id, char, x, y, vx: 0, vy: 0, facing, state: 'air', move: null, mt: 0, ground: false, jumps: 2, wallJumps: 3, coyote: 0, drop: 0, dmg: 0, stocks: 3, hitstun: 0, hitlag: 0, invuln: 0, dodgeCd: 0, airDodge: false, recovery: true, prevIn: 0, hitIds: [], lag: 0, dead: 0, wall: 0, lastHit: null, kos: 0, falls: 0, weapon: null, ledgeT: 0, ledgeCd: 0, combo: 0, buf: 0, bufT: 0, charge: 0, shield: SHIELD, dodgeChain: 0, dodgeAgo: 999, ledgeUsed: false, wdur: 0, item: null, feather: 0 };
   }
   const C = f => CHARS[f.char];
 
@@ -203,7 +205,8 @@
     return down ? 'dAir' : side ? 'sAir' : 'nAir';
   }
   function startDodge(f, inp, dir) {
-    f.state = 'dodge'; f.mt = 0; f.dodgeCd = 54; f.hitIds = [];
+    f.dodgeChain = f.dodgeAgo < 150 ? Math.min(3, f.dodgeChain + 1) : 0; f.dodgeAgo = 0;
+    f.state = 'dodge'; f.mt = 0; f.dodgeCd = 50 + f.dodgeChain * 28; f.hitIds = [];
     const dy = (inp & IN.D ? 1 : 0) - (inp & IN.U ? 1 : 0);
     if (!f.ground && (dir || dy)) { const l = Math.hypot(dir, dy); f.move = 'air'; f.vx = (dir / l) * 13; f.vy = (dy / l) * 13; f.invuln = 14; f.airDodge = true; }
     else { f.move = 'spot'; f.invuln = 20; if (!f.ground) f.airDodge = true; }
@@ -216,7 +219,7 @@
     for (const p of A.plats) if (f.x > p.x0 && f.x < p.x1 && Math.abs(f.y - p.y) < 0.5) return true;
     return false;
   }
-  function land(f) { f.ground = true; f.vy = 0; f.jumps = 2; f.wallJumps = 3; f.airDodge = false; f.recovery = true; }
+  function land(f) { f.ground = true; f.vy = 0; f.jumps = f.feather > 0 ? 3 : 2; f.wallJumps = 3; f.airDodge = false; f.recovery = true; f.ledgeUsed = false; }
   // Rebord de l'île : on s'y accroche en tombant tout près.
   function tryLedge(f, A) {
     if (f.ledgeCd > 0 || f.vy < 0) return false;
@@ -224,7 +227,8 @@
       const hx = ex - side * HW;
       if (Math.abs(f.x - hx) < 18 && f.y > s.y0 + 8 && f.y < s.y0 + 80) {
         Object.assign(f, { state: 'ledge', x: hx, y: s.y0 + 56, vx: 0, vy: 0, facing: side, ledgeT: 0, jumps: 2, recovery: true, airDodge: false, wallJumps: 3, move: null });
-        f.invuln = Math.max(f.invuln, 24);
+        if (!f.ledgeUsed) f.invuln = Math.max(f.invuln, 24);
+        f.ledgeUsed = true;
         f.events?.push('ledge');
         return true;
       }
@@ -248,6 +252,9 @@
     if (f.drop > 0) f.drop--;
     if (f.coyote > 0) f.coyote--;
     if (f.ledgeCd > 0) f.ledgeCd--;
+    if (f.dodgeAgo < 999) f.dodgeAgo++;
+    if (f.feather > 0) f.feather--;
+    if (f.state !== 'shield') f.shield = Math.min(SHIELD, f.shield + 0.1);
     let grav = c.grav, maxFall = c.fall;
 
     if (f.state === 'ledge') {
@@ -258,7 +265,12 @@
       else if ((pressed & IN.D) || (away && f.ledgeT > 6) || f.ledgeT > 150) { f.state = 'air'; f.ledgeCd = 40; f.x -= f.facing * 6; }
       return;
     }
-    if (f.state === 'hitstun') {
+    if (f.state === 'shield') {
+      f.vx *= 0.7; f.shield -= 0.12;
+      if (!(inp & IN.SHIELD) || !f.ground || f.shield <= 0) f.state = 'idle';
+      else if (pressed & IN.JUMP) { used(IN.JUMP); f.state = 'air'; f.vy = -c.jump; f.ground = false; f.events?.push('jump'); }
+      else if (pressed & IN.DODGE && f.dodgeCd === 0) { used(IN.DODGE); startDodge(f, inp, dir); f.move = 'roll'; if (dir) f.vx = dir * 11; }
+    } else if (f.state === 'hitstun') {
       f.vx *= 0.986; f.vx += dir * 0.12;
       if (--f.hitstun <= 0) { f.state = 'air'; f.combo = 0; }
       maxFall = c.fall * 1.6;
@@ -268,7 +280,7 @@
     } else if (f.state === 'dodge') {
       f.mt++;
       if (f.move === 'air') { grav = 0; if (f.mt > 14) { f.state = 'air'; f.vx *= 0.4; f.vy *= 0.4; } }
-      else { f.vx *= 0.75; if (f.mt > 22) f.state = f.ground ? 'idle' : 'air'; }
+      else { f.vx *= f.move === 'roll' ? 0.88 : 0.75; if (f.mt > 22) f.state = f.ground ? 'idle' : 'air'; }
     } else if (f.state === 'attack') {
       const m = M[f.move];
       if (m.sig && !m.air && f.mt === 1 && f.ground && inp & IN.HEAVY && f.charge < CHARGE) { f.charge++; f.vx *= 0.8; if (f.charge === 1) f.events?.push('charge'); } // charge du coup lourd
@@ -306,14 +318,17 @@
       if (f.ground && pressed & IN.D) { for (const p of A.plats) if (f.x > p.x0 && f.x < p.x1 && Math.abs(f.y - p.y) < 0.5) { f.drop = 12; f.ground = false; f.vy = 2; } }
       if (pressed & IN.PICK) {
         used(IN.PICK);
-        if (f.weapon) { // lancer son arme droit devant (ou vers le haut, vers le bas)
-          const up = inp & IN.U ? -1 : inp & IN.D ? 1 : 0;
+        const up = inp & IN.U ? -1 : inp & IN.D ? 1 : 0;
+        if (f.item === 'bombe') { f.spawn?.push({ kind: 'bombe', x: f.x + f.facing * 20, y: f.y - 60, vx: f.facing * (up ? 4 : 12), vy: up < 0 ? -14 : -4, life: 110, spin: 0, h: { dmg: 15, kb: 7, ks: 0.1, dx: 1, dy: -0.9, fx: 'fire' } }); f.item = null; f.events?.push('throw'); }
+        else if (f.item === 'neige') { f.spawn?.push({ kind: 'neige', x: f.x + f.facing * 20, y: f.y - 60, vx: f.facing * 17, vy: up < 0 ? -12 : -2, life: 60, h: { dmg: 4, kb: 2, ks: 0, dx: 1, dy: -0.3, fx: 'ice' } }); f.item = null; f.events?.push('throw'); }
+        else if (f.weapon) { // lancer son arme droit devant (ou vers le haut, vers le bas)
           f.spawn?.push({ kind: 'arme', weapon: f.weapon, x: f.x + f.facing * 20, y: f.y - 60, vx: f.facing * (up ? 9 : 19), vy: up * 15 - 3, life: 70, spin: 0, h: { dmg: 9, kb: 6, ks: 0.06, dx: 1, dy: -0.5 } });
           f.weapon = null; f.events?.push('throw');
         } else f.wantPick = true;
       }
       if (pressed & IN.DODGE && f.dodgeCd === 0 && (f.ground || !f.airDodge)) { used(IN.DODGE); startDodge(f, inp, dir); }
       else if (pressed & (IN.LIGHT | IN.HEAVY)) { const id = pickMove(f, inp, pressed & IN.HEAVY); used(IN.LIGHT | IN.HEAVY); if (id) startMove(f, id); }
+      else if (f.ground && inp & IN.SHIELD && f.shield > 10) { f.state = 'shield'; f.events?.push('shield'); }
     }
     if (f.state === 'dodge' && f.move === 'spot' && !f.ground) grav *= 0.4;
 
@@ -334,7 +349,8 @@
     if (f.wall && f.vy > 2 && !f.ground && f.state === 'air') f.vy = Math.min(f.vy, 3.5); // glisse le long du mur
     if (f.ground) {
       if (!wasGround) {
-        if (f.state === 'hitstun' && f.vy > 0 && Math.abs(f.vy) + Math.abs(f.vx) > 14) { f.vy = -Math.abs(f.vy) * 0.45; f.ground = false; f.events?.push('bounce'); } // rebond
+        if (f.state === 'hitstun' && f.bufT > 0 && f.buf & IN.DODGE) { used(IN.DODGE); land(f); Object.assign(f, { state: 'dodge', move: 'roll', mt: 0, invuln: 18, vx: dir * 9, hitstun: 0, combo: 0 }); f.events?.push('tech'); }
+        else if (f.state === 'hitstun' && f.vy > 0 && Math.abs(f.vy) + Math.abs(f.vx) > 14) { f.vy = -Math.abs(f.vy) * 0.45; f.ground = false; f.events?.push('bounce'); } // rebond
         else {
           const m = f.state === 'attack' ? M[f.move] : null;
           land(f);
@@ -379,15 +395,42 @@
     events.push({ t: 'hit', a: by, b: b.id, x: Math.round(x), y: Math.round(y), dmg: h.dmg, v: +v.toFixed(1), heavy: h.ks >= 0.08, big, combo: b.combo, fx: h.fx ?? null });
   }
   const foe = (a, b) => b !== a && b.state !== 'out' && b.dead === 0 && b.invuln === 0 && !(a.team && a.team === b.team);
+  const allKeys = id => [id, ...[0, 1, 2, 3, 4, 5].map(g => `${id}/${g}`)];
+  // La garde encaisse : elle s'use selon les dégâts ; à zéro, elle se brise et on reste étourdi.
+  function block(b, fromX, dmg, events) {
+    b.shield -= dmg * 2.2; b.vx = Math.sign(b.x - fromX || 1) * 4;
+    events.push({ t: 'block', id: b.id, x: Math.round(b.x), y: Math.round(b.y - 45) });
+    if (b.shield <= 0) { b.shield = 0; b.state = 'lag'; b.lag = 110; b.move = 'broken'; events.push({ t: 'break', id: b.id, x: Math.round(b.x), y: Math.round(b.y - 45) }); }
+  }
+  const overlap = (p, q) => p[0] < q[2] && p[2] > q[0] && p[1] < q[3] && p[3] > q[1];
   function resolve(list, events) {
+    // deux coups qui se croisent s'annulent (« clang ! ») et repoussent les deux combattants
+    const boxes = list.map(f => (f.hitlag > 0 ? [] : activeHits(f)));
+    for (let i = 0; i < list.length; i++) for (let j = i + 1; j < list.length; j++) {
+      const a = list[i], b = list[j];
+      if ((a.team && a.team === b.team) || a.hitIds.includes(b.id) || b.hitIds.includes(a.id)) continue;
+      const pair = boxes[i].flatMap(p => boxes[j].filter(q => overlap(p, q)).map(q => [p, q]))[0];
+      if (!pair) continue;
+      a.hitIds.push(...allKeys(b.id)); b.hitIds.push(...allKeys(a.id));
+      a.vx = -a.facing * 7; b.vx = -b.facing * 7; a.hitlag = b.hitlag = 9;
+      events.push({ t: 'clash', x: Math.round((pair[0][0] + pair[0][2]) / 2), y: Math.round((pair[0][1] + pair[0][3]) / 2) });
+    }
     for (const a of list) {
       if (a.hitlag > 0) continue;
-      for (const [x0, y0, x1, y1, h] of activeHits(a)) {
+      outer: for (const [x0, y0, x1, y1, h] of activeHits(a)) {
         for (const b of list) {
           const key = h.g === undefined ? b.id : `${b.id}/${h.g}`;
-          if (!foe(a, b) || a.hitIds.includes(key)) continue;
           if (b.x + HW < x0 || b.x - HW > x1 || b.y < y0 || b.y - HH > y1) continue;
+          // esquive parfaite : esquiver au tout dernier moment étourdit l'attaquant
+          if (b !== a && b.state === 'dodge' && b.mt <= 8 && !(a.team && a.team === b.team) && !a.hitIds.includes('p:' + b.id) && a.state === 'attack') {
+            a.hitIds.push('p:' + b.id); a.state = 'lag'; a.lag = 36; a.move = 'stunned';
+            events.push({ t: 'perfect', a: a.id, b: b.id, x: Math.round(b.x), y: Math.round(b.y - 50) });
+            break outer;
+          }
+          if (!foe(a, b) || a.hitIds.includes(key)) continue;
           a.hitIds.push(key);
+          if (b.state === 'shield') { block(b, a.x, h.dmg * chargeK(a), events); a.hitlag = 4; continue; }
+          if (a.weapon) a.wdur--;
           const dx = h.both ? Math.sign(b.x - a.x || a.facing) * Math.abs(h.dx) : h.dx * a.facing;
           applyHit(a, b, h, dx, h.dy, (Math.max(x0, b.x - HW) + Math.min(x1, b.x + HW)) / 2, b.y - HH / 2, events, a.id, chargeK(a));
         }
@@ -396,7 +439,7 @@
   }
   function respawn(f, A) {
     if (f.stocks <= 0) { f.state = 'out'; return; }
-    Object.assign(f, { x: A.respawn[0], y: A.respawn[1], vx: 0, vy: 0, dmg: 0, state: 'air', move: null, invuln: 120, jumps: 2, recovery: true, airDodge: false, hitstun: 0, combo: 0 });
+    Object.assign(f, { x: A.respawn[0], y: A.respawn[1], vx: 0, vy: 0, dmg: 0, state: 'air', move: null, invuln: 120, jumps: 2, recovery: true, airDodge: false, hitstun: 0, combo: 0, shield: SHIELD, ledgeUsed: false });
   }
 
   /* ---------------- Le monde ---------------- */
@@ -424,41 +467,71 @@
       step(f, inputs[f.id] ?? 0, A);
       for (const e of f.events) events.push({ t: e, id: f.id, x: Math.round(f.x), y: Math.round(f.y) });
       for (const s of f.spawn) { w.shots.push({ ...s, id: ++w.seq, owner: f.id, team: f.team }); if (s.kind !== 'arme') events.push({ t: 'shot', big: s.kind === 'boulet', id: f.id, x: Math.round(s.x), y: Math.round(s.y) }); }
+      for (const s of f.spawn) if (s.kind === 'balle' || s.kind === 'boulet') f.wdur -= 0.5; // les pistolets s'usent en tirant
       if (f.wantPick) {
-        const it = w.items.find(i => i.ground && Math.abs(i.x - f.x) < 46 && Math.abs(i.y - f.y) < 60);
-        if (it) { const list = C(f).weapons; f.weapon = list[(w.frame + it.id) % list.length]; w.items.splice(w.items.indexOf(it), 1); events.push({ t: 'pick', id: f.id, weapon: f.weapon, x: Math.round(it.x), y: Math.round(it.y) }); }
+        const it = w.items.find(i => i.ground && i.kind === 'arme' && Math.abs(i.x - f.x) < 46 && Math.abs(i.y - f.y) < 60);
+        if (it) { const list = C(f).weapons; f.weapon = list[(w.frame + it.id) % list.length]; f.wdur = 14; w.items.splice(w.items.indexOf(it), 1); events.push({ t: 'pick', id: f.id, weapon: f.weapon, x: Math.round(it.x), y: Math.round(it.y) }); }
+      }
+      // objets ramassés en passant dessus : potion (soigne), plume (un saut de plus), bombe et boule de neige (à lancer)
+      if (f.state !== 'out' && f.dead === 0) {
+        const it = w.items.find(i => i.ground && i.kind !== 'arme' && Math.abs(i.x - f.x) < 40 && Math.abs(i.y - f.y) < 60 && !((i.kind === 'bombe' || i.kind === 'neige') && f.item));
+        if (it) {
+          if (it.kind === 'potion') f.dmg = Math.max(0, f.dmg - 25);
+          else if (it.kind === 'plume') { f.feather = 900; f.jumps = Math.max(f.jumps, 3); }
+          else f.item = it.kind;
+          w.items.splice(w.items.indexOf(it), 1);
+          events.push({ t: 'pick', id: f.id, item: it.kind, x: Math.round(it.x), y: Math.round(it.y) });
+        }
       }
       delete f.events; delete f.spawn; delete f.wantPick;
     }
     // armes qui tombent du ciel
     if (--w.nextItem <= 0) {
       w.nextItem = 420 + ((w.frame * 7919) % 240);
-      if (w.items.length < 3) { const S = A.solids[0], x = S.x0 + 40 + ((w.frame * 2654435761) % (S.x1 - S.x0 - 80)); w.items.push({ id: ++w.seq, x, y: -900, vy: 0, ground: false, life: 1500 }); events.push({ t: 'item', x, y: floorAt(A, x, -900) ?? 0 }); }
+      if (w.items.length < 3) { const S = A.solids[0], x = S.x0 + 40 + ((w.frame * 2654435761) % (S.x1 - S.x0 - 80)); w.items.push({ id: ++w.seq, x, y: -900, vy: 0, ground: false, life: 1500, kind: ITEM_KINDS[(w.frame * 31 + w.seq) % ITEM_KINDS.length] }); events.push({ t: 'item', x, y: floorAt(A, x, -900) ?? 0 }); }
     }
     for (const it of w.items) {
       if (!it.ground) { it.vy = Math.min(it.vy + 0.25, 6); const fl = floorAt(A, it.x, it.y); it.y += it.vy; if (fl !== null && it.y >= fl) { it.y = fl; it.ground = true; events.push({ t: 'land', id: null, x: Math.round(it.x), y: Math.round(it.y) }); } }
     }
     w.items = w.items.filter(it => --it.life > 0 && it.y < A.blast.b);
     // projectiles : balles et armes lancées
+    const boom = s => {
+      for (const b of w.fighters) if (b.state !== 'out' && b.dead === 0 && b.invuln === 0 && Math.hypot(b.x - s.x, b.y - 45 - s.y) < 120) {
+        if (b.state === 'shield') block(b, s.x, 15, events); else applyHit(null, b, s.h, Math.sign(b.x - s.x || 1), -0.9, b.x, b.y - 45, events, s.owner);
+      }
+      events.push({ t: 'boom', x: Math.round(s.x), y: Math.round(s.y) }); s.life = 0;
+    };
     for (const s of w.shots) {
+      const py = s.y;
       s.x += s.vx; s.y += s.vy; s.life--;
       if (s.kind === 'arme') { s.vy += 0.4; s.spin += 0.4; }
-      if (A.solids.some(o => s.x > o.x0 && s.x < o.x1 && s.y > o.y0 && s.y < o.y1)) { s.life = 0; continue; }
+      if (s.kind === 'neige') s.vy += 0.25;
       const owner = w.fighters.find(f => f.id === s.owner) ?? { id: s.owner, team: s.team };
+      if (s.kind === 'bombe') {
+        s.vy += 0.5; s.spin += 0.25;
+        const fl = floorAt(A, s.x, py);
+        if (fl !== null && s.y >= fl && s.vy > 0) { s.y = fl; s.vy = -s.vy * 0.45; s.vx *= 0.7; }
+        if (s.life <= 0 || w.fighters.some(b => foe(owner, b) && Math.hypot(b.x - s.x, b.y - 45 - s.y) < 58)) boom(s);
+        continue;
+      }
+      if (A.solids.some(o => s.x > o.x0 && s.x < o.x1 && s.y > o.y0 && s.y < o.y1)) { s.life = 0; continue; }
       for (const b of w.fighters) {
         if (!foe(owner, b) || s.life <= 0) continue;
         if (s.x < b.x - HW - 6 || s.x > b.x + HW + 6 || s.y < b.y - HH - 6 || s.y > b.y + 6) continue;
-        applyHit(null, b, s.h, Math.sign(s.vx || 1) * Math.max(0.3, Math.abs(s.h.dx)), s.kind === 'arme' ? -0.6 : s.h.dy, s.x, s.y, events, s.owner, s.ck ?? 1);
+        if (b.state === 'shield') block(b, s.x, s.h.dmg, events);
+        else applyHit(null, b, s.h, Math.sign(s.vx || 1) * Math.max(0.3, Math.abs(s.h.dx)), s.kind === 'arme' ? -0.6 : s.h.dy, s.x, s.y, events, s.owner, s.ck ?? 1);
+        if (s.kind === 'neige' && b.state === 'hitstun') { Object.assign(b, { state: 'lag', lag: 60, move: 'frozen', vx: b.vx * 0.2 }); events.push({ t: 'freeze', id: b.id, x: Math.round(b.x), y: Math.round(b.y - 45) }); }
         s.life = 0;
       }
     }
     w.shots = w.shots.filter(s => s.life > 0 && s.x > A.blast.l && s.x < A.blast.r && s.y < A.blast.b);
     resolve(w.fighters, events);
+    for (const f of w.fighters) if (f.weapon && f.wdur <= 0) { events.push({ t: 'wbreak', id: f.id, weapon: f.weapon, x: Math.round(f.x), y: Math.round(f.y - 60) }); f.weapon = null; } // l'arme usée se brise
     const B = A.blast;
     for (const f of w.fighters) {
       if (f.state === 'out' || f.dead > 0) continue;
       if (f.x < B.l || f.x > B.r || f.y > B.b || f.y < B.t) {
-        f.stocks--; f.falls++; f.dead = 100; f.state = 'dead'; f.weapon = null; f.combo = 0;
+        f.stocks--; f.falls++; f.dead = 100; f.state = 'dead'; f.weapon = null; f.item = null; f.feather = 0; f.combo = 0;
         const killer = w.fighters.find(o => o.id === f.lastHit && o !== f);
         if (killer) killer.kos++;
         events.push({ t: 'ko', id: f.id, by: killer?.id ?? null, x: Math.round(Math.max(B.l, Math.min(B.r, f.x))), y: Math.round(Math.max(B.t, Math.min(B.b, f.y))), left: f.stocks });
@@ -469,9 +542,9 @@
   const alive = w => w.fighters.filter(f => f.state !== 'out');
 
   // Combattant envoyé sur le réseau (et rejoué tel quel par le navigateur)
-  const KEYS = ['x', 'y', 'vx', 'vy', 'facing', 'state', 'move', 'mt', 'ground', 'jumps', 'wallJumps', 'coyote', 'drop', 'dmg', 'stocks', 'hitstun', 'hitlag', 'invuln', 'dodgeCd', 'airDodge', 'recovery', 'prevIn', 'lag', 'dead', 'wall', 'kos', 'falls', 'weapon', 'ledgeT', 'ledgeCd', 'combo', 'buf', 'bufT', 'charge'];
+  const KEYS = ['x', 'y', 'vx', 'vy', 'facing', 'state', 'move', 'mt', 'ground', 'jumps', 'wallJumps', 'coyote', 'drop', 'dmg', 'stocks', 'hitstun', 'hitlag', 'invuln', 'dodgeCd', 'airDodge', 'recovery', 'prevIn', 'lag', 'dead', 'wall', 'kos', 'falls', 'weapon', 'ledgeT', 'ledgeCd', 'combo', 'buf', 'bufT', 'charge', 'shield', 'dodgeChain', 'dodgeAgo', 'ledgeUsed', 'wdur', 'item', 'feather'];
   const pack = f => { const o = { id: f.id, char: f.char, team: f.team }; for (const k of KEYS) o[k] = typeof f[k] === 'number' ? Math.round(f[k] * 100) / 100 : f[k]; o.hitIds = f.hitIds; return o; };
-  const packItems = w => ({ items: w.items.map(i => [i.id, Math.round(i.x), Math.round(i.y), i.ground ? 1 : 0]), shots: w.shots.map(s => [s.id, s.kind, Math.round(s.x), Math.round(s.y), +s.vx.toFixed(1), +s.vy.toFixed(1), s.weapon ?? '', +(s.spin ?? 0).toFixed(2), s.owner]) });
+  const packItems = w => ({ items: w.items.map(i => [i.id, Math.round(i.x), Math.round(i.y), i.ground ? 1 : 0, i.kind]), shots: w.shots.map(s => [s.id, s.kind, Math.round(s.x), Math.round(s.y), +s.vx.toFixed(1), +s.vy.toFixed(1), s.weapon ?? '', +(s.spin ?? 0).toFixed(2), s.owner]) });
 
-  return { FPS, IN, HW, HH, ARENAS, CHARS, CHAR_IDS, WEAPONS, WEAPON_IDS, MOVES, MOVE_IDS, movesOf, STATES: ['idle', 'run', 'air', 'attack', 'lag', 'dodge', 'hitstun', 'ledge', 'dead', 'out'], fighter, step, resolve, activeHits, world, stepWorld, alive, pack, packItems, floorAt };
+  return { FPS, IN, HW, HH, ARENAS, CHARS, CHAR_IDS, WEAPONS, WEAPON_IDS, MOVES, MOVE_IDS, movesOf, STATES: ['idle', 'run', 'air', 'attack', 'lag', 'dodge', 'hitstun', 'ledge', 'shield', 'dead', 'out'], SHIELD, fighter, step, resolve, activeHits, world, stepWorld, alive, pack, packItems, floorAt };
 });

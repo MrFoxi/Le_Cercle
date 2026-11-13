@@ -113,9 +113,18 @@ function onEvent(e, me) {
     sideFx(e);
     return;
   }
-  if (e.t === 'pick') { R.fx.ring(e.x, e.y - 20, '#ffe07a', 10, 260); blip(600, 1200, 0.15, 'triangle', 0.07); if (e.id === me) toast(`${BR.WEAPONS[e.weapon].icon} ${BR.WEAPONS[e.weapon].name} ! (E pour la lancer)`); return; }
+  if (e.t === 'pick') { R.fx.ring(e.x, e.y - 20, '#ffe07a', 10, 260); blip(600, 1200, 0.15, 'triangle', 0.07); if (e.id === me) toast(e.weapon ? `${BR.WEAPONS[e.weapon].icon} ${BR.WEAPONS[e.weapon].name} ! (E pour la lancer)` : { potion: '🧪 Potion : −25 % de dégâts', plume: '🪶 Plume : un saut de plus pendant 15 s', bombe: '💣 Bombe ! (E pour la lancer)', neige: '❄️ Boule de neige ! (E pour la lancer)' }[e.item]); return; }
   if (e.t === 'throw') { SFX.whoosh(); return; }
   if (e.t === 'charge') { SFX.charge(); return; }
+  if (e.t === 'perfect') { R.fx.word(e.x, e.y - 30, 'PARFAIT !', '#7ff0e0'); R.fx.ring(e.x, e.y, '#7ff0e0', 20, 600); blip(880, 1760, 0.3, 'sine', 0.1); blip(1320, 2640, 0.3, 'sine', 0.06, 0.08); return; }
+  if (e.t === 'clash') { R.fx.word(e.x, e.y - 20, 'CLANG !', '#ffe07a'); R.fx.hit({ ...e, heavy: false, v: 0 }, '#ffe07a'); blip(1800, 1700, 0.25, 'square', 0.08); blip(2400, 2300, 0.2, 'square', 0.05); return; }
+  if (e.t === 'block') { R.fx.ring(e.x, e.y, '#aee0ff', 30, 260); blip(500, 300, 0.1, 'triangle', 0.08); return; }
+  if (e.t === 'break') { R.fx.word(e.x, e.y - 40, 'GARDE BRISÉE !', '#ff6a5a'); R.fx.hit({ ...e, heavy: true, v: 0 }, '#aee0ff'); noise(0.4, 2000, 0.4, 'highpass'); return; }
+  if (e.t === 'tech') { R.fx.dust(e.x, e.y, 10); R.fx.word(e.x, e.y - 100, 'RATTRAPÉ !', '#ffffff'); blip(600, 900, 0.12, 'triangle', 0.07); return; }
+  if (e.t === 'wbreak') { R.fx.word(e.x, e.y - 30, `${BR.WEAPONS[e.weapon].icon} cassé !`, '#ffffff'); noise(0.3, 1500, 0.3, 'bandpass'); if (e.id === me) toast('Ton arme s’est brisée'); return; }
+  if (e.t === 'boom') { R.fx.hit({ ...e, heavy: true, v: 20, fx: 'fire' }, '#ff8a2a'); R.fx.dust(e.x, e.y, 20, 2.5); SFX.pound(); noise(0.6, 500, 0.6, 'lowpass', 60); return; }
+  if (e.t === 'freeze') { R.fx.word(e.x, e.y - 50, 'GELÉ !', '#9fdcff'); blip(2200, 3200, 0.3, 'sine', 0.07); return; }
+  if (e.t === 'shield') return;
   if (e.t === 'shot') { blip(900, 300, 0.08, 'square', 0.05); return; }
   if (e.t === 'item') { blip(1200, 1600, 0.2, 'sine', 0.05); return; }
   if (e.t === 'ledge' || e.t === 'climb') { if (e.id !== me) R.fx.dust(e.x, e.y, 4); return; }
@@ -145,7 +154,7 @@ function sideFx(e) {
 
 /* ---------------- Commandes : clavier, souris, manette ---------------- */
 const keys = new Set();
-const KEYMAP = { KeyA: IN.L, KeyQ: IN.L, ArrowLeft: IN.L, KeyD: IN.R, ArrowRight: IN.R, KeyW: IN.U | IN.JUMP, KeyZ: IN.U | IN.JUMP, ArrowUp: IN.U | IN.JUMP, KeyS: IN.D, ArrowDown: IN.D, Space: IN.JUMP, KeyJ: IN.LIGHT, KeyX: IN.LIGHT, KeyK: IN.HEAVY, KeyC: IN.HEAVY, KeyL: IN.DODGE, ShiftLeft: IN.DODGE, ShiftRight: IN.DODGE, KeyV: IN.DODGE, KeyE: IN.PICK, KeyH: IN.PICK, KeyB: IN.PICK };
+const KEYMAP = { KeyA: IN.L, KeyQ: IN.L, ArrowLeft: IN.L, KeyD: IN.R, ArrowRight: IN.R, KeyW: IN.U | IN.JUMP, KeyZ: IN.U | IN.JUMP, ArrowUp: IN.U | IN.JUMP, KeyS: IN.D, ArrowDown: IN.D, Space: IN.JUMP, KeyJ: IN.LIGHT, KeyX: IN.LIGHT, KeyK: IN.HEAVY, KeyC: IN.HEAVY, KeyL: IN.DODGE, ShiftLeft: IN.DODGE, ShiftRight: IN.DODGE, KeyV: IN.DODGE, KeyE: IN.PICK, KeyH: IN.PICK, KeyB: IN.PICK, KeyF: IN.SHIELD, KeyU: IN.SHIELD };
 let mouse = 0, aim = 0, aimT = 0;
 const opt = { upJump: store.get('castagne-upjump') !== '0', mouseAim: store.get('castagne-aim') === '1' };
 $('#optUpJump').checked = opt.upJump; $('#optAim').checked = opt.mouseAim;
@@ -179,7 +188,8 @@ function readInput() {
     if (b(3)) bits |= IN.PICK;
     if (b(2)) bits |= IN.LIGHT;
     if (b(1)) bits |= IN.HEAVY;
-    if (b(4) || b(5) || b(6) || b(7)) bits |= IN.DODGE;
+    if (b(5) || b(6) || b(7)) bits |= IN.DODGE;
+    if (b(4)) bits |= IN.SHIELD;
   }
   if ((bits & IN.L) && (bits & IN.R)) bits &= ~(IN.L | IN.R);
   return bits;
@@ -207,7 +217,8 @@ function hud(list) {
     const st = f.state === 'out' ? '💀' : '❤️'.repeat(Math.max(0, f.stocks));
     const sEl = el.querySelector('.stocks'); if (sEl.textContent !== st) sEl.textContent = st;
     el.classList.toggle('out', f.state === 'out');
-    el.dataset.weapon = f.weapon ? BR.WEAPONS[f.weapon].icon : '';
+    el.dataset.weapon = (f.weapon ? BR.WEAPONS[f.weapon].icon : '') + (f.item === 'bombe' ? '💣' : f.item === 'neige' ? '❄️' : '');
+    el.classList.toggle('worn', !!f.weapon && f.wdur <= 4);
   }
   const s = S;
   if (s?.phase === 'fight') { const left = Math.max(0, Math.ceil((s.deadline - s.now - (performance.now() - stateAt)) / 1000)); $('#timer').textContent = `${Math.floor(left / 60)}:${String(left % 60).padStart(2, '0')}`; }

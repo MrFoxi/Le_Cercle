@@ -79,7 +79,7 @@ class Room extends PartyRoom {
     if (!Array.isArray(list) || !this.world) return;
     const q = (this.queues[name] ??= []), last = this.acks[name] ?? 0;
     for (const e of list.slice(0, 20)) {
-      if (!Array.isArray(e) || !Number.isInteger(e[0]) || !Number.isInteger(e[1]) || e[1] < 0 || e[1] > 511) continue;
+      if (!Array.isArray(e) || !Number.isInteger(e[0]) || !Number.isInteger(e[1]) || e[1] < 0 || e[1] > 1023) continue;
       if (e[0] <= last || (q.length && e[0] <= q.at(-1)[0])) continue;
       q.push([e[0], e[1]]);
     }
@@ -146,8 +146,8 @@ class Room extends PartyRoom {
       b.bits = bits; b.next = w.frame + 8; b.release = true;
       return bits;
     }
-    const item = !f.weapon && w.items.find(i => i.ground && Math.abs(i.x - f.x) < 260 && Math.abs(i.y - f.y) < 40);
-    if (item) { bits |= item.x > f.x ? IN.R : IN.L; if (Math.abs(item.x - f.x) < 40) bits = IN.PICK; b.bits = bits; b.next = w.frame + 4; return bits; }
+    const item = w.items.find(i => i.ground && Math.abs(i.x - f.x) < 260 && Math.abs(i.y - f.y) < 40 && (i.kind === 'arme' ? !f.weapon : !((i.kind === 'bombe' || i.kind === 'neige') && f.item)));
+    if (item) { bits |= item.x > f.x ? IN.R : IN.L; if (item.kind === 'arme' && Math.abs(item.x - f.x) < 40) bits = IN.PICK; b.bits = bits; b.next = w.frame + 4; return bits; }
     const foes = w.fighters.filter(o => o !== f && o.state !== 'out' && o.dead === 0 && !(f.team && o.team === f.team));
     if (!foes.length) return 0;
     const t = foes.reduce((m, o) => (Math.hypot(o.x - f.x, o.y - f.y) < Math.hypot(m.x - f.x, m.y - f.y) ? o : m));
@@ -161,7 +161,8 @@ class Room extends PartyRoom {
       if (!f.ground && t.y > f.y + 30) bits |= IN.D;
       bits |= strong ? IN.HEAVY : IN.LIGHT;
       if (this.rng() < 0.35) bits &= ~(IN.L | IN.R);
-    } else if (near && t.state === 'attack' && this.rng() < 0.2) bits |= IN.DODGE;
+    } else if (near && t.state === 'attack' && this.rng() < 0.35) bits |= this.rng() < 0.5 ? IN.DODGE : IN.SHIELD;
+    if (f.item && Math.abs(dx) < 320 && Math.abs(dx) > 60 && this.rng() < 0.3) bits = (dx > 0 ? IN.R : IN.L) | IN.PICK;
     b.bits = bits; b.release = false;
     b.next = w.frame + 6 + Math.floor(this.rng() * 10);
     return bits;

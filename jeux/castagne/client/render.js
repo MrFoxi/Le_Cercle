@@ -52,6 +52,9 @@ function poseOf(f, t) {
   if (f.state === 'air') return f.vy < 0 ? P({ lF: [45, 80], lB: [-5, 50], aF: [-40, 50], aB: [-70, 40], lean: 6, sq: 1.06 }) : P({ lF: [20, 30], lB: [-25, 40], aF: [70, 30], aB: [100, 30], lean: -4 });
   if (f.state === 'lag') return P({ bob: 14, sq: 0.84, lF: [35, 70], lB: [-35, 70], aF: [50, 60], aB: [40, 60], face: 'grit' });
   if (f.state === 'dodge') return P({ bob: f.ground ? 10 : 0, lF: [70, 120], lB: [50, 120], aF: [60, 130], aB: [40, 130], lean: 30, face: 'calm', ghost: true });
+  if (f.state === 'shield') return P({ bob: 10, lean: 10, aF: [95, 130], aB: [80, 130], lF: [30, 50], lB: [-30, 50], face: 'grit' });
+  if (f.state === 'lag' && (f.move === 'broken' || f.move === 'stunned')) return P({ bob: 6, lean: Math.sin(t * 5) * 12, head: Math.sin(t * 7) * 14, aF: [30, 40], aB: [20, 40], face: 'hurt' });
+  if (f.state === 'lag' && f.move === 'frozen') return P({ aF: [60, 60], aB: [40, 60], lF: [10, 10], lB: [-10, 10], face: 'hurt' });
   if (f.state === 'ledge') return P({ aF: [178, 12], aB: [172, 18], lF: [8, 25], lB: [-12, 35], lean: -6, face: 'grit', head: -10 });
   if (f.state === 'hitstun') { const w = t * 30; return P({ lF: [Math.sin(w) * 40 - 20, 40], lB: [Math.cos(w) * 40 + 20, 50], aF: [140 + Math.sin(w * 1.3) * 30, 30], aB: [-120 + Math.cos(w) * 30, 30], lean: -20, face: 'hurt', tumble: true }); }
   if (f.state === 'attack' && MOVE_POSES[f.move]) {
@@ -306,6 +309,7 @@ export function createRenderer(canvas) {
     },
     dust(x, y, n = 6, s = 1) { for (let k = 0; k < n; k++) parts.push({ k: 'dust', x: x + (rnd() - 0.5) * 20 * s, y: y - 4, vx: (rnd() - 0.5) * 3 * s, vy: -rnd() * 1.6, r: (6 + rnd() * 8) * s, life: 0.5 + rnd() * 0.3, max: 0.8, c: 'rgba(240,225,205,' }); },
     ring(x, y, c = '#ffffff', r = 6, vr = 180) { parts.push({ k: 'ring', x, y, r, vr, life: 0.3, max: 0.3, c }); },
+    word(x, y, s, col = '#ffffff') { texts.push({ x, y, s, life: 0.9, max: 0.9, c: col }); },
     focus(x, y) { focus = { x, y, t: 0.55 }; },
     combo(x, y, n, col) { texts.push({ x: x + 30, y: y - 70, s: `×${n} COMBO`, life: 0.9, max: 0.9, c: col, small: true }); },
     trail(f, col) { parts.push({ k: 'ghost', f: { ...f }, life: 0.25, max: 0.25, c: col }); },
@@ -409,10 +413,12 @@ export function createRenderer(canvas) {
     for (let k = 0; k < 10; k++) { c.fillStyle = 'rgba(255,255,255,.55)'; const yy = 60 + (((t * 260 + k * 70) % 700)); c.fillRect(S.x1 - 66, yy, 18, 22); }
     c.drawImage(stage, SX0, SY0, SW, SH);
     // caisses d'armes : rayon de lumière en tombant, éclat posées
-    for (const [, ix, iy, gr] of items) {
+    const ICON = { potion: '🧪', plume: '🪶', bombe: '💣', neige: '❄️' };
+    for (const [, ix, iy, gr, kind] of items) {
       if (!gr) { c.save(); c.globalCompositeOperation = 'lighter'; const lg = c.createLinearGradient(ix, iy, ix, iy + 900); lg.addColorStop(0, 'rgba(255,230,140,.5)'); lg.addColorStop(1, 'rgba(255,230,140,0)'); c.fillStyle = lg; c.fillRect(ix - 16, iy, 32, 900); c.restore(); }
       const bob = gr ? Math.sin(t * 4 + ix) * 3 : 0, y = iy - 22 + bob;
       c.save(); c.globalCompositeOperation = 'lighter'; const gg = c.createRadialGradient(ix, y, 0, ix, y, 46); gg.addColorStop(0, 'rgba(255,220,120,.7)'); gg.addColorStop(1, 'rgba(255,220,120,0)'); c.fillStyle = gg; c.beginPath(); c.arc(ix, y, 46, 0, TAU); c.fill(); c.restore();
+      if (kind && kind !== 'arme') { c.save(); c.translate(ix, y); c.rotate(Math.sin(t * 2 + ix) * 0.15); c.font = '34px serif'; c.textAlign = 'center'; c.textBaseline = 'middle'; c.fillText(ICON[kind], 0, 0); c.restore(); continue; }
       c.save(); c.translate(ix, y); c.rotate(Math.sin(t * 2 + ix) * 0.1);
       c.fillStyle = '#b8783e'; c.strokeStyle = INK; c.lineWidth = 3; c.fillRect(-18, -16, 36, 32); c.strokeRect(-18, -16, 36, 32);
       c.fillStyle = GOLD; c.fillRect(-18, -3, 36, 6); c.strokeRect(-18, -3, 36, 6);
@@ -420,6 +426,7 @@ export function createRenderer(canvas) {
       c.restore();
     }
     for (const [, kind, sx, sy, svx, svy, sw, spin] of shots) {
+      if (kind === 'bombe' || kind === 'neige') { c.save(); c.translate(sx, sy); c.rotate(spin * 3); c.font = '30px serif'; c.textAlign = 'center'; c.textBaseline = 'middle'; c.fillText(kind === 'bombe' ? '💣' : '⚪', 0, 0); c.restore(); if (kind === 'bombe') parts.push({ k: 'spark', x: sx + 8, y: sy - 14, vx: (Math.random() - 0.5) * 3, vy: -2, life: 0.2, max: 0.2, c: '#ffd040' }); continue; }
       if (kind === 'boulet') { c.save(); c.globalCompositeOperation = 'lighter'; const g = c.createRadialGradient(sx, sy, 0, sx, sy, 26); g.addColorStop(0, '#fff6c0'); g.addColorStop(0.4, 'rgba(255,140,40,.8)'); g.addColorStop(1, 'rgba(255,60,0,0)'); c.fillStyle = g; c.beginPath(); c.arc(sx, sy, 26, 0, TAU); c.fill(); c.restore(); parts.push({ k: 'flame', x: sx, y: sy, vx: -svx * 0.1, vy: -1, r: 12, life: 0.35, max: 0.35 }); }
       else if (kind === 'balle') { c.save(); c.globalCompositeOperation = 'lighter'; c.strokeStyle = '#ffe07a'; c.lineWidth = 6; c.beginPath(); c.moveTo(sx, sy); c.lineTo(sx - svx * 2.2, sy - svy * 2.2); c.stroke(); c.fillStyle = '#ffffff'; c.beginPath(); c.arc(sx, sy, 4, 0, TAU); c.fill(); c.restore(); }
       else { c.save(); c.translate(sx, sy); drawWeapon(c, sw, { x: 0, y: -30, a: spin * 57.3 }); c.restore(); }
@@ -437,6 +444,15 @@ export function createRenderer(canvas) {
       chargeAura(f, t);
       const fo = {}, tip = drawFighter(c, f, t, fo);
       moveFx(f, t);
+      if (f.state === 'shield') { const k = f.shield / BR.SHIELD; c.save(); c.globalCompositeOperation = 'lighter'; c.fillStyle = `rgba(120,200,255,${0.12 + 0.12 * k})`; c.strokeStyle = `rgba(170,225,255,${0.5 + 0.4 * k})`; c.lineWidth = 4; c.beginPath(); c.arc(f.x, f.y - 46, 34 + 26 * k, 0, TAU); c.fill(); c.stroke(); c.restore(); }
+      if (f.state === 'lag' && (f.move === 'broken' || f.move === 'stunned')) for (let k = 0; k < 3; k++) { const a = t * 5 + (k * TAU) / 3; c.font = '18px serif'; c.textAlign = 'center'; c.fillText('⭐', f.x + Math.cos(a) * 26, f.y - 108 + Math.sin(a) * 7); }
+      if (f.state === 'lag' && f.move === 'frozen') { c.fillStyle = 'rgba(170,225,255,.45)'; c.strokeStyle = 'rgba(230,248,255,.9)'; c.lineWidth = 3; c.beginPath(); c.roundRect(f.x - 34, f.y - 104, 68, 108, 10); c.fill(); c.stroke(); c.strokeStyle = 'rgba(255,255,255,.7)'; c.beginPath(); c.moveTo(f.x - 20, f.y - 90); c.lineTo(f.x - 8, f.y - 70); c.stroke(); }
+      if (f.item) { c.font = '24px serif'; c.textAlign = 'center'; c.fillText(f.item === 'bombe' ? '💣' : '⚪', f.x + f.facing * 26, f.y - 96); }
+      if (!f.ground && f.state !== 'dead') { // sauts restants (et remontée) sous le combattant
+        const n = Math.max(0, f.jumps);
+        for (let k = 0; k < n; k++) { c.fillStyle = f.feather > 0 && k === 2 ? '#ffe07a' : '#ffffff'; c.strokeStyle = INK; c.lineWidth = 2; c.beginPath(); c.arc(f.x - (n - 1) * 7 + k * 14, f.y + 18, 5, 0, TAU); c.fill(); c.stroke(); }
+        if (f.recovery) { c.fillStyle = '#ffd23f'; c.beginPath(); c.moveTo(f.x + n * 7 + 8, f.y + 22); c.lineTo(f.x + n * 7 + 14, f.y + 12); c.lineTo(f.x + n * 7 + 20, f.y + 22); c.closePath(); c.fill(); c.stroke(); }
+      }
       const tr = (trails[f.id] ??= []);
       if (tip && f.state === 'attack') { tr.push({ ...tip, t }); if (tr.length > 8) tr.shift(); } else tr.length = 0;
       c.globalAlpha = 1;
@@ -478,8 +494,19 @@ export function createRenderer(canvas) {
       c.restore();
       void id;
     }
-    // éclair de K.O.
+    // combattants hors du cadre : une bulle au bord de l'écran, avec leurs dégâts
     c.setTransform(dpr, 0, 0, dpr, 0, 0);
+    for (const f of list) {
+      if (f.state === 'out' || f.state === 'dead') continue;
+      const px = W / 2 + (f.x - cam.x) * cam.z, py = H / 2 + (f.y - 45 - cam.y) * cam.z;
+      if (px > 0 && px < W && py > 0 && py < H) continue;
+      const bx = clamp(px, 40, W - 40), by = clamp(py, 40, H - 40), a = Math.atan2(py - by, px - bx), col = colors[f.id] ?? '#fff';
+      c.fillStyle = col; c.strokeStyle = INK; c.lineWidth = 3;
+      c.beginPath(); c.moveTo(bx + Math.cos(a) * 38, by + Math.sin(a) * 38); c.lineTo(bx + Math.cos(a + 0.5) * 26, by + Math.sin(a + 0.5) * 26); c.lineTo(bx + Math.cos(a - 0.5) * 26, by + Math.sin(a - 0.5) * 26); c.closePath(); c.fill(); c.stroke();
+      c.fillStyle = '#fff7ea'; c.beginPath(); c.arc(bx, by, 26, 0, TAU); c.fill(); c.stroke();
+      c.fillStyle = INK; c.font = '800 15px "Baloo 2", system-ui'; c.textAlign = 'center'; c.textBaseline = 'middle'; c.fillText(`${Math.round(f.dmg)}%`, bx, by);
+    }
+    // éclair de K.O.
     if (flash > 0) { c.fillStyle = `rgba(255,255,255,${flash})`; c.fillRect(0, 0, W, H); }
   }
   return { resize, draw, fx, cam };
