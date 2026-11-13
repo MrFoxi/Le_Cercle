@@ -607,7 +607,7 @@ function frame(now) {
     if (sound()) crowd(0.14 + Math.max(0, Math.min(1, (5 - near) / 5)) * 0.22);
   } else V.frame(dt, t, null);
 }
-if (location.hostname === 'localhost') window.cb = { V, state: () => S, pred: () => pred, local: () => L, profile: () => P, give: n => earn(n, 'test'), play: arg => { const [stade, mode = 'normal', a = 'roco', b = 'siroco'] = arg.split('/'); startLocal([{ ...meP(), char: a }, botP(b, 2, 'Robot')], { time: 120, stade, mode, bonus: 1 }, { type: 'duo' }); }, unlock: () => { P.chars = [...CC.CHAR_IDS]; refreshCards(); } };
+if (location.hostname === 'localhost') window.cb = { V, state: () => S, pred: () => pred, local: () => L, profile: () => P, give: n => earn(n, 'test'), play: arg => { const [stade, mode = 'normal', a = 'roco', b = 'siroco'] = arg.split('/'); startLocal([{ ...meP(), char: a }, botP(b, 2, 'Robot')], { time: 120, stade, mode, bonus: 1 }, { type: 'duo' }); }, unlock: () => { P.chars = [...CC.CHAR_IDS]; refreshCards(); }, sheet: (t = 0) => { const d = document.createElement('div'); d.style.cssText = 'position:fixed;inset:0;z-index:99;background:#fff7ea;display:grid;grid-template-columns:repeat(4,1fr);align-items:center;justify-items:center'; for (const id of CC.CHAR_IDS) { const cv = document.createElement('canvas'); cv.width = cv.height = 420; cv.style.width = cv.style.height = '420px'; drawPortrait(cv, id, 0, t); d.append(cv); } document.body.append(d); } };
 refreshCards(); renderCoins();
 requestAnimationFrame(frame);
 show('home');
