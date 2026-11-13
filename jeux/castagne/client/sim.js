@@ -15,7 +15,7 @@
   const BUFMASK = IN.JUMP | IN.LIGHT | IN.HEAVY | IN.DODGE | IN.PICK;
   const CHARGE = 45; // images de charge au plus
   const SHIELD = 60; // résistance de la garde
-  const ITEM_KINDS = ['arme', 'arme', 'arme', 'potion', 'plume', 'bombe', 'neige'];
+  const OBJECTS = ['potion', 'plume', 'bombe', 'neige'];
   const chargeK = f => 1 + ((f.charge ?? 0) / CHARGE) * 0.45;
 
   /* ---------------- Arène ---------------- */
@@ -446,7 +446,7 @@
   function world(arenaId, entries, stocks = 3) {
     const A = ARENAS[arenaId];
     return {
-      arena: arenaId, frame: 0, items: [], shots: [], nextItem: 360, seq: 0,
+      arena: arenaId, frame: 0, items: [], shots: [], nextItem: 180, nextObj: 1200, seq: 0,
       fighters: entries.map((e, k) => { const sp = A.spawns[k % A.spawns.length]; return Object.assign(fighter(e.id, e.char, sp, sp[0] > 0 ? -1 : 1), { stocks, team: e.team ?? null }); }),
     };
   }
@@ -486,10 +486,10 @@
       delete f.events; delete f.spawn; delete f.wantPick;
     }
     // armes qui tombent du ciel
-    if (--w.nextItem <= 0) {
-      w.nextItem = 420 + ((w.frame * 7919) % 240);
-      if (w.items.length < 3) { const S = A.solids[0], x = S.x0 + 40 + ((w.frame * 2654435761) % (S.x1 - S.x0 - 80)); w.items.push({ id: ++w.seq, x, y: -900, vy: 0, ground: false, life: 1500, kind: ITEM_KINDS[(w.frame * 31 + w.seq) % ITEM_KINDS.length] }); events.push({ t: 'item', x, y: floorAt(A, x, -900) ?? 0 }); }
-    }
+    // caisses d'armes souvent (toutes les 4 à 6 s, 4 au plus) ; objets de temps en temps (toutes les 20 à 30 s, un seul)
+    const drop = kind => { const S = A.solids[0], x = S.x0 + 40 + ((w.frame * 2654435761 + w.seq * 97) % (S.x1 - S.x0 - 80)); w.items.push({ id: ++w.seq, x, y: -900, vy: 0, ground: false, life: 1500, kind }); events.push({ t: 'item', x, y: floorAt(A, x, -900) ?? 0 }); };
+    if (--w.nextItem <= 0) { w.nextItem = 240 + ((w.frame * 7919) % 120); if (w.items.filter(i => i.kind === 'arme').length < 4) drop('arme'); }
+    if (--w.nextObj <= 0) { w.nextObj = 1200 + ((w.frame * 104729) % 600); if (!w.items.some(i => i.kind !== 'arme')) drop(OBJECTS[(w.frame * 31 + w.seq) % OBJECTS.length]); }
     for (const it of w.items) {
       if (!it.ground) { it.vy = Math.min(it.vy + 0.25, 6); const fl = floorAt(A, it.x, it.y); it.y += it.vy; if (fl !== null && it.y >= fl) { it.y = fl; it.ground = true; events.push({ t: 'land', id: null, x: Math.round(it.x), y: Math.round(it.y) }); } }
     }
