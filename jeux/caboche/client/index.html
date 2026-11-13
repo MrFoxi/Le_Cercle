@@ -11,6 +11,7 @@
   <link rel="stylesheet" href="style.css">
   <script src="/socket.io/socket.io.js"></script>
   <script src="sim.js"></script>
+  <script src="bot.js"></script>
   <script type="module" src="main.js"></script>
   <script src="/shared/presence.js" defer></script>
 </head>
@@ -19,32 +20,37 @@
 
   <!-- Accueil -->
   <section id="home" class="screen">
-    <a class="back" href="../">← Le Cercle</a>
+    <div class="topbar"><a class="back" href="../">← Le Cercle</a><span class="coins pill"></span><button class="ghost small" id="shopBtn">🛒 Boutique</button><button class="ghost small" id="statsBtn">📊 Stats</button></div>
     <header class="hero">
       <h1>Caboche <span>Cup</span></h1>
-      <p class="tagline">Du foot de profil à un contre un, avec des têtes énormes : boulets, lobs, reprises de volée, têtes plongeantes, tacles et super-pouvoirs, sous les projecteurs du stade.</p>
+      <p class="tagline">Du foot de profil avec des têtes énormes : boulets, lobs, retournés, têtes plongeantes, tacles, super-pouvoirs et bonus qui tombent du ciel.</p>
     </header>
     <form class="card" id="nameForm"><label>Ton nom de joueur <input name="pseudo" maxlength="20" required autocomplete="nickname" placeholder="Pseudo"></label></form>
-    <div class="card"><h2>Ton joueur</h2><div class="picks" id="homePicks"></div></div>
+    <div class="card"><h2>Ton joueur <small>les joueurs 🔒 se débloquent avec des pièces</small></h2><div class="picks" id="homePicks"></div></div>
+    <div class="modes">
+      <button class="mode m1" id="soloBtn"><i>🤖</i><b>Contre un robot</b><small>Un match tout de suite</small></button>
+      <button class="mode m2" id="tourBtn"><i>🏆</i><b>Tournoi</b><small>7 matchs jusqu'à la coupe</small></button>
+      <button class="mode m3" id="survieBtn"><i>💀</i><b>Survie</b><small>Un but et c'est fini · classement mondial</small></button>
+      <button class="mode m4" id="defisBtn"><i>🎯</i><b>Défis</b><small>Lobs, retournés, cage inviolée…</small></button>
+      <button class="mode m5" id="duoBtn"><i>🎮</i><b>À deux</b><small>Sur le même clavier</small></button>
+      <button class="mode m6" id="quickBtn"><i>⚡</i><b>Match rapide en ligne</b><small>Contre un vrai joueur</small></button>
+    </div>
     <div class="grid">
-      <div class="card"><h2>Tout de suite</h2><p class="hint">Un match contre un robot, sans attendre.</p><button class="primary big" id="soloBtn">⚽ Jouer</button></div>
-      <div class="card"><h2>Match rapide</h2><p class="hint">Contre un vrai joueur : rejoint un salon qui attend, sinon en ouvre un.</p><button class="primary big" id="quickBtn">⚡ Trouver un adversaire</button></div>
-      <form class="card" id="createForm"><h2>Créer un salon</h2>
+      <form class="card" id="createForm"><h2>Créer un salon</h2><p class="hint">1 contre 1 ou 2 contre 2, avec tes amis ou des robots.</p>
         <div class="chips"><label class="chip"><input type="radio" name="vis" value="public" checked> 🌍 Public</label><label class="chip"><input type="radio" name="vis" value="private"> 🔒 Privé</label></div>
         <button class="primary">Créer</button></form>
-    </div>
-    <div class="grid two">
       <form class="card" id="joinForm"><h2>Avec un code</h2><input name="code" maxlength="5" required autocomplete="off" class="code-input" placeholder="ABCDE" aria-label="Code du salon"><div class="row"><button class="primary" name="mode" value="play">Rejoindre</button><button class="ghost" name="mode" value="watch">👁</button></div></form>
       <div class="card"><h2>Salons ouverts</h2><ul id="rooms" class="list"></ul></div>
     </div>
     <div class="card rules"><h2>Les commandes</h2>
       <ul>
-        <li><kbd>Q</kbd> <kbd>D</kbd> (ou <kbd>←</kbd> <kbd>→</kbd>) : courir · <kbd>Z</kbd> (ou <kbd>↑</kbd>) : sauter, pour les têtes · <kbd>Maj</kbd> maintenue : sprint, qui use l'endurance (la barre sous ton nom).</li>
-        <li><kbd>Espace</kbd> (ou clic gauche) : tirer vers le but adverse. Le tir dépend de ta course : à l'arrêt, un <b>piqué</b> ; en avançant, une <b>frappe</b> ; en sprint, un <b>boulet</b> ; en reculant, un <b>lob</b> ; en l'air, une <b>reprise de volée</b>.</li>
+        <li><kbd>Q</kbd> <kbd>D</kbd> (ou <kbd>←</kbd> <kbd>→</kbd>) : courir · <kbd>Z</kbd> (ou <kbd>↑</kbd>) : sauter · <kbd>Maj</kbd> : sprint, qui use l'endurance (la barre sous ton nom).</li>
+        <li><kbd>Espace</kbd> (ou clic gauche) : tirer. À l'arrêt, un <b>piqué</b> ; en avançant, une <b>frappe</b> ; en sprint, un <b>boulet</b> ; en reculant, un <b>lob</b>. En l'air : <b>volée</b>, <b>tête plongeante</b> (ballon à hauteur de poitrine), <b>retourné</b> (ballon au-dessus de ta tête).</li>
+        <li><b>Garde la touche de tir</b> pour charger : au relâché, un tir chargé, plus fort et plus tendu.</li>
+        <li>Un ballon qui arrive doucement est <b>amorti</b> et reste devant toi. En l'air devant ton but, ta tête devient une <b>parade</b>.</li>
         <li><kbd>S</kbd> (ou clic droit) : tacle glissé. Il fait tomber l'adversaire… mais rate-le et tu restes un moment à terre.</li>
-        <li><kbd>E</kbd> : super-pouvoir quand la jauge est pleine. Bouboule : 🔥 Super Tir (le prochain tir part en boulet de feu). Lila : 🎈 Tête Géante (une tête deux fois plus grosse).</li>
-        <li>La jauge se remplit avec le temps, et d'un coup quand on encaisse un but. Égalité à la fin : <b>but en or</b>.</li>
-        <li>Manette : stick, <b>A</b> sauter, <b>X</b>/RT tirer, <b>B</b> tacler, LB/RB/LT sprint, <b>Y</b> pouvoir.</li>
+        <li><kbd>E</kbd> : super-pouvoir quand la jauge est pleine (chaque joueur a le sien). Des <b>bonus</b> tombent en parachute : touche-les pour les prendre.</li>
+        <li>Manette : stick ou croix, <b>A</b> sauter, <b>X</b>/RT tirer, <b>B</b> tacler, LB/RB/LT sprint, <b>Y</b> pouvoir. Sur téléphone, des boutons apparaissent à l'écran.</li>
       </ul>
     </div>
   </section>
@@ -57,9 +63,16 @@
     <div class="grid two">
       <div class="card"><h2>Joueurs <small id="count"></small></h2><ul id="players" class="list"></ul><button class="ghost" id="addBot">🤖 Ajouter un robot</button><p class="hint" id="spect"></p></div>
       <div class="card"><h2>Règles</h2>
-        <label>Matchs <select id="rounds"><option value="1">1 match</option><option value="3">3 matchs</option><option value="5">5 matchs</option></select></label>
-        <label>Durée <select id="timeSel"><option value="120">2 min</option><option value="180">3 min</option></select></label>
-        <label>Niveau du robot <select id="levelSel"><option value="1">🙂 Facile</option><option value="2">😤 Normal</option><option value="3">😈 Coriace</option></select></label>
+        <div class="grid two tight">
+          <label>Format <select id="formatSel"><option value="1v1">1 contre 1</option><option value="2v2">2 contre 2</option></select></label>
+          <label>Matchs <select id="rounds"><option value="1">1 match</option><option value="3">3 matchs</option><option value="5">5 matchs</option></select></label>
+          <label>Durée <select id="timeSel"><option value="60">1 min</option><option value="120">2 min</option><option value="180">3 min</option></select></label>
+          <label>Victoire <select id="goalsSel"><option value="0">Au temps</option><option value="3">Premier à 3</option><option value="5">Premier à 5</option></select></label>
+          <label>Mode <select id="modeSel" class="modeOpts"></select></label>
+          <label>Stade <select id="stadeSel" class="stadeOpts"></select></label>
+          <label>Bonus <select id="bonusSel"><option value="1">🎁 Oui</option><option value="0">Non</option></select></label>
+          <label>Robots <select id="levelSel"><option value="1">🙂 Facile</option><option value="2">😤 Normal</option><option value="3">😈 Coriace</option></select></label>
+        </div>
         <p class="hint" id="roomHint"></p>
         <button class="primary big" id="startBtn">⚽ Coup d'envoi !</button>
       </div>
@@ -75,10 +88,16 @@
     <div class="cd" id="cd" hidden></div>
     <div class="banner" id="banner" hidden></div>
     <div class="flash" id="flash" hidden></div>
+    <div class="comment" id="comment" hidden><i>🎙️</i><span></span></div>
+    <div id="touch" aria-hidden="true">
+      <div class="pad l"><button data-bit="L">◀</button><button data-bit="R">▶</button></div>
+      <div class="pad r"><button data-bit="POWER">⚡</button><button data-bit="TACKLE">🛷</button><button data-bit="SPRINT">💨</button><button data-bit="JUMP">⤒</button><button data-bit="KICK" class="big">🦶</button></div>
+    </div>
     <ul id="feed" class="feed"></ul>
     <p class="toast" id="toast" hidden></p>
   </section>
 
   <div id="board" class="overlay" hidden><div class="card end"><h2 id="boardTitle"></h2><ol id="boardList" class="ranking"></ol><p class="hint" id="boardHint"></p><div class="row center" id="boardButtons"></div></div></div>
+  <div id="panel" class="overlay" hidden><div class="card sheet"><button class="ghost small close" data-close="panel" aria-label="Fermer">✕</button><h2 id="panelTitle"></h2><div id="panelBody"></div></div></div>
 </body>
 </html>
