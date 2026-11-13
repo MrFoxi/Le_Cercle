@@ -2,12 +2,12 @@
 // numérotées au serveur (« in ») et fait bouger son joueur tout de suite avec la même physique ; à chaque état reçu
 // (« snap »), il reprend la position du serveur et rejoue les touches que le serveur n'a pas encore vues.
 // L'adversaire est affiché avec un léger retard, lissé ; le ballon est prolongé jusqu'à maintenant (vitesse et gravité).
-import { createStadium, TEAM } from './render.js';
+import { createPitch, drawPortrait, TEAM } from './render.js';
 import { $, esc, store, audio, sound, blip, fanfare, party } from '/shared/party.js';
 
 const CC = window.CC, { IN } = CC;
 const socket = io('/caboche');
-const V = createStadium($('#view'));
+const V = createPitch($('#view'));
 addEventListener('resize', () => V.resize());
 
 /* ---------------- Sons ---------------- */
@@ -61,9 +61,11 @@ const { show, act } = ui;
 $('#timeSel').onchange = e => act('configure', 'time', Number(e.target.value));
 $('#levelSel').onchange = e => act('configure', 'level', Number(e.target.value));
 function charCards(box) {
-  box.innerHTML = CC.CHAR_IDS.map(id => { const c = CC.CHARS[id], pw = CC.POWERS[c.power]; return `<button class="char" data-char="${id}"><b>${c.name}</b><small>${c.title}</small><span class="pw">${pw.icon} ${pw.name}</span><span class="stats">${Object.entries(c.stats).map(([k, v]) => `<i><em>${k}</em><u style="width:${v * 20}%"></u></i>`).join('')}</span></button>`; }).join('');
+  box.innerHTML = CC.CHAR_IDS.map(id => { const c = CC.CHARS[id], pw = CC.POWERS[c.power]; return `<button class="char" data-char="${id}"><canvas width="240" height="240"></canvas><b>${c.name}</b><small>${c.title}</small><span class="pw">${pw.icon} ${pw.name}</span><span class="stats">${Object.entries(c.stats).map(([k, v]) => `<i><em>${k}</em><u style="width:${v * 20}%"></u></i>`).join('')}</span></button>`; }).join('');
 }
 charCards($('#homePicks')); charCards($('#picks'));
+// portraits animés (ils suivent un ballon imaginaire), seulement quand un menu est affiché
+setInterval(() => { if (document.body.classList.contains('playing')) return; const t = performance.now() / 1000; for (const cv of document.querySelectorAll('.char canvas')) if (cv.offsetParent) drawPortrait(cv, cv.parentNode.dataset.char, 0, t); }, 50);
 for (const box of [$('#picks'), $('#homePicks')]) box.onclick = e => { const b = e.target.closest('[data-char]'); if (!b) return; audio(); myChar = b.dataset.char; store.set('caboche-char', myChar); renderPicks(); if (ui.room && ['lobby', 'over'].includes(ui.room.phase)) act('pick', myChar); blip(500, 800, 0.1, 'triangle', 0.06); };
 function renderPicks() { for (const b of document.querySelectorAll('[data-char]')) b.classList.toggle('on', b.dataset.char === myChar); }
 renderPicks();
@@ -79,7 +81,7 @@ $('#quickBtn').onclick = async () => {
 /* ---------------- États reçus ---------------- */
 let S = null, matchKey = '';
 const snaps = [];
-let pred = null, pending = [], seq = 0, vis = { x: 0, z: 0 };
+let pred = null, pending = [], seq = 0, vis = { x: 0 };
 const inMatch = s => s && ['kickoff', 'play', 'goal', 'end'].includes(s.phase);
 socket.on('state', s => {
   const old = S; S = s;
@@ -93,9 +95,9 @@ socket.on('state', s => {
   if (s.phase === 'end' || s.phase === 'over') showBoard(s); else $('#board').hidden = true;
 });
 function onPhase(s, old) {
-  if (s.phase === 'kickoff') { V.cam.focus = null; countdown(); }
+  if (s.phase === 'kickoff') countdown();
   if (s.phase === 'play' && old?.phase === 'kickoff') { SFX.whistle(); banner('C’EST PARTI !', ''); }
-  if (s.phase === 'end') { SFX.whistle(3); crowd(0.15); V.cam.focus = null; }
+  if (s.phase === 'end') { SFX.whistle(3); crowd(0.15); }
 }
 let countT = null;
 function countdown() { let n = 2; clearInterval(countT); const el = $('#cd'); const tick = () => { el.textContent = n > 0 ? n : '⚽'; el.hidden = false; el.classList.remove('pop'); void el.offsetWidth; el.classList.add('pop'); blip(n > 0 ? 660 : 990, n > 0 ? 660 : 990, 0.12, 'square', 0.06); if (n-- <= 0) { clearInterval(countT); setTimeout(() => (el.hidden = true), 500); } }; tick(); countT = setInterval(tick, 700); }
@@ -106,32 +108,32 @@ socket.on('snap', snap => {
   for (const e of snap.ev) onEvent(e, me);
   const mine = snap.p.find(p => p.id === me);
   if (mine) {
-    const ack = snap.ack[me] ?? 0, before = pred && { x: pred.x, z: pred.z };
+    const ack = snap.ack[me] ?? 0, before = pred && { x: pred.x };
     pred = { ...mine };
     pending = pending.filter(([q]) => q > ack);
     if (S?.phase === 'play' || S?.phase === 'goal') for (const [, bits] of pending) CC.step(pred, bits);
-    if (before && Math.hypot(before.x - pred.x, before.z - pred.z) < 2) { vis.x += before.x - pred.x; vis.z += before.z - pred.z; }
+    if (before && Math.abs(before.x - pred.x) < 2) vis.x += before.x - pred.x;
   }
 });
 const nameOf = id => S?.players.find(p => p.name === id)?.name ?? id;
+const KICKS = { boulet: '💥 BOULET !', volee: '🦶 REPRISE DE VOLÉE !', lob: '🌈 LOB !' };
 function onEvent(e, me) {
-  if (e.t === 'kick') { V.fx.kick(e); SFX.kick(e.p); if (e.fire) { banner('🔥 SUPER TIR !', ''); SFX.power(); } return; }
-  if (e.t === 'header') { V.fx.spark(e.x, e.y, e.z, '#ffffff', 12); SFX.head(); return; }
-  if (e.t === 'bounce') { SFX.bounce(e.v); return; }
-  if (e.t === 'post') { V.fx.spark(e.x, 1.5, e.z, '#ffffff', 30); SFX.post(); SFX.ooh(); flash('POTEAU !'); return; }
-  if (e.t === 'wall') { SFX.wall(); return; }
+  if (e.t === 'kick') { V.fx.kick(e); SFX.kick(e.p); if (e.fire) { banner('🔥 SUPER TIR !', ''); SFX.power(); } else if (KICKS[e.kind] && e.id === me) flash(KICKS[e.kind]); return; }
+  if (e.t === 'header') { V.fx.header(e); SFX.head(); return; }
+  if (e.t === 'bounce') { SFX.bounce(e.v); if (e.y < 0.5) V.fx.dust(e.x, 3); return; }
+  if (e.t === 'post') { V.fx.spark(e.x, e.y, '#ffffff', 30); V.fx.shake(0.4); SFX.post(); SFX.ooh(); flash('POTEAU !'); return; }
+  if (e.t === 'wall') { SFX.wall(); if (Math.abs(e.x) > CC.F.HL && e.y < CC.F.GH) V.fx.net(e.x, e.y); return; }
   if (e.t === 'tackle') { SFX.tackle(); return; }
-  if (e.t === 'fall') { V.fx.dust(e.x, e.z, 20, '#8aa870'); SFX.fall(); V.fx.shake(0.3); if (e.id === me) toast('Taclé ! 🤕'); return; }
+  if (e.t === 'fall') { V.fx.dust(e.x, 20, '#7fbf5f'); SFX.fall(); V.fx.shake(0.3); if (e.id === me) toast('Taclé ! 🤕'); return; }
   if (e.t === 'jump') { if (e.id !== me) SFX.jump(); return; }
-  if (e.t === 'land') { V.fx.dust(e.x, e.z, 6); return; }
+  if (e.t === 'land') { V.fx.dust(e.x, 6); return; }
   if (e.t === 'power') { const p = S?.players.find(x => x.name === e.id), pw = CC.POWERS[CC.CHARS[p?.char ?? 'bouboule'].power]; banner(`${pw.icon} ${pw.name.toUpperCase()} !`, nameOf(e.id)); SFX.power(); return; }
   if (e.t === 'golden') { banner('BUT EN OR !', 'Le prochain but gagne le match'); SFX.whistle(2); return; }
   if (e.t === 'goal') {
     V.fx.goal(e.side); SFX.goal(); crowd(0.6); setTimeout(() => crowd(0.18), 3500);
     const mine = S?.sides?.[e.side] === me;
     banner(e.own ? 'CONTRE SON CAMP !' : 'BUUUT !', `${nameOf(e.by)} · ${e.score[0]} - ${e.score[1]}`);
-    V.cam.focus = { x: (e.side === 0 ? 1 : -1) * CC.F.HL * 0.75 };
-    V.celebrate(e.by, 'danser'); const other = S?.sides?.[1 - e.side]; if (other) V.celebrate(other, 'pleurer');
+    V.celebrate(e.by, 'win'); const other = S?.sides?.[1 - e.side]; if (other) V.celebrate(other, 'sad');
     goalFlash = performance.now() + 2500;
     if (mine) blip(784, 1568, 0.4, 'square', 0.06, 0.3);
   }
@@ -139,7 +141,7 @@ function onEvent(e, me) {
 
 /* ---------------- Commandes ---------------- */
 const keys = new Set();
-const KEYMAP = { KeyA: IN.L, KeyQ: IN.L, ArrowLeft: IN.L, KeyD: IN.R, ArrowRight: IN.R, KeyW: IN.U, KeyZ: IN.U, ArrowUp: IN.U, KeyS: IN.D, ArrowDown: IN.D, Space: IN.JUMP, KeyJ: IN.KICK, KeyK: IN.TACKLE, KeyE: IN.POWER, KeyF: IN.POWER, ShiftLeft: IN.TACKLE };
+const KEYMAP = { KeyA: IN.L, ArrowLeft: IN.L, KeyD: IN.R, ArrowRight: IN.R, KeyW: IN.JUMP, ArrowUp: IN.JUMP, Space: IN.KICK, KeyJ: IN.KICK, ShiftLeft: IN.SPRINT, ShiftRight: IN.SPRINT, KeyS: IN.TACKLE, ArrowDown: IN.TACKLE, KeyK: IN.TACKLE, KeyE: IN.POWER };
 let mouse = 0;
 addEventListener('keydown', e => { if (e.target.closest?.('input, select')) return; if (KEYMAP[e.code] !== undefined && document.body.classList.contains('playing')) { e.preventDefault(); keys.add(e.code); audio(); } });
 addEventListener('keyup', e => keys.delete(e.code));
@@ -153,8 +155,8 @@ function readInput() {
   for (const g of navigator.getGamepads?.() ?? []) {
     if (!g) continue;
     const ax = g.axes[0] ?? 0, ay = g.axes[1] ?? 0, b = i => g.buttons[i]?.pressed;
-    if (ax < -0.35) bits |= IN.L; if (ax > 0.35) bits |= IN.R; if (ay < -0.35) bits |= IN.U; if (ay > 0.35) bits |= IN.D;
-    if (b(0)) bits |= IN.JUMP; if (b(2) || b(7)) bits |= IN.KICK; if (b(1) || b(6)) bits |= IN.TACKLE; if (b(3)) bits |= IN.POWER;
+    if (ax < -0.35) bits |= IN.L; if (ax > 0.35) bits |= IN.R; if (ay < -0.6) bits |= IN.JUMP;
+    if (b(0)) bits |= IN.JUMP; if (b(2) || b(7)) bits |= IN.KICK; if (b(1)) bits |= IN.TACKLE; if (b(4) || b(5) || b(6)) bits |= IN.SPRINT; if (b(3)) bits |= IN.POWER;
   }
   return bits;
 }
@@ -179,7 +181,6 @@ function showBoard(s) {
   if (!over) $('#boardButtons').innerHTML = '';
   $('#board').hidden = false;
 }
-let lastBoard = '';
 function hud(list, snap) {
   const s = S;
   const names = s?.sides ?? [], score = s?.score ?? [0, 0];
@@ -187,8 +188,6 @@ function hud(list, snap) {
   $('#sbL').textContent = names[0] ?? ''; $('#sbR').textContent = names[1] ?? '';
   $('#sbScore').textContent = `${score[0]} - ${score[1]}`; $('#sbClock').textContent = clock;
   $('#sbClock').classList.toggle('hurry', !snap?.golden && secs <= 10 && s?.phase === 'play');
-  const flashOn = performance.now() < goalFlash, sig = `${names}|${score}|${clock}|${flashOn}`;
-  if (sig !== lastBoard) { lastBoard = sig; V.drawBoard(names, score, clock, flashOn); }
   for (const p of list) {
     const el = $(p.side ? '#gR' : '#gL'), pw = CC.POWERS[CC.CHARS[p.char].power];
     el.style.setProperty('--g', `${Math.round(p.gauge * 100)}%`);
@@ -199,7 +198,6 @@ function hud(list, snap) {
 
 /* ---------------- Boucle ---------------- */
 let last = performance.now(), acc = 0, outbox = [];
-const tags = {};
 function frame(now) {
   requestAnimationFrame(frame);
   const dt = Math.min(0.1, (now - last) / 1000); last = now;
@@ -210,36 +208,26 @@ function frame(now) {
     if (live && pred) { const bits = readInput(); pending.push([++seq, bits]); outbox.push([seq, bits]); pred.ev = []; CC.step(pred, bits); for (const e of pred.ev) if (e === 'jump') SFX.jump(); delete pred.ev; if (pending.length > 120) pending.shift(); }
   }
   if (outbox.length) socket.emit('in', outbox.splice(0));
-  vis.x *= Math.exp(-dt * 14); vis.z *= Math.exp(-dt * 14);
-  let list = [], ballNow = null;
-  const snap = snaps.at(-1)?.s;
+  vis.x *= Math.exp(-dt * 14);
+  let scene = null;
   if (inMatch(s) && snaps.length) {
-    V.syncPlayers(snap.p.map(p => ({ name: p.id, char: p.char, side: p.side })));
-    const rt = now - 66;
+    const snap = snaps.at(-1).s, rt = now - 66;
     let i = snaps.findIndex(x => x.at > rt); if (i < 0) i = snaps.length - 1;
     const B = snaps[i], A = snaps[Math.max(0, i - 1)], k = B.at > A.at ? Math.max(0, Math.min(1, (rt - A.at) / (B.at - A.at))) : 1;
-    for (const b of B.s.p) {
+    const list = B.s.p.map(b => {
       let p;
-      if (b.id === s.me && pred) p = { ...pred, x: pred.x + vis.x, z: pred.z + vis.z };
-      else { const a = A.s.p.find(x => x.id === b.id) ?? b; p = { ...b, x: a.x + (b.x - a.x) * k, y: a.y + (b.y - a.y) * k, z: a.z + (b.z - a.z) * k }; }
-      list.push(p); V.posePlayer(p.id, p, dt, t);
-    }
+      if (b.id === s.me && pred) p = { ...pred, x: pred.x + vis.x };
+      else { const a = A.s.p.find(x => x.id === b.id) ?? b; p = { ...b, x: a.x + (b.x - a.x) * k, y: a.y + (b.y - a.y) * k }; }
+      return { ...p, name: p.id, me: p.id === s.me };
+    });
     // ballon : dernier état connu, prolongé jusqu'à maintenant
-    const L = snaps.at(-1), age = Math.min(0.12, (now - L.at) / 1000), [bx, by, bz, bvx, bvy, bvz, fire] = L.s.b;
-    ballNow = { x: bx + bvx * age, y: Math.max(CC.BALL.r, by + bvy * age - 0.5 * CC.BALL.g * age * age), z: bz + bvz * age, fire };
+    const L = snaps.at(-1), age = Math.min(0.12, (now - L.at) / 1000), [bx, by, bvx, bvy, fire] = L.s.b;
+    const lim = CC.WALL - CC.BALL.r, ball = { x: Math.max(-lim, Math.min(lim, bx + bvx * age)), y: Math.max(CC.BALL.r, by + bvy * age - 0.5 * CC.BALL.g * age * age), vx: bvx, vy: bvy, fire };
+    const secs = Math.ceil((snap.clock ?? 0) / 1000);
+    scene = { players: list, ball, board: { names: s.sides, score: s.score, clock: snap.golden ? 'BUT EN OR' : `${Math.floor(secs / 60)}:${String(secs % 60).padStart(2, '0')}`, flash: performance.now() < goalFlash } };
     hud(list, snap);
-  } else V.syncPlayers([]);
-  V.update(dt, t, ballNow ?? { x: 0, y: CC.BALL.r, z: 0, fire: 0 });
-  // noms au-dessus des têtes
-  for (const p of list) {
-    const el = (tags[p.id] ??= Object.assign(document.createElement('div'), { className: 'tag' }));
-    if (!el.parentNode) $('#labels').append(el);
-    const hp = V.headPos(p.id); if (!hp) continue;
-    const sc = V.project(hp);
-    el.style.transform = `translate(${sc.x}px, ${sc.y}px) translate(-50%, -100%)`;
-    el.innerHTML = `<b style="--c:${TEAM[p.side]}">${esc(p.id)}${p.id === s.me ? ' (toi)' : ''}</b>`;
   }
-  for (const [id, el] of Object.entries(tags)) if (!list.some(p => p.id === id)) { el.remove(); delete tags[id]; }
+  V.frame(dt, t, scene);
   if (live && sound()) crowd(0.16);
 }
 if (location.hostname === 'localhost') window.cb = { V, state: () => S, pred: () => pred };

@@ -10,7 +10,7 @@ const SETTINGS = { rounds: [1, 3, 5], time: [120, 180], level: [1, 2, 3] };
 const KICKOFF_MS = 2200, GOAL_MS = 3200, END_MS = 6000, GOLDEN_MS = 60000, TICK_MS = 1000 / CC.FPS, QUEUE_MAX = 4, MAX_STEPS = 5;
 const COLORS = ['#ff4d4d', '#3d8bff'];
 const BOT_NAMES = ['Robot Crampon', 'Robot Lucarne', 'Robot Petit-Pont'];
-const { IN, F } = CC;
+const { IN } = CC;
 
 class Room extends PartyRoom {
   static MAX_PLAYERS = 2;
@@ -77,7 +77,7 @@ class Room extends PartyRoom {
     if (!Array.isArray(list) || !this.world) return;
     const q = (this.queues[name] ??= []), last = this.acks[name] ?? 0;
     for (const e of list.slice(0, 20)) {
-      if (!Array.isArray(e) || !Number.isInteger(e[0]) || !Number.isInteger(e[1]) || e[1] < 0 || e[1] > 255) continue;
+      if (!Array.isArray(e) || !Number.isInteger(e[0]) || !Number.isInteger(e[1]) || e[1] < 0 || e[1] > 127) continue;
       if (e[0] <= last || (q.length && e[0] <= q.at(-1)[0])) continue;
       q.push([e[0], e[1]]);
     }
@@ -134,38 +134,60 @@ class Room extends PartyRoom {
   }
 
   /* ---- Robot ---- */
-  // Défend s'il est mal placé (entre le ballon et son but), sinon contourne le ballon pour le frapper vers le but adverse ;
-  // saute pour les ballons hauts, tacle parfois. Le niveau règle la vitesse de réaction et la justesse.
+  // Repasse du bon côté du ballon (en sautant par-dessus s'il le faut), le frappe vers le but adverse, le pique par-dessus
+  // l'adversaire qui barre la route, saute pour les têtes, sprinte quand il est loin, tacle parfois.
+  // Le niveau règle la vitesse de réaction et la justesse.
   think(p) {
     const w = this.world, b = w.ball, lvl = this.settings.level, br = (this.brains[p.id] ??= { next: 0, bits: 0 });
     if (w.frame < br.next) return br.bits & ~(IN.KICK | IN.JUMP | IN.TACKLE | IN.POWER);
     br.next = w.frame + [12, 7, 3][lvl - 1] + Math.floor(this.rng() * 4);
-    const own = p.side ? F.HL : -F.HL, opp = -own, s = Math.sign(opp);
-    const o = w.players.find(x => x !== p);
-    // ballon anticipé un peu
-    const look = [0.1, 0.25, 0.4][lvl - 1], bx = b.x + b.vx * look, bz = b.z + b.vz * look;
-    let tx, tz;
-    const behind = (bx - p.x) * s > 0.3; // le ballon est devant moi (vers le but adverse)
-    const danger = -b.vx * s > 4; // le ballon file vers mon but : je me mets en travers
-    if (!behind) { tx = bx - s * 1.4; tz = danger || Math.abs(bz - p.z) >= 1.2 ? bz : bz + 1.6 * Math.sign(p.z - bz || 1); } // sinon repasser derrière le ballon sans le pousser vers son but
-    // l'adversaire barre la route du but : viser à côté de lui (contourner) plutôt que de lui tirer dans la tête
-    const blocked = o && (o.x - bx) * s > 0 && (o.x - bx) * s < 7 && Math.abs(o.z - bz) < 1.6;
-    const ax = blocked ? o.x : opp, az = blocked ? o.z + 2.8 * Math.sign(bz - o.z || (p.z > 0 ? 1 : -1)) : 0;
-    if (behind) { const gx = ax - bx, gz = az - bz, gl = Math.hypot(gx, gz) || 1; tx = bx - (gx / gl) * 0.9; tz = bz - (gz / gl) * 0.9; }
+    const s = CC.dirOf(p), o = w.players.find(x => x !== p);
+    const look = [0.1, 0.2, 0.3][lvl - 1], bx = b.x + b.vx * look; // ballon anticipé un peu
+    const ahead = (bx - p.x) * s > 0.15; // le ballon est devant moi (vers le but adverse)
+    const tx = bx - s * (ahead ? 0.55 : 0.9);
     let bits = 0;
-    if (tx > p.x + 0.25) bits |= IN.R; else if (tx < p.x - 0.25) bits |= IN.L;
-    if (tz > p.z + 0.25) bits |= IN.D; else if (tz < p.z - 0.25) bits |= IN.U;
-    const dist = Math.hypot(b.x - p.x, b.z - p.z);
-    if (dist < 1.6 && behind && !blocked && b.y < 1.3 && this.rng() < [0.5, 0.75, 0.95][lvl - 1]) {
-      // viser : tout droit, ou en biais si le but est franchement de côté
-      const slope = -b.z / Math.max(1, Math.abs(opp - b.x));
-      bits = IN.KICK | (s > 0 ? IN.R : IN.L) | (slope > 0.35 ? IN.D : slope < -0.35 ? IN.U : 0);
+    if (tx > p.x + 0.2) bits |= IN.R; else if (tx < p.x - 0.2) bits |= IN.L;
+    const far = Math.abs(tx - p.x);
+    if (far > 3.5 && p.sta > 0.4 && lvl > 1) bits |= IN.SPRINT;
+    const dx = (b.x - p.x) * s, dist = Math.hypot(b.x - p.x - s * 0.5, b.y - p.y - 0.35);
+    // repasser derrière le ballon : sauter par-dessus plutôt que le pousser vers mon but
+    if (!ahead && Math.abs(b.x - p.x) < 1.6 && b.y < 1.2 && p.ground) bits |= IN.JUMP;
+    // ballon à hauteur de tête qui file vers mon but : ne pas le rattraper par-derrière (ma tête le pousserait dedans)
+    if (!ahead && b.vx * s < -2 && b.y > 1.0 && b.y < 3.4 && Math.abs(b.x - p.x) < 2.2) bits &= ~(IN.L | IN.R | IN.SPRINT);
+    // tirer : le robot essaie le tir dans sa tête ; si l'adversaire le renverrait, il change de geste (piqué, lob)
+    if (ahead && dist < 1.3) {
+      const now = this.shot(p, o, p.vx), still = this.shot(p, o, 0), back = this.shot(p, o, -s * 3);
+      if (dist < 0.95 && now !== 'contre' && this.rng() < [0.45, 0.75, 0.95][lvl - 1]) bits |= IN.KICK;
+      else if (now === 'contre' && still === 'contre' && back === 'contre' && dist < 0.95 && (br.stuck = (br.stuck ?? 0) + 1) > 6) { br.stuck = 0; bits = IN.KICK; } // rien ne passe : tenter quand même
+      else if (now === 'contre') bits = (bits & ~(IN.L | IN.R | IN.SPRINT)) | (still !== 'contre' ? 0 : back !== 'contre' ? (s > 0 ? IN.L : IN.R) : 0);
     }
-    if (dist < 2.2 && b.y > 1.6 && b.y < 4 && b.vy < 2 && this.rng() < 0.6) bits |= IN.JUMP;
-    if (o && o.stun <= 0 && Math.hypot(o.x - p.x, o.z - p.z) < 2.2 && Math.hypot(b.x - o.x, b.z - o.z) < 1.5 && this.rng() < [0.05, 0.12, 0.2][lvl - 1]) { bits |= IN.TACKLE; if (o.x > p.x) bits |= IN.R; else bits |= IN.L; }
-    if (p.gauge >= 1 && dist < 4 && this.rng() < 0.3) bits |= IN.POWER;
+    // tête : ballon haut qui redescend juste devant
+    // tête : là où sera le ballon dans un quart de seconde, à hauteur de saut
+    const hx = b.x + b.vx * 0.25, hy = b.y + b.vy * 0.25 - 0.47;
+    if (hy > 1.9 && hy < 4.2 && (hx - p.x) * s > 0.15 && (hx - p.x) * s < 1.3 && p.ground && this.rng() < [0.3, 0.55, 0.8][lvl - 1]) bits |= IN.JUMP;
+    // interception : quand le ballon arrivera sur moi, et à quelle hauteur ; s'il passe au-dessus de ma tête, sauter
+    const tt = b.vx ? (p.x - b.x) / b.vx : -1, yt = b.y + b.vy * tt - 7.5 * tt * tt;
+    if (tt > 0.05 && tt < 0.4 && yt > 1.7 && yt < 3.9 && p.ground && this.rng() < [0.35, 0.6, 0.85][lvl - 1]) bits |= IN.JUMP;
+    // l'adversaire barre le chemin : lui sauter par-dessus
+    const go = bits & IN.R ? 1 : bits & IN.L ? -1 : 0;
+    if (go && o && o.y < 0.5 && (o.x - p.x) * go > 0 && (o.x - p.x) * go < 1.3 && p.ground) bits |= IN.JUMP;
+    if (o && o.stun <= 0 && o.y < 0.5 && (o.x - p.x) * s > 0 && (o.x - p.x) * s < 2 && Math.abs(b.x - o.x) < 1.2 && this.rng() < [0.04, 0.1, 0.18][lvl - 1]) bits = IN.TACKLE | (s > 0 ? IN.R : IN.L);
+    if (p.gauge >= 1 && Math.abs(b.x - p.x) < 4 && this.rng() < 0.3) bits |= IN.POWER;
     br.bits = bits;
     return bits;
+  }
+
+  // Où irait le ballon si p tirait maintenant avec la vitesse vx : 'but', 'contre' (renvoyé par l'adversaire) ou 'ok'.
+  shot(p, o, vx) {
+    const b = { ...this.world.ball }, s = CC.dirOf(p), [, deg, pw] = CC.kickOf({ ...p, vx, sprint: p.sprint && vx * s > 0 }, b), an = (deg * Math.PI) / 180;
+    b.vx = s * Math.cos(an) * pw; b.vy = Math.sin(an) * pw;
+    const w = { ball: b }, ev = [];
+    for (let k = 0; k < 360; k++) {
+      CC.stepBall(w, ev, CC.DT / 2);
+      if (o && (Math.hypot(b.x - o.x, b.y - CC.headY(o)) < CC.headR(o) + CC.BALL.r + 0.1 || Math.hypot(b.x - o.x, b.y - o.y - CC.BODY.y) < CC.BODY.r + CC.BALL.r + 0.1)) return 'contre';
+      if (Math.abs(b.x) > CC.F.HL + CC.BALL.r && b.y < CC.F.GH) return Math.sign(b.x) === s ? 'but' : 'contre';
+    }
+    return 'ok';
   }
 
   viewFor(name) {
