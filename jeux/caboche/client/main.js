@@ -2,8 +2,10 @@
 // sur le même clavier : le match tourne dans le navigateur avec local.js) et salons en ligne (le serveur fait foi).
 // En ligne, le navigateur lit les touches 60 fois par seconde, les envoie numérotées (« in ») et fait bouger son joueur
 // tout de suite avec la même physique ; à chaque état reçu (« snap »), il reprend la position du serveur et rejoue
-// les touches pas encore vues. Les autres joueurs sont affichés avec un léger retard, lissé.
-// Autour du match : ralenti des buts (replay), commentateur, sons du public, commandes tactiles.
+// les touches pas encore vues. Le ballon aussi est anticipé : quand tu frappes, il part tout de suite, et le serveur
+// corrige en douceur. Les autres joueurs sont affichés avec un léger retard, lissé.
+// Autour du match : ralenti des buts (replay), arrêt sur image des grosses frappes, commentateur, sons du public,
+// commandes tactiles.
 import { createPitch, drawPortrait, TEAM, BALLS } from './render.js';
 import { LocalMatch } from './local.js';
 import { $, $$, esc, store, audio, sound, blip, fanfare, party } from '/shared/party.js';
@@ -24,7 +26,7 @@ function noise(dur, freq, vol, type = 'bandpass', to, at = 0) {
   s.connect(f).connect(g).connect(ac.destination); s.start(t);
 }
 const SFX = {
-  kick: p => { blip(160, 60, 0.12, 'sine', 0.3); noise(0.06, 900, 0.25, 'lowpass'); if (p > 21) blip(90, 40, 0.2, 'sine', 0.25); },
+  kick: p => { blip(170, 55, 0.12, 'sine', 0.32); noise(0.05, 1400, 0.3, 'lowpass'); if (p > 20) { blip(95, 38, 0.22, 'sine', 0.3); noise(0.12, 300, 0.2, 'lowpass'); } },
   head: () => { blip(320, 140, 0.1, 'sine', 0.25); noise(0.05, 1200, 0.15); },
   bounce: v => blip(140, 70, 0.08, 'sine', Math.min(0.2, v * 0.02)),
   post: () => { blip(1400, 1300, 0.6, 'triangle', 0.12); blip(2100, 2000, 0.4, 'sine', 0.06); },
@@ -32,8 +34,9 @@ const SFX = {
   whistle: (n = 1) => { for (let k = 0; k < n; k++) blip(2600, 2500, 0.28, 'sine', 0.08, k * 0.36); },
   goal: () => { noise(3, 900, 0.55, 'bandpass', 600); noise(2.5, 400, 0.4, 'lowpass', 200, 0.1); fanfare([523, 659, 784, 1046], 0.1); },
   ooh: () => noise(1.2, 700, 0.25, 'bandpass', 450),
-  tackle: () => noise(0.25, 300, 0.3, 'lowpass', 120),
-  fall: () => { blip(200, 60, 0.3, 'sine', 0.2); noise(0.2, 500, 0.2, 'lowpass'); },
+  boing: () => { blip(220, 660, 0.18, 'triangle', 0.12); blip(660, 330, 0.15, 'sine', 0.06, 0.12); },
+  bump: () => { blip(120, 50, 0.15, 'sine', 0.25); noise(0.08, 400, 0.15, 'lowpass'); },
+  perfect: () => { blip(880, 1760, 0.12, 'square', 0.07); blip(1320, 2640, 0.2, 'triangle', 0.06, 0.05); },
   power: () => { blip(300, 1200, 0.5, 'sawtooth', 0.07); blip(600, 2400, 0.4, 'sine', 0.05, 0.1); },
   jump: () => blip(300, 600, 0.1, 'triangle', 0.05),
   item: () => { blip(660, 1320, 0.15, 'square', 0.06); blip(990, 1980, 0.15, 'square', 0.05, 0.08); },
@@ -120,7 +123,7 @@ $('#quickBtn').onclick = async () => {
 /* ---------------- Match en ligne : états reçus ---------------- */
 let S = null, matchKey = '';
 const snaps = [];
-let pred = null, pending = [], seq = 0, vis = { x: 0 };
+let pred = null, PW = null, pending = [], seq = 0, vis = { x: 0 }, ballOff = [];
 const inMatch = s => s && ['kickoff', 'play', 'goal', 'end'].includes(s.phase);
 socket.on('state', s => {
   if (L) return; // une partie hors ligne est en cours
@@ -130,7 +133,7 @@ socket.on('state', s => {
   show(inMatch(s) || s.phase === 'over' ? 'game' : 'room');
   ui.renderRoom();
   const key = `${s.round}.${s.roundNo}`;
-  if (inMatch(s) && key !== matchKey) { matchKey = key; pred = null; pending = []; snaps.length = 0; $('#board').hidden = true; newMatch(); }
+  if (inMatch(s) && key !== matchKey) { matchKey = key; pred = null; PW = null; ballOff = []; pending = []; snaps.length = 0; $('#board').hidden = true; newMatch(); }
   if (old?.phase !== s.phase) onPhase(s.phase, old?.phase);
   if (s.phase === 'end' && old?.phase !== 'end') matchOver(s.result);
   if (s.phase === 'end' || s.phase === 'over') showBoard(s); else $('#board').hidden = true;
@@ -143,11 +146,16 @@ socket.on('snap', snap => {
   for (const e of snap.ev) onEvent(e);
   const mine = snap.p.find(p => p.id === me);
   if (mine) {
-    const ack = snap.ack[me] ?? 0, before = pred && { x: pred.x }, env = CC.envOf(S?.settings);
-    pred = { ...mine };
+    // monde anticipé : l'état du serveur, puis les touches qu'il n'a pas encore vues (ton joueur et les ballons bougent ;
+    // les autres restent où le serveur les a vus)
+    const ack = snap.ack[me] ?? 0, before = pred && { x: pred.x }, oldBalls = PW?.balls.map(b => ({ ...b }));
+    const st = S?.settings ?? {};
+    PW = { frame: snap.f, opts: { mode: st.mode, stade: st.stade, bonus: false }, players: snap.p.map(p => ({ ...p })), balls: snap.b.map(CC.unpackBall), items: [], itemIn: 1e9, itemId: 0, walls: [...(snap.wl ?? [0, 0])], shrink: [0, 0], ballMod: snap.bm ? { kind: snap.bm, t: 1 } : null, wind: snap.wd ?? 0, goalH: snap.gh, seed: 1, touch: null };
     pending = pending.filter(([q]) => q > ack);
-    if (S?.phase === 'play' || S?.phase === 'goal') for (const [, bits] of pending) CC.step(pred, bits, env);
+    if (S?.phase === 'play' || S?.phase === 'goal') for (const [, bits] of pending) CC.stepWorld(PW, { [me]: bits }, []);
+    pred = PW.players.find(p => p.id === me);
     if (before && Math.abs(before.x - pred.x) < 2) vis.x += before.x - pred.x;
+    ballOff = PW.balls.map((b, k) => { const o = oldBalls?.[k], prev = ballOff[k] ?? { x: 0, y: 0 }; return o && Math.hypot(o.x + prev.x - b.x, o.y + prev.y - b.y) < 2.5 ? { x: o.x + prev.x - b.x, y: o.y + prev.y - b.y } : { x: 0, y: 0 }; });
   }
 });
 
@@ -172,10 +180,10 @@ function countdown() { let n = 2; clearInterval(countT); const el = $('#cd'); co
 
 /* ---------------- Commentateur ---------------- */
 const SAY = {
-  boulet: ['Quel boulet de canon !', 'Une frappe de mule !'], lob: ['Oh, le joli lob !', 'Par-dessus tout le monde !'], retourne: ['UN RETOURNÉ ! Incroyable !', 'Ciseau acrobatique !'],
-  plongeon: ['Tête plongeante !', 'Il plonge comme un aigle !'], volee: ['Reprise de volée !', 'Sans contrôle, en pleine course !'], canon: ['Tir chargé à bloc !', 'Il a armé une bombe !'],
+  parfaite: ['Frappe parfaite !', 'Une frappe de mule !', 'Quel boulet de canon !'], lob: ['Oh, le joli lob !', 'Par-dessus tout le monde !'], tete: ['Quelle tête !', 'Coup de boule magistral !'],
+  volee: ['Reprise de volée !', 'Sans contrôle, en pleine course !'], boing: ['Il lui a marché sur la tête !', 'Boing ! Il s’en sert de trampoline !'], bump: ['Ça cogne !', 'Choc des têtes !'],
   feu: ['Le ballon est en FEU !'], tornade: ['Une tornade ! Personne ne sait où il va !'], save: ['Quel arrêt !', 'Parade de grande classe !'], post: ['Sur le poteau !', 'La barre tremble encore !'],
-  fall: ['Tacle appuyé…', 'Il est par terre !'], goal: ['BUUUT !', 'Dans la lucarne !', 'Le stade explose !'], own: ['Contre son camp… aïe aïe aïe.'], item: ['Un bonus tombé du ciel !'],
+  goal: ['BUUUT !', 'Dans la lucarne !', 'Le stade explose !'], own: ['Contre son camp… aïe aïe aïe.'], item: ['Un bonus tombé du ciel !'],
   block: ['Le mur tient bon !'], trap: ['Joli contrôle.', 'Le ballon lui colle au pied.'], golden: ['But en or : le prochain gagne tout !'], freeze: ['Congelé sur place !'], mini: ['Il a rétréci !'],
 };
 let sayAt = 0;
@@ -187,28 +195,38 @@ function say(kind, force = false) {
 }
 
 /* ---------------- Événements du match ---------------- */
-const KICKS = { boulet: '💥 BOULET !', volee: '🦶 VOLÉE !', lob: '🌈 LOB !', retourne: '🤸 RETOURNÉ !', plongeon: '🦅 PLONGEON !', canon: '💣 TIR CHARGÉ !' };
-const SPECIAL = ['boulet', 'lob', 'volee', 'plongeon', 'retourne', 'canon', 'feu', 'tornade'];
-let lastKick = {}, track = null, recEv = [];
-function newMatch() { lastKick = {}; track = { kinds: {}, charged: 0, jumped: false, goalsFor: 0, conceded: 0, powerGoal: false }; rec.length = 0; replay = null; }
+const KICKS = { volee: '🦶 VOLÉE !', lob: '🌈 LOB !' };
+const SPECIAL = ['lob', 'volee', 'tete', 'parfaite', 'feu', 'tornade'];
+let lastKick = {}, track = null, recEv = [], stopUntil = 0, myKickAt = 0;
+function newMatch() { lastKick = {}; track = { kinds: {}, jumped: false, goalsFor: 0, conceded: 0, powerGoal: false }; rec.length = 0; replay = null; }
+// Effets d'une frappe : affichés tout de suite pour la sienne (anticipée), sans doublon quand le serveur la confirme.
+function kickFx(e, local) {
+  const now = performance.now();
+  if (!local && e.id === meId() && now - myKickAt < 500) return;
+  if (local) myKickAt = now;
+  V.fx.kick(e); SFX.kick(e.p);
+  if (e.perfect) { V.fx.pop(e.x, e.y + 0.9, '⚡ PARFAIT !', '#ffe14a', 0.55); SFX.perfect(); say('parfaite'); }
+  if (e.perfect || e.p > 23) stopUntil = now + (e.perfect ? 80 : 50); // arrêt sur image
+  if (L?.ctx.type === 'train') V.fx.pop(e.x, e.y + 1.5, `${Math.round(e.p * 3.6)} km/h`, '#ffffff', 0.4);
+}
 function onEvent(e) {
   const me = meId(), mySide = sideOf(me);
   if (e.t === 'kick') {
-    V.fx.kick(e); SFX.kick(e.p); recEv.push(e); lastKick[e.id] = { kind: e.kind, charged: e.charged, at: performance.now() };
+    kickFx(e); recEv.push(e); lastKick[e.id] = { kind: e.perfect ? 'parfaite' : e.kind, at: performance.now() };
     if (e.fire) { banner('🔥 SUPER TIR !', ''); SFX.power(); say('feu', true); }
     else if (e.kind === 'tornade') { banner('🌪️ TORNADE !', ''); SFX.power(); say('tornade', true); }
-    else if (KICKS[e.kind]) { V.fx.pop(e.x, e.y + 0.8, KICKS[e.kind], '#ffe14a', 0.5); if (SPECIAL.includes(e.kind)) say(e.kind); }
+    else if (KICKS[e.kind] && !e.perfect) { V.fx.pop(e.x, e.y + 0.8, KICKS[e.kind], '#ffe14a', 0.5); say(e.kind); }
     return;
   }
-  if (e.t === 'header') { V.fx.header(e); SFX.head(); recEv.push(e); return; }
+  if (e.t === 'header') { V.fx.header(e); SFX.head(); recEv.push(e); lastKick[e.id] = { kind: 'tete', at: performance.now() }; return; }
+  if (e.t === 'boing') { V.fx.boing(e); SFX.boing(); say('boing'); return; }
+  if (e.t === 'bump') { V.fx.bump(e); SFX.bump(); say('bump'); return; }
   if (e.t === 'save') { V.fx.header(e); V.fx.pop(e.x, e.y + 0.6, '🧤 ARRÊT !', '#9fe8ff'); SFX.head(); SFX.ooh(); say('save', true); return; }
-  if (e.t === 'trap') { if (e.id === me) say('trap'); return; }
+  if (e.t === 'trap') { if (e.id === me && Math.random() < 0.33) say('trap'); return; }
   if (e.t === 'bounce') { SFX.bounce(e.v); if (e.y < 0.5) V.fx.dust(e.x, 3); return; }
   if (e.t === 'post') { V.fx.spark(e.x, e.y, '#ffffff', 30); V.fx.shake(0.4); SFX.post(); SFX.ooh(); flash('POTEAU !'); say('post', true); V.fx.chance(e.x > 0 ? 0 : 1); return; }
   if (e.t === 'block') { V.fx.spark(e.x, e.y, '#ffb35a', 20); SFX.wall(); say('block'); return; }
   if (e.t === 'wall') { SFX.wall(); if (Math.abs(e.x) > CC.F.HL && e.y < CC.F.GH) V.fx.net(e.x, e.y); return; }
-  if (e.t === 'tackle') { SFX.tackle(); return; }
-  if (e.t === 'fall') { V.fx.dust(e.x, 20); SFX.fall(); V.fx.shake(0.3); say('fall'); if (e.id === me) toast('Taclé ! 🤕'); return; }
   if (e.t === 'jump') { if (e.id === me && track) track.jumped = true; if (e.id !== me) SFX.jump(); return; }
   if (e.t === 'land') { V.fx.dust(e.x, 6); return; }
   if (e.t === 'item') { const it = CC.ITEMS[e.kind]; V.fx.pop(e.x, e.y + 1, `${it.icon} ${it.name}`, '#ffffff', 0.42); SFX.item(); say('item'); if (e.kind === 'gel') { SFX.freeze(); say('freeze', true); } return; }
@@ -230,10 +248,10 @@ function onEvent(e) {
     if (e.side === mySide && track) {
       track.goalsFor++;
       const k = lastKick[me], fresh = k && performance.now() - k.at < 3500 && e.touch === me;
-      if (e.touch === me || e.by === me) { P.stats.goals++; if (fresh) { track.kinds[k.kind] = (track.kinds[k.kind] ?? 0) + 1; P.stats.kinds[k.kind] = (P.stats.kinds[k.kind] ?? 0) + 1; if (k.charged) track.charged++; } }
+      if (e.touch === me || e.by === me) { P.stats.goals++; if (fresh) { track.kinds[k.kind] = (track.kinds[k.kind] ?? 0) + 1; P.stats.kinds[k.kind] = (P.stats.kinds[k.kind] ?? 0) + 1; } }
       const mine = L ? L.match.world.players.find(p => p.id === me) : snaps.at(-1)?.s.p.find(p => p.id === me);
       if (mine?.power || (fresh && ['feu', 'tornade'].includes(k.kind))) track.powerGoal = true;
-      if (!L || L.ctx.type !== 'duo') earn(fresh && SPECIAL.includes(k.kind) ? 15 : 10, 'but');
+      if (!L || !['duo', 'train'].includes(L.ctx.type)) earn(fresh && SPECIAL.includes(k.kind) ? 15 : 10, 'but');
       blip(784, 1568, 0.4, 'square', 0.06, 0.3);
     } else if (track && mySide >= 0 && e.side !== mySide) track.conceded++;
     saveP();
@@ -242,7 +260,7 @@ function onEvent(e) {
 }
 // Fin d'un match (en ligne ou hors ligne) : statistiques et pièces.
 function matchOver(r) {
-  if (!r || (L && L.ctx.type === 'duo')) return null;
+  if (!r || (L && ['duo', 'train'].includes(L.ctx.type))) return null;
   const my = sideOf(meId()), res = r.win === null || r.win === undefined ? 'nul' : r.win === my ? 'win' : 'loss';
   P.stats.played++; P.stats[{ win: 'won', nul: 'drawn', loss: 'lost' }[res]]++;
   P.stats.conceded += r.score[1 - my] ?? 0;
@@ -271,21 +289,21 @@ function replayScene(now) {
 
 /* ---------------- Commandes : deux claviers, souris, manettes, tactile ---------------- */
 const keys = new Set();
-const KEYS1 = { KeyA: IN.L, KeyD: IN.R, KeyW: IN.JUMP, Space: IN.KICK, KeyJ: IN.KICK, ShiftLeft: IN.SPRINT, KeyS: IN.TACKLE, KeyK: IN.TACKLE, KeyE: IN.POWER };
-const KEYS2 = { ArrowLeft: IN.L, ArrowRight: IN.R, ArrowUp: IN.JUMP, Enter: IN.KICK, NumpadEnter: IN.KICK, ShiftRight: IN.SPRINT, ArrowDown: IN.TACKLE, ControlRight: IN.POWER, Numpad0: IN.POWER, KeyL: IN.KICK, KeyP: IN.POWER };
+const KEYS1 = { KeyA: IN.L, KeyD: IN.R, KeyW: IN.JUMP, Space: IN.KICK, KeyJ: IN.KICK, ShiftLeft: IN.SPRINT, KeyS: IN.LOB, KeyK: IN.LOB, KeyE: IN.POWER };
+const KEYS2 = { ArrowLeft: IN.L, ArrowRight: IN.R, ArrowUp: IN.JUMP, Enter: IN.KICK, NumpadEnter: IN.KICK, ShiftRight: IN.SPRINT, ArrowDown: IN.LOB, ControlRight: IN.POWER, Numpad0: IN.POWER, KeyL: IN.KICK, KeyP: IN.POWER };
 let mouse = 0, touchBits = 0;
 const duo = () => L?.ctx.type === 'duo';
 addEventListener('keydown', e => { if (e.target.closest?.('input, select')) return; if ((KEYS1[e.code] ?? KEYS2[e.code]) !== undefined && document.body.classList.contains('playing')) { e.preventDefault(); keys.add(e.code); audio(); } });
 addEventListener('keyup', e => keys.delete(e.code));
 addEventListener('blur', () => { keys.clear(); mouse = 0; touchBits = 0; });
-$('#view').addEventListener('mousedown', e => { audio(); mouse |= e.button === 2 ? IN.TACKLE : IN.KICK; });
-addEventListener('mouseup', e => { mouse &= e.button === 2 ? ~IN.TACKLE : ~IN.KICK; });
+$('#view').addEventListener('mousedown', e => { audio(); mouse |= e.button === 2 ? IN.LOB : IN.KICK; });
+addEventListener('mouseup', e => { mouse &= e.button === 2 ? ~IN.LOB : ~IN.KICK; });
 $('#view').addEventListener('contextmenu', e => e.preventDefault());
 function pad(g) {
   let bits = 0; if (!g) return 0;
   const ax = g.axes[0] ?? 0, ay = g.axes[1] ?? 0, b = i => g.buttons[i]?.pressed;
   if (ax < -0.35 || b(14)) bits |= IN.L; if (ax > 0.35 || b(15)) bits |= IN.R; if (ay < -0.6 || b(0)) bits |= IN.JUMP;
-  if (b(2) || b(7)) bits |= IN.KICK; if (b(1)) bits |= IN.TACKLE; if (b(4) || b(5) || b(6)) bits |= IN.SPRINT; if (b(3)) bits |= IN.POWER;
+  if (b(2) || b(7)) bits |= IN.KICK; if (b(1)) bits |= IN.LOB; if (b(4) || b(5) || b(6)) bits |= IN.SPRINT; if (b(3)) bits |= IN.POWER;
   return bits;
 }
 function readInput(n = 1) {
@@ -376,6 +394,7 @@ const randChar = (but = []) => { const l = CC.CHAR_IDS.filter(c => !but.includes
 function localEnd() {
   const m = L.match, r = m.result, ctx = L.ctx, res = matchOver(r);
   const again = () => startLocal(m.players, m.settings, ctx);
+  if (ctx.type === 'train') return localBoard('🎯 Fin de l’entraînement', scoreRows(r), 'Les tirs affichaient leur vitesse : vise la frappe parfaite (milieu du geste) !', [['Encore', again], ['Accueil', quitLocal, 'ghost']]);
   if (ctx.type === 'duo') return localBoard(r.win === null ? '🤝 Match nul' : `🏆 ${teamName(r.sides[r.win])} gagne !`, scoreRows(r), '', [['Revanche', again], ['Accueil', quitLocal, 'ghost']]);
   if (ctx.type === 'tour') return tourEnd(res, r);
   if (ctx.type === 'survie') return survieEnd(res, r);
@@ -436,10 +455,10 @@ async function survieOver(r) {
 
 /* Défis */
 const DEFIS = [
-  { id: 'lob', icon: '🌈', name: 'Arc-en-ciel', text: 'Marque 2 buts sur un lob (tire en reculant).', reward: 120, lvl: 1, done: c => (c.kinds.lob ?? 0) >= 2 },
-  { id: 'volee', icon: '🦶', name: 'De volée', text: 'Marque 2 buts en l’air (volée ou tête plongeante).', reward: 120, lvl: 1, done: c => (c.kinds.volee ?? 0) + (c.kinds.plongeon ?? 0) >= 2 },
-  { id: 'retourne', icon: '🤸', name: 'Ciseau !', text: 'Marque un retourné : en l’air, ballon au-dessus de ta tête, tire !', reward: 200, lvl: 1, done: c => (c.kinds.retourne ?? 0) >= 1 },
-  { id: 'charge', icon: '💣', name: 'Gros canon', text: 'Marque 2 buts avec un tir chargé (garde la touche de tir).', reward: 150, lvl: 1, done: c => c.charged >= 2 },
+  { id: 'lob', icon: '🌈', name: 'Arc-en-ciel', text: 'Marque 2 buts sur un lob (clic droit ou S).', reward: 120, lvl: 1, done: c => (c.kinds.lob ?? 0) >= 2 },
+  { id: 'volee', icon: '🦶', name: 'De volée', text: 'Marque 2 buts de volée (tire en l’air).', reward: 120, lvl: 1, done: c => (c.kinds.volee ?? 0) >= 2 },
+  { id: 'parfait', icon: '⚡', name: 'Pied parfait', text: 'Marque 2 buts sur une frappe parfaite (le ballon au milieu du geste).', reward: 200, lvl: 1, done: c => (c.kinds.parfaite ?? 0) >= 2 },
+  { id: 'tete', icon: '🗿', name: 'Coup de boule', text: 'Marque 2 buts de la tête.', reward: 150, lvl: 1, done: c => (c.kinds.tete ?? 0) >= 2 },
   { id: 'sol', icon: '👟', name: 'Pieds sur terre', text: 'Gagne sans jamais sauter (premier à 3 buts).', reward: 150, lvl: 1, set: { goals: 3 }, fail: c => c.jumped, win: true },
   { id: 'blanchir', icon: '🧤', name: 'Cage inviolée', text: 'Gagne 3-0 contre un robot Normal.', reward: 200, lvl: 2, set: { goals: 3 }, fail: c => c.conceded > 0, win: true },
   { id: 'pouvoir', icon: '⚡', name: 'Super-héros', text: 'Marque pendant que ton super-pouvoir agit.', reward: 120, lvl: 1, done: c => c.powerGoal },
@@ -474,8 +493,8 @@ function defiEnd(res, r) {
 /* Deux joueurs sur le même clavier */
 let p2Char = 'lila';
 function openDuo() {
-  panel('🎮 À deux sur le même clavier', `<div class="duo"><div><h3>Joueur 1 · ${esc(pseudo())}</h3><canvas data-portrait="${myChar}" width="160" height="160"></canvas><p class="hint"><kbd>Q</kbd><kbd>D</kbd> courir · <kbd>Z</kbd> sauter · <kbd>Espace</kbd> tirer · <kbd>Maj</kbd> sprint · <kbd>S</kbd> tacle · <kbd>E</kbd> pouvoir</p></div>
-    <div><h3>Joueur 2</h3><canvas data-portrait="${p2Char}" data-side="1" width="160" height="160"></canvas><div class="row center"><button class="ghost small" id="p2Prev">◀</button><b id="p2Name">${CC.CHARS[p2Char].name}</b><button class="ghost small" id="p2Next">▶</button></div><p class="hint"><kbd>←</kbd><kbd>→</kbd> courir · <kbd>↑</kbd> sauter · <kbd>Entrée</kbd> tirer · <kbd>Maj</kbd> droite sprint · <kbd>↓</kbd> tacle · <kbd>Ctrl</kbd> droite pouvoir</p></div></div>
+  panel('🎮 À deux sur le même clavier', `<div class="duo"><div><h3>Joueur 1 · ${esc(pseudo())}</h3><canvas data-portrait="${myChar}" width="160" height="160"></canvas><p class="hint"><kbd>Q</kbd><kbd>D</kbd> courir · <kbd>Z</kbd> sauter · <kbd>Espace</kbd> tirer · <kbd>Maj</kbd> sprint · <kbd>S</kbd> lob · <kbd>E</kbd> pouvoir</p></div>
+    <div><h3>Joueur 2</h3><canvas data-portrait="${p2Char}" data-side="1" width="160" height="160"></canvas><div class="row center"><button class="ghost small" id="p2Prev">◀</button><b id="p2Name">${CC.CHARS[p2Char].name}</b><button class="ghost small" id="p2Next">▶</button></div><p class="hint"><kbd>←</kbd><kbd>→</kbd> courir · <kbd>↑</kbd> sauter · <kbd>Entrée</kbd> tirer · <kbd>Maj</kbd> droite sprint · <kbd>↓</kbd> lob · <kbd>Ctrl</kbd> droite pouvoir</p></div></div>
     <div class="grid three"><label>Durée <select id="duoTime"><option value="60">1 min</option><option value="120" selected>2 min</option><option value="180">3 min</option></select></label><label>Mode <select id="duoMode">${options(CC.MODES, 'normal')}</select></label><label>Stade <select id="duoStade">${options(CC.STADES, 'nuit')}</select></label></div>
     <div class="row center"><button class="primary big" id="duoGo">⚽ Jouer !</button></div>`);
   const step = k => { const l = CC.CHAR_IDS; p2Char = l[(l.indexOf(p2Char) + k + l.length) % l.length]; $('canvas[data-side="1"]').dataset.portrait = p2Char; $('#p2Name').textContent = CC.CHARS[p2Char].name; };
@@ -508,7 +527,7 @@ function equip(tab, id) {
 /* Statistiques */
 function openStats() {
   const s = P.stats, k = s.kinds, ratio = s.played ? Math.round((s.won / s.played) * 100) : 0;
-  const KN = { frappe: 'Frappes', boulet: 'Boulets', lob: 'Lobs', pique: 'Piqués', canon: 'Tirs chargés', volee: 'Volées', plongeon: 'Têtes plongeantes', retourne: 'Retournés', feu: 'Super Tirs', tornade: 'Tornades' };
+  const KN = { frappe: 'Frappes', parfaite: 'Frappes parfaites', volee: 'Volées', lob: 'Lobs', tete: 'Têtes', feu: 'Super Tirs', tornade: 'Tornades' };
   panel('📊 Statistiques', `<div class="statgrid">${[['Matchs', s.played], ['Victoires', `${s.won} (${ratio} %)`], ['Nuls', s.drawn], ['Défaites', s.lost], ['Buts marqués', s.goals], ['Buts encaissés', s.conceded], ['Meilleure série', s.bestStreak], ['Record en survie', s.survie], ['Tournois gagnés', s.tournois], ['Défis réussis', `${Object.keys(P.defis).length}/${DEFIS.length}`], ['Pièces', `${P.coins} 🪙`], ['Joueurs débloqués', `${P.chars.length}/${CC.CHAR_IDS.length}`]].map(([a, b]) => `<div><small>${a}</small><b>${b}</b></div>`).join('')}</div>
     <h3>⚽ Tes buts par geste</h3><div class="statgrid">${Object.entries(KN).map(([id, n]) => `<div><small>${n}</small><b>${k[id] ?? 0}</b></div>`).join('')}</div>`);
 }
@@ -517,6 +536,7 @@ $('#tourBtn').onclick = () => { audio(); openTour(); };
 $('#survieBtn').onclick = () => { audio(); openSurvie(); };
 $('#defisBtn').onclick = () => { audio(); openDefis(); };
 $('#duoBtn').onclick = () => { audio(); openDuo(); };
+$('#trainBtn').onclick = () => { audio(); startLocal([meP()], { time: 300, bonus: 0, stade: 'nuit' }, { type: 'train' }); };
 $('#shopBtn').onclick = () => { audio(); openShop(); };
 $('#statsBtn').onclick = () => { audio(); openStats(); };
 
@@ -550,10 +570,16 @@ function frame(now) {
     acc += dt;
     while (acc >= CC.DT) {
       acc -= CC.DT;
-      if (live && pred) { const bits = readInput(1); pending.push([++seq, bits]); outbox.push([seq, bits]); pred.ev = []; CC.step(pred, bits, env); for (const e of pred.ev) if (e === 'jump') SFX.jump(); delete pred.ev; if (pending.length > 120) pending.shift(); }
+      if (live && PW) {
+        const bits = readInput(1), ev = []; pending.push([++seq, bits]); outbox.push([seq, bits]);
+        CC.stepWorld(PW, { [s.me]: bits }, ev);
+        for (const e of ev) if (e.id === s.me) { if (e.t === 'jump') SFX.jump(); if (e.t === 'kick') kickFx(e, true); }
+        if (pending.length > 120) pending.shift();
+      }
     }
     if (outbox.length) socket.emit('in', outbox.splice(0));
     vis.x *= Math.exp(-dt * 14);
+    for (const o of ballOff) { o.x *= Math.exp(-dt * 10); o.y *= Math.exp(-dt * 10); }
     if (inMatch(s) && snaps.length) {
       const snap = snaps.at(-1).s, rt = now - 66;
       let i = snaps.findIndex(x => x.at > rt); if (i < 0) i = snaps.length - 1;
@@ -566,7 +592,8 @@ function frame(now) {
       });
       // ballons : dernier état connu, prolongé jusqu'à maintenant
       const Ls = snaps.at(-1), age = Math.min(0.12, (now - Ls.at) / 1000), lim = CC.WALL - env.r;
-      const balls = Ls.s.b.map(CC.unpackBall).map(b => ({ ...b, r: env.r, x: Math.max(-lim, Math.min(lim, b.x + b.vx * age)), y: Math.max(env.r, b.y + b.vy * age - 0.5 * env.bg * age * age) }));
+      const balls = live && PW ? PW.balls.map((b, k) => ({ ...b, r: env.r, x: b.x + (ballOff[k]?.x ?? 0), y: b.y + (ballOff[k]?.y ?? 0) })) // ballons anticipés
+        : Ls.s.b.map(CC.unpackBall).map(b => ({ ...b, r: env.r, x: Math.max(-lim, Math.min(lim, b.x + b.vx * age)), y: Math.max(env.r, b.y + b.vy * age - 0.5 * env.bg * age * age) }));
       const clock = hud(list, snap.clock, snap.golden);
       scene = { players: list, balls, items: snap.it ?? [], walls: snap.wl, goalH: snap.gh, wind: snap.wd, g: env.bg, board: { names: s.sides.map(teamName), score: s.score, clock, flash: now < goalFlash } };
     }
@@ -574,7 +601,7 @@ function frame(now) {
   if (scene) {
     record(now, scene);
     const rp = replayScene(now);
-    V.frame(rp ? dt * replay.speed : dt, t, rp ?? scene);
+    V.frame(now < stopUntil ? 0 : rp ? dt * replay.speed : dt, t, rp ?? scene);
     // le public monte quand un ballon approche d'un but
     const near = Math.min(...scene.balls.map(b => CC.F.HL - Math.abs(b.x)));
     if (sound()) crowd(0.14 + Math.max(0, Math.min(1, (5 - near) / 5)) * 0.22);

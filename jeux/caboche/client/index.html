@@ -23,7 +23,7 @@
     <div class="topbar"><a class="back" href="../">← Le Cercle</a><span class="coins pill"></span><button class="ghost small" id="shopBtn">🛒 Boutique</button><button class="ghost small" id="statsBtn">📊 Stats</button></div>
     <header class="hero">
       <h1>Caboche <span>Cup</span></h1>
-      <p class="tagline">Du foot de profil avec des têtes énormes : boulets, lobs, retournés, têtes plongeantes, tacles, super-pouvoirs et bonus qui tombent du ciel.</p>
+      <p class="tagline">Du foot de profil avec des têtes énormes et une grosse chaussure : frappes parfaites, lobs, volées, têtes, bousculades, super-pouvoirs et bonus qui tombent du ciel.</p>
     </header>
     <form class="card" id="nameForm"><label>Ton nom de joueur <input name="pseudo" maxlength="20" required autocomplete="nickname" placeholder="Pseudo"></label></form>
     <div class="card"><h2>Ton joueur <small>les joueurs 🔒 se débloquent avec des pièces</small></h2><div class="picks" id="homePicks"></div></div>
@@ -33,6 +33,7 @@
       <button class="mode m3" id="survieBtn"><i>💀</i><b>Survie</b><small>Un but et c'est fini · classement mondial</small></button>
       <button class="mode m4" id="defisBtn"><i>🎯</i><b>Défis</b><small>Lobs, retournés, cage inviolée…</small></button>
       <button class="mode m5" id="duoBtn"><i>🎮</i><b>À deux</b><small>Sur le même clavier</small></button>
+      <button class="mode m7" id="trainBtn"><i>🎯</i><b>Entraînement</b><small>Seul avec le ballon</small></button>
       <button class="mode m6" id="quickBtn"><i>⚡</i><b>Match rapide en ligne</b><small>Contre un vrai joueur</small></button>
     </div>
     <div class="grid">
@@ -45,12 +46,11 @@
     <div class="card rules"><h2>Les commandes</h2>
       <ul>
         <li><kbd>Q</kbd> <kbd>D</kbd> (ou <kbd>←</kbd> <kbd>→</kbd>) : courir · <kbd>Z</kbd> (ou <kbd>↑</kbd>) : sauter · <kbd>Maj</kbd> : sprint, qui use l'endurance (la barre sous ton nom).</li>
-        <li><kbd>Espace</kbd> (ou clic gauche) : tirer. À l'arrêt, un <b>piqué</b> ; en avançant, une <b>frappe</b> ; en sprint, un <b>boulet</b> ; en reculant, un <b>lob</b>. En l'air : <b>volée</b>, <b>tête plongeante</b> (ballon à hauteur de poitrine), <b>retourné</b> (ballon au-dessus de ta tête).</li>
-        <li><b>Garde la touche de tir</b> pour charger : au relâché, un tir chargé, plus fort et plus tendu.</li>
-        <li>Un ballon qui arrive doucement est <b>amorti</b> et reste devant toi. En l'air devant ton but, ta tête devient une <b>parade</b>.</li>
-        <li><kbd>S</kbd> (ou clic droit) : tacle glissé. Il fait tomber l'adversaire… mais rate-le et tu restes un moment à terre.</li>
+        <li><kbd>Espace</kbd> (ou clic gauche) : la jambe balaie un arc devant toi, et le ballon part <b>là où le pied le touche</b> : touché par-dessous, il monte ; au milieu, il part tendu. Touché au milieu du geste, c'est une <b>frappe parfaite</b>. En courant, ça part plus fort ; en l'air, c'est une volée.</li>
+        <li><kbd>S</kbd> (ou clic droit) : <b>lob</b>, qui passe par-dessus l'adversaire. Une touche appuyée un peu trop tôt est gardée en mémoire.</li>
+        <li>Les têtes sont solides : on bouscule, on bloque, on peut même <b>sauter sur la tête</b> de l'adversaire pour rebondir. Un ballon qui arrive doucement est amorti par la chaussure.</li>
         <li><kbd>E</kbd> : super-pouvoir quand la jauge est pleine (chaque joueur a le sien). Des <b>bonus</b> tombent en parachute : touche-les pour les prendre.</li>
-        <li>Manette : stick ou croix, <b>A</b> sauter, <b>X</b>/RT tirer, <b>B</b> tacler, LB/RB/LT sprint, <b>Y</b> pouvoir. Sur téléphone, des boutons apparaissent à l'écran.</li>
+        <li>Manette : stick ou croix, <b>A</b> sauter, <b>X</b>/RT tirer, <b>B</b> lob, LB/RB/LT sprint, <b>Y</b> pouvoir. Sur téléphone, des boutons apparaissent à l'écran.</li>
       </ul>
     </div>
   </section>
@@ -91,7 +91,7 @@
     <div class="comment" id="comment" hidden><i>🎙️</i><span></span></div>
     <div id="touch" aria-hidden="true">
       <div class="pad l"><button data-bit="L">◀</button><button data-bit="R">▶</button></div>
-      <div class="pad r"><button data-bit="POWER">⚡</button><button data-bit="TACKLE">🛷</button><button data-bit="SPRINT">💨</button><button data-bit="JUMP">⤒</button><button data-bit="KICK" class="big">🦶</button></div>
+      <div class="pad r"><button data-bit="POWER">⚡</button><button data-bit="LOB">🌈</button><button data-bit="SPRINT">💨</button><button data-bit="JUMP">⤒</button><button data-bit="KICK" class="big">🦶</button></div>
     </div>
     <ul id="feed" class="feed"></ul>
     <p class="toast" id="toast" hidden></p>

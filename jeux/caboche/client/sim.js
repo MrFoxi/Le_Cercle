@@ -1,32 +1,34 @@
 // Caboche Cup : la physique du match en 2D (vue de profil), partagée par le serveur (qui fait foi) et le navigateur
-// (qui anticipe son joueur, et fait tourner seul les modes hors ligne). Script classique : window.CC ou require.
+// (qui anticipe son joueur et le ballon, et fait tourner seul les modes hors ligne). Script classique : window.CC ou require.
 // Mètres et secondes, 60 images par seconde ; x le long du terrain (le côté 0 attaque vers +x), y vers le haut.
-// Joueurs à grosse tête (1 contre 1 ou 2 contre 2), toujours tournés vers le but adverse : courir, sprinter (endurance),
-// sauter, tirer (le geste dépend de la course : piqué, frappe, boulet, lob ; en l'air : volée, tête plongeante,
-// retourné ; touche maintenue : tir chargé), amortir, tacler, parer près de son but, pouvoir spécial (huit personnages).
-// Ballons (un ou trois), bonus qui tombent du ciel, modes fous (lune, patinoire, ballon géant, vent, cages folles)
-// et terrains (sable, neige, pluie, vent des toits). Testé par jeux/caboche/caboche.test.js.
+// Un joueur, c'est une tête énorme (un cercle solide : on ne traverse pas l'adversaire, on peut se poser sur sa tête)
+// et une grosse chaussure qui pivote sous la tête. Tirer fait balayer la jambe en arc de cercle : le ballon part selon
+// l'endroit où le pied le touche (dessous : il monte ; au milieu : tendu ; dessus : rasant) ; au bon moment, frappe
+// parfaite. Une touche à part pour le lob. Une touche appuyée un peu tôt est gardée en mémoire.
+// En plus : sprint et endurance, sauts, têtes, parade près de son but, pouvoirs (huit personnages), bonus qui tombent
+// du ciel, modes fous et terrains. Testé par jeux/caboche/caboche.test.js.
 (function (root, factory) {
   const CC = factory();
   if (typeof module === 'object' && module.exports) module.exports = CC;
   else root.CC = CC;
 })(this, () => {
   const FPS = 60, DT = 1 / FPS;
-  const IN = { L: 1, R: 2, JUMP: 4, KICK: 8, TACKLE: 16, POWER: 32, SPRINT: 64 };
+  const IN = { L: 1, R: 2, JUMP: 4, KICK: 8, LOB: 16, POWER: 32, SPRINT: 64 };
   const F = { HL: 10, GD: 1.5, GH: 2.9, CEIL: 9, BAR: 0.12 };
   const WALL = F.HL + F.GD; // murs du stade, derrière les buts
-  const BALL = { r: 0.34, g: 15, bounce: 0.72, wall: 0.72, drag: 0.998, roll: 0.985, max: 32 };
+  const BALL = { r: 0.34, g: 15, bounce: 0.72, wall: 0.72, drag: 0.998, roll: 0.985, max: 34 };
   const PG = 26; // gravité des joueurs
-  const BODY = { y: 0.6, r: 0.42 }, HEAD = { y: 1.55 }, SPRINT = 1.4, CHARGE = 0.8;
+  // la tête repose sur la chaussure : NECK = hauteur du bas de la tête ; la jambe pivote sous la tête
+  const NECK = 0.42, LEG = { pivot: 0.6, len: 0.62, foot: 0.22, rest: 0.15, from: -0.7, to: 2.3, swing: 0.18 }, SPRINT = 1.4;
   const CHARS = {
-    bouboule: { name: 'Bouboule', title: 'le canonnier', run: 6.2, accel: 45, jump: 9.6, kick: 19, head: 0.7, weight: 1.25, power: 'super', price: 0, stats: { vitesse: 3, tir: 5, saut: 3, tête: 4 } },
-    lila: { name: 'Lila', title: 'la fusée', run: 7.2, accel: 55, jump: 10.6, kick: 16, head: 0.62, weight: 0.85, power: 'tete', price: 0, stats: { vitesse: 5, tir: 3, saut: 5, tête: 3 } },
-    givre: { name: 'Givre', title: 'le glaçon', run: 6.6, accel: 48, jump: 9.8, kick: 17, head: 0.66, weight: 1, power: 'gel', price: 300, stats: { vitesse: 4, tir: 4, saut: 3, tête: 4 } },
-    zoe: { name: 'Zoé', title: 'la sauterelle', run: 6.8, accel: 52, jump: 11.2, kick: 16, head: 0.6, weight: 0.8, power: 'ressort', price: 300, stats: { vitesse: 4, tir: 3, saut: 5, tête: 4 } },
-    tiko: { name: 'Tiko', title: 'le lutin', run: 7.6, accel: 60, jump: 10, kick: 15, head: 0.56, weight: 0.7, power: 'mini', price: 400, stats: { vitesse: 5, tir: 2, saut: 4, tête: 2 } },
-    magnus: { name: 'Magnus', title: 'le dribbleur', run: 6.8, accel: 50, jump: 9.6, kick: 17.5, head: 0.68, weight: 1.05, power: 'aimant', price: 450, stats: { vitesse: 4, tir: 4, saut: 3, tête: 4 } },
-    roco: { name: 'Roco', title: 'le mur', run: 5.6, accel: 40, jump: 9, kick: 18, head: 0.78, weight: 1.5, power: 'mur', price: 500, stats: { vitesse: 2, tir: 4, saut: 2, tête: 5 } },
-    siroco: { name: 'Siroco', title: 'le vent', run: 7, accel: 55, jump: 10, kick: 18, head: 0.62, weight: 0.9, power: 'tornade', price: 600, stats: { vitesse: 4, tir: 5, saut: 4, tête: 3 } },
+    bouboule: { name: 'Bouboule', title: 'le canonnier', run: 6.2, accel: 45, jump: 9.6, kick: 21, head: 0.72, weight: 1.25, power: 'super', price: 0, stats: { vitesse: 3, tir: 5, saut: 3, tête: 4 } },
+    lila: { name: 'Lila', title: 'la fusée', run: 7.2, accel: 55, jump: 10.6, kick: 18, head: 0.64, weight: 0.85, power: 'tete', price: 0, stats: { vitesse: 5, tir: 3, saut: 5, tête: 3 } },
+    givre: { name: 'Givre', title: 'le glaçon', run: 6.6, accel: 48, jump: 9.8, kick: 19, head: 0.68, weight: 1, power: 'gel', price: 300, stats: { vitesse: 4, tir: 4, saut: 3, tête: 4 } },
+    zoe: { name: 'Zoé', title: 'la sauterelle', run: 6.8, accel: 52, jump: 11.2, kick: 18, head: 0.62, weight: 0.8, power: 'ressort', price: 300, stats: { vitesse: 4, tir: 3, saut: 5, tête: 4 } },
+    tiko: { name: 'Tiko', title: 'le lutin', run: 7.6, accel: 60, jump: 10, kick: 17, head: 0.58, weight: 0.7, power: 'mini', price: 400, stats: { vitesse: 5, tir: 2, saut: 4, tête: 2 } },
+    magnus: { name: 'Magnus', title: 'le dribbleur', run: 6.8, accel: 50, jump: 9.6, kick: 19.5, head: 0.7, weight: 1.05, power: 'aimant', price: 450, stats: { vitesse: 4, tir: 4, saut: 3, tête: 4 } },
+    roco: { name: 'Roco', title: 'le mur', run: 5.6, accel: 40, jump: 9, kick: 20, head: 0.8, weight: 1.5, power: 'mur', price: 500, stats: { vitesse: 2, tir: 4, saut: 2, tête: 5 } },
+    siroco: { name: 'Siroco', title: 'le vent', run: 7, accel: 55, jump: 10, kick: 20, head: 0.64, weight: 0.9, power: 'tornade', price: 600, stats: { vitesse: 4, tir: 5, saut: 4, tête: 3 } },
   };
   const CHAR_IDS = Object.keys(CHARS);
   const POWERS = {
@@ -64,68 +66,64 @@
 
   const dirOf = p => (p.side ? -1 : 1); // sens d'attaque
   const C = p => CHARS[p.char] ?? CHARS.bouboule;
-  function player(id, char, side) {
-    return { id, char, side, x: (side ? 1 : -1) * 4.5, y: 0, vx: 0, vy: 0, ground: true, jumps: 0, kickT: 0, kickCd: 0, kicked: false, kind: '', charge: 0, chargeK: 0, tackleT: 0, tackleCd: 0, tackled: false, tdir: 0, stun: 0, frozen: 0, mini: 0, big: 0, fast: 0, keeper: false, gauge: 0, power: null, powerT: 0, pending: null, sta: 1, tired: false, sprint: false, prevIn: 0, goals: 0, trapAt: -99 };
-  }
-  const headR = p => C(p).head * (p.power === 'tete' ? 2 : 1) * (p.big > 0 ? 1.6 : 1) * (p.mini > 0 ? 0.55 : 1) * (p.keeper ? 1.2 : 1);
-  const headY = p => p.y + HEAD.y * (p.power === 'tete' ? 1.2 : 1) * (p.big > 0 ? 1.1 : 1) * (p.mini > 0 ? 0.7 : 1);
-  const bodyY = p => p.y + BODY.y * (p.mini > 0 ? 0.7 : 1), bodyR = p => BODY.r * (p.mini > 0 ? 0.75 : 1);
   const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+  function player(id, char, side) {
+    return { id, char, side, x: (side ? 1 : -1) * 4.5, y: 0, vx: 0, vy: 0, ground: true, perch: 0, jumps: 0, kickT: 0, kickCd: 0, kicked: false, lob: false, queued: 0, kind: '', frozen: 0, mini: 0, big: 0, fast: 0, keeper: false, gauge: 0, power: null, powerT: 0, pending: null, sta: 1, tired: false, sprint: false, prevIn: 0, goals: 0, trapAt: -99 };
+  }
+  const sz = p => (p.mini > 0 ? 0.7 : 1); // taille du corps (rétréci)
+  const baseR = p => C(p).head * (p.power === 'tete' ? 2 : 1) * (p.big > 0 ? 1.6 : 1) * (p.mini > 0 ? 0.55 : 1);
+  const headR = p => baseR(p) * (p.keeper ? 1.2 : 1);
+  const headY = p => p.y + NECK * sz(p) + baseR(p);
+  // La jambe : angle (0 : pied sous la tête ; positif : vers l'avant et vers le haut) et position du pied.
+  const legAngle = p => (p.kickT > 0 ? LEG.from + (LEG.to - LEG.from) * (1 - p.kickT / LEG.swing) : LEG.rest);
+  function footPos(p, th = legAngle(p)) { const s = dirOf(p), k = sz(p); return { x: p.x + s * Math.sin(th) * LEG.len * k, y: p.y + LEG.pivot * k - Math.cos(th) * LEG.len * k }; }
 
-  // Une image pour un joueur (course, sprint, saut, tir, charge, tacle, pouvoir). Les contacts sont réglés par stepWorld.
+  // Une image pour un joueur (course, sprint, saut, tir, lob, pouvoir). Les contacts sont réglés par stepWorld.
   function step(p, inp, env = ENV0) {
-    const c = C(p), pressed = inp & ~p.prevIn, released = p.prevIn & ~inp, s = dirOf(p);
+    const c = C(p), pressed = inp & ~p.prevIn;
     p.prevIn = inp;
-    p.kickCd = Math.max(0, p.kickCd - DT); p.tackleCd = Math.max(0, p.tackleCd - DT);
-    if (p.kickT > 0 && (p.kickT -= DT) <= 0) p.chargeK = 0;
+    p.kickCd = Math.max(0, p.kickCd - DT);
+    if (p.kickT > 0) p.kickT = Math.max(0, p.kickT - DT);
     if (p.powerT > 0 && (p.powerT -= DT) <= 0) p.power = null;
     for (const k of ['frozen', 'mini', 'big', 'fast']) if (p[k] > 0) p[k] = Math.max(0, p[k] - DT);
     p.gauge = Math.min(1, p.gauge + DT / GAUGE_S);
     p.sprint = false;
-    if (p.stun > 0 || p.frozen > 0) { // à terre après un tacle, ou congelé
-      if (p.stun > 0) p.stun -= DT;
-      if (p.ground) p.vx *= 0.88;
-      p.charge = 0;
-    } else if (p.tackleT > 0) { // glissade
-      p.tackleT -= DT; p.vx *= 0.975; p.charge = 0;
-    } else {
+    const canJump = p.ground || p.perch > 0;
+    if (p.perch > 0) p.perch--;
+    if (p.frozen > 0) { if (p.ground) p.vx *= 0.88; p.queued = 0; } // congelé
+    else {
       const mx = (inp & IN.R ? 1 : 0) - (inp & IN.L ? 1 : 0);
       p.sprint = !!(inp & IN.SPRINT) && mx !== 0 && !p.tired && p.sta > 0;
       const run = c.run * env.run * (p.fast > 0 ? 1.35 : 1) * (p.mini > 0 ? 0.8 : 1) * (p.sprint ? SPRINT : 1);
-      const a = c.accel * env.accel * (p.ground ? 1 : 0.6) * DT;
+      const a = c.accel * env.accel * (canJump ? 1 : 0.6) * DT;
       p.vx += clamp(mx * run - p.vx, -a, a);
       if (pressed & IN.JUMP) {
         const j = c.jump * env.jump * (p.power === 'ressort' ? 1.4 : 1);
-        if (p.ground) { p.vy = j; p.ground = false; p.jumps = p.power === 'ressort' ? 1 : 0; p.ev?.push('jump'); }
+        if (canJump) { p.vy = j; p.ground = false; p.perch = 0; p.jumps = p.power === 'ressort' ? 1 : 0; p.ev?.push('jump'); }
         else if (p.jumps > 0) { p.jumps--; p.vy = j * 0.85; p.ev?.push('jump'); }
       }
-      if (pressed & IN.KICK && p.kickCd <= 0) { p.kickT = 0.22; p.kickCd = 0.32; p.kicked = false; p.kind = ''; p.chargeK = 0; p.ev?.push('swing'); }
-      // touche de tir maintenue après le geste : on charge ; au relâché, tir chargé
-      if (inp & IN.KICK) { if (p.kickT <= 0) p.charge = Math.min(CHARGE, p.charge + DT); }
-      else if (released & IN.KICK) {
-        if (p.charge > 0.18) { p.kickT = 0.24; p.kickCd = 0.32; p.kicked = false; p.kind = ''; p.chargeK = Math.min(1, p.charge / CHARGE); p.ev?.push('swing'); }
-        p.charge = 0;
-      }
-      if (pressed & IN.TACKLE && p.tackleCd <= 0 && p.ground) { p.tdir = mx || s; p.tackleT = 0.45; p.tackleCd = 1.4; p.tackled = false; p.vx = p.tdir * 12.5; p.ev?.push('tackle'); }
+      // tir et lob : une touche appuyée pendant le geste précédent est gardée 150 ms
+      if (pressed & (IN.KICK | IN.LOB)) p.queued = (pressed & IN.LOB ? -1 : 1) * 9;
+      if (p.queued && p.kickCd <= 0) { p.lob = p.queued < 0; p.queued = 0; p.kickT = LEG.swing; p.kickCd = 0.3; p.kicked = false; p.kind = ''; p.ev?.push('swing'); }
+      else if (p.queued) p.queued -= Math.sign(p.queued);
       if (pressed & IN.POWER && p.gauge >= 1) {
         const pw = c.power; p.gauge = 0; p.power = pw; p.powerT = POWERS[pw].dur; p.ev?.push('power');
         if (pw === 'gel' || pw === 'mini' || pw === 'mur') p.pending = pw; // effet sur l'adversaire ou le terrain : stepWorld
       }
     }
-    if (!(inp & IN.KICK)) p.charge = 0;
     // endurance : le sprint l'use, elle revient sans sprinter ; à zéro, il faut souffler un peu
     if (p.sprint) { p.sta -= DT * 0.55; if (p.sta <= 0) { p.sta = 0; p.tired = true; } }
     else { p.sta = Math.min(1, p.sta + DT * 0.28); if (p.tired && p.sta > 0.35) p.tired = false; }
     p.vy -= env.pg * DT;
     p.x += p.vx * DT; p.y += p.vy * DT;
     if (p.y <= 0) { if (!p.ground && p.vy < -6) p.ev?.push('land'); p.y = 0; p.vy = 0; p.ground = true; p.jumps = 0; }
+    else if (p.y > 0.02) p.ground = false;
     const lim = F.HL - 0.25; // on ne rentre pas dans les buts
     if (Math.abs(p.x) > lim) { p.x = Math.sign(p.x) * lim; p.vx = 0; }
-    p.keeper = !p.ground && Math.abs(p.x + s * F.HL) < 3.2; // en l'air devant son but : parade
+    p.keeper = !p.ground && p.perch <= 0 && Math.abs(p.x + dirOf(p) * F.HL) < 3.2; // en l'air devant son but : parade
   }
 
-  // Rebond du ballon sur un cercle (corps ou tête) : il repart en tenant compte de la vitesse du joueur.
-  // Renvoie la vitesse de choc (0 s'il n'y a pas contact).
+  // Rebond du ballon sur un cercle : il repart en tenant compte de la vitesse du cercle. Renvoie la vitesse de choc.
   function bounceOff(b, r0, cx, cy, r, vx, vy, e) {
     const dx = b.x - cx, dy = b.y - cy, d = Math.hypot(dx, dy), min = r + r0;
     if (d >= min || d < 1e-6) return 0;
@@ -142,7 +140,7 @@
     return [0, 1].map(d => {
       let h = F.GH;
       if (w.opts.mode === 'cages') h += Math.sin(w.frame / 150 + d * Math.PI) * 0.75;
-      if (w.shrink[d] > 0) h *= 0.7;
+      if (w.shrink?.[d] > 0) h *= 0.7;
       return h;
     });
   }
@@ -182,30 +180,25 @@
     }
   }
 
-  // Tir : le geste dépend de la situation (pouvoir, en l'air, sprint, course, recul, arrêt) et de la charge.
-  // Renvoie [nom, angle en degrés, puissance].
-  function kickOf(p, b) {
-    const c = C(p), ck = p.chargeK || 0, k = 1 + 0.6 * ck, low = ck * 8;
-    if (p.power === 'super') return ['feu', 6, c.kick * 1.7 * k];
-    if (p.power === 'tornade') return ['tornade', 10, c.kick * 1.35 * k];
-    if (!p.ground) {
-      const rel = b.y - p.y;
-      if (rel > 1.45) return ['retourne', -12, c.kick * 1.3 * k];
-      if (rel > 0.6) return ['plongeon', 4, c.kick * 1.15 * k];
-      return ['volee', 8, c.kick * 1.05 * k];
-    }
-    const fwd = p.vx * dirOf(p);
-    if (p.sprint && fwd > 0) return ['boulet', 13 - low, (c.kick * 1.2 + fwd * 0.3) * k];
-    if (fwd > 1.5) return ['frappe', 22 - low, (c.kick + fwd * 0.3) * k];
-    if (fwd < -1.5) return ['lob', 58, c.kick * 0.78 * k];
-    return ck > 0.3 ? ['canon', 18 - low, c.kick * 0.85 * k] : ['pique', 40, c.kick * 0.85];
+  // Vitesse donnée au ballon par le pied à l'angle th : direction du pied vers le ballon (le point de contact choisit
+  // la hauteur), puissance selon la vitesse de la jambe (plus forte au milieu du geste : frappe parfaite) et la course.
+  function kickVel(p, b, th, f = footPos(p, th)) {
+    const c = C(p), s = dirOf(p);
+    let nx = b.x - f.x, ny = b.y - f.y; const d = Math.hypot(nx, ny) || 1; nx /= d; ny /= d;
+    let ang = Math.atan2(ny, Math.max(0.3, nx * s)) + 0.1; // angle vers l'avant (positif : vers le haut)
+    const perfect = !p.lob && th > 1.15 && th < 1.85, q = clamp(1 - Math.abs(th - 1.5) / 1.4, 0, 1), fwd = Math.max(0, p.vx * s);
+    let pw = c.kick * (0.7 + 0.3 * q) * (perfect ? 1.12 : 1) + fwd * 0.35, kind = p.ground || p.perch > 0 ? 'frappe' : 'volee';
+    ang = clamp(ang, -0.55, 1.1);
+    if (p.lob) { ang = 1.0; pw = c.kick * 0.74 + fwd * 0.2; kind = 'lob'; }
+    if (p.power === 'super') { pw *= 1.7; ang = Math.min(ang, 0.25); kind = 'feu'; }
+    else if (p.power === 'tornade') { pw *= 1.35; kind = 'tornade'; }
+    return { vx: s * Math.cos(ang) * pw, vy: Math.sin(ang) * pw, kind, perfect: perfect && kind !== 'lob', pw };
   }
-  // Le ballon est-il à portée du geste (pied au sol, tout le corps en l'air) ?
-  function inReach(p, b) {
-    const s = dirOf(p), dx = (b.x - p.x) * s;
-    if (p.ground) return Math.hypot(b.x - p.x - s * 0.5, b.y - p.y - 0.35) < 0.95 && dx > -0.3;
-    const rel = b.y - p.y;
-    return dx > -0.4 && dx < 1.3 && rel > -0.3 && rel < 2.3;
+  // Pour le robot : l'angle de jambe qui passerait au plus près de ce ballon, et la distance pied-ballon.
+  function bestReach(p, b) {
+    let best = null;
+    for (let k = 0; k <= 24; k++) { const th = LEG.from + ((LEG.to - LEG.from) * k) / 24, f = footPos(p, th), d = Math.hypot(b.x - f.x, b.y - f.y); if (!best || d < best.d) best = { th, d, f }; }
+    return best;
   }
 
   const rand = w => (w.seed = (w.seed * 16807) % 2147483647) / 2147483647;
@@ -219,7 +212,25 @@
     else if (kind === 'jauge') p.gauge = 1;
   }
 
-  // Une image pour le match : joueurs, pouvoirs, bonus, contacts (pied, corps, tête), tacles, ballons, but.
+  // Les têtes sont solides : on se pousse (le plus lourd tient mieux), on rebondit en l'air, on se pose sur la tête de l'autre.
+  function bodies(w, ev) {
+    for (let i = 0; i < w.players.length; i++) for (let j = i + 1; j < w.players.length; j++) {
+      const a = w.players[i], o = w.players[j], dx = o.x - a.x, dy = headY(o) - headY(a), d = Math.hypot(dx, dy), min = baseR(a) + baseR(o);
+      if (d >= min || d < 1e-6) continue;
+      const nx = dx / d, ny = dy / d, over = min - d, wa = C(a).weight, wo = C(o).weight, ka = wo / (wa + wo), ko = wa / (wa + wo);
+      a.x -= nx * over * ka; o.x += nx * over * ko;
+      a.y = Math.max(0, a.y - ny * over * ka); o.y = Math.max(0, o.y + ny * over * ko);
+      const rv = (o.vx - a.vx) * nx + (o.vy - a.vy) * ny;
+      if (rv < 0) { const jmp = (-(1.25) * rv) / (1 / wa + 1 / wo); a.vx -= (jmp * nx) / wa; a.vy -= (jmp * ny) / wa; o.vx += (jmp * nx) / wo; o.vy += (jmp * ny) / wo; }
+      // posé sur la tête de l'autre : on peut ressauter
+      for (const [top, under, k] of [[o, a, ny], [a, o, -ny]]) if (k > 0.55) {
+        if (top.vy < 0.5) { if (-rv > 4 && w.frame - (w.boingAt ?? 0) > 12) { w.boingAt = w.frame; ev.push({ t: 'boing', id: top.id, on: under.id, x: +top.x.toFixed(2), y: +headY(under).toFixed(2) }); } top.vy = Math.max(top.vy, -rv > 4 ? 3 : 0); top.perch = 3; top.jumps = 0; }
+      }
+      if (Math.abs(nx) > 0.6 && -rv > 7 && w.frame - (w.bumpAt ?? 0) > 15) { w.bumpAt = w.frame; ev.push({ t: 'bump', x: +((a.x + o.x) / 2).toFixed(2), y: +((headY(a) + headY(o)) / 2).toFixed(2) }); }
+    }
+  }
+
+  // Une image pour le match : joueurs, pouvoirs, bonus, corps, jambe, têtes, ballons, but.
   // Renvoie le côté qui marque (0 : celui de gauche, qui attaque vers +x ; 1 : celui de droite), ou null.
   function stepWorld(w, inputs, ev = []) {
     const env = envOf(w.opts);
@@ -238,26 +249,13 @@
         p.pending = null;
       }
     }
-    // les joueurs se bousculent ; le tacle fait tomber l'adversaire
-    for (let i = 0; i < w.players.length; i++) for (let j = i + 1; j < w.players.length; j++) {
-      const a = w.players[i], o = w.players[j];
-      if (Math.abs(a.y - o.y) >= 1.6) continue;
-      const dx = o.x - a.x, d = Math.abs(dx);
-      if (d >= 0.95) continue;
-      const push = 0.95 - d, n = Math.sign(dx) || 1, wa = C(a).weight, wo = C(o).weight;
-      a.x -= n * push * (wo / (wa + wo)); o.x += n * push * (wa / (wa + wo));
-      if (a.vx * n > 0) a.vx *= 0.6; if (o.vx * n < 0) o.vx *= 0.6;
-      if (a.side !== o.side) for (const [t, v] of [[a, o], [o, a]]) if (t.tackleT > 0 && !t.tackled && v.stun <= 0 && v.tackleT <= 0 && v.y < 1) {
-        t.tackled = true; v.stun = 1.1; v.vx = t.tdir * 4 / C(v).weight; v.vy = 4.5; v.ground = false; v.kickT = 0;
-        ev.push({ t: 'fall', id: v.id, by: t.id, x: +v.x.toFixed(2), y: +v.y.toFixed(2) });
-      }
-    }
-    // bonus : un toutes les 10 à 16 s, qui descend en parachute ; on le ramasse en le touchant
+    bodies(w, ev);
+    // bonus : un toutes les 10 à 16 s, qui descend en parachute ; on le ramasse en le touchant de la tête
     if (w.opts.bonus) {
       if (--w.itemIn <= 0) { w.itemIn = 600 + Math.floor(rand(w) * 360); if (w.items.length < 2) w.items.push({ id: ++w.itemId, kind: ITEM_IDS[Math.floor(rand(w) * ITEM_IDS.length)], x: +((rand(w) * 2 - 1) * (F.HL - 2.5)).toFixed(2), y: 7.5, life: 11 }); }
       for (const it of w.items) { it.y = Math.max(0.45, it.y - 1.3 * DT); it.life -= DT; }
       for (const it of [...w.items]) {
-        const p = w.players.find(p => p.stun <= 0 && Math.abs(p.x - it.x) < 0.9 && it.y > p.y - 0.3 && it.y < headY(p) + headR(p));
+        const p = w.players.find(p => Math.hypot(p.x - it.x, headY(p) - it.y) < baseR(p) + 0.45 || Math.hypot(footPos(p).x - it.x, footPos(p).y - it.y) < 0.6);
         if (p) { applyItem(w, p, it.kind); ev.push({ t: 'item', id: p.id, kind: it.kind, x: it.x, y: +it.y.toFixed(2) }); }
         if (p || it.life <= 0) w.items.splice(w.items.indexOf(it), 1);
       }
@@ -270,33 +268,29 @@
     }
     for (const p of w.players) {
       const s = dirOf(p);
-      // le geste : le ballon le plus proche à portée part selon le geste choisi
-      if (p.kickT > 0 && !p.kicked && p.stun <= 0 && p.frozen <= 0) {
-        const b = w.balls.filter(b => inReach(p, b)).sort((a, c) => Math.abs(a.x - p.x) - Math.abs(c.x - p.x))[0];
-        if (b) {
-          const [kind, deg, pw] = kickOf(p, b), an = (deg * Math.PI) / 180;
-          p.kicked = true; p.kind = kind;
-          b.vx = s * Math.cos(an) * pw; b.vy = Math.sin(an) * pw;
-          if (b.y < env.r + 0.02 && b.vy < 0) b.vy = -b.vy * 0.6;
-          if (kind === 'feu') { p.power = null; p.powerT = 0; b.fire = 2.2; }
-          if (kind === 'tornade') { p.power = null; p.powerT = 0; b.zig = 1.6; b.zph = 0; }
-          w.touch = p.id;
-          ev.push({ t: 'kick', id: p.id, x: +b.x.toFixed(2), y: +b.y.toFixed(2), p: +pw.toFixed(1), kind, fire: kind === 'feu', charged: p.chargeK > 0.3 });
-          continue;
+      // la jambe balaie son arc : le premier ballon touché part selon le point de contact (trois positions par image)
+      let kicked = null;
+      if (p.kickT > 0 && !p.kicked && p.frozen <= 0) {
+        const th1 = legAngle(p), th0 = Math.max(LEG.from, th1 - ((LEG.to - LEG.from) * DT) / LEG.swing);
+        for (let k = 1; k <= 3 && !kicked; k++) {
+          const th = th0 + ((th1 - th0) * k) / 3, f = footPos(p, th);
+          for (const b of w.balls) if (Math.hypot(b.x - f.x, b.y - f.y) < LEG.foot + env.r) { kicked = b; hit(w, p, b, th, f, env, ev); break; }
         }
       }
       for (const b of w.balls) {
+        if (b === kicked) continue;
         // aimant : le ballon proche colle au pied
-        if (p.power === 'aimant' && p.ground && p.stun <= 0 && b.y < 1.4 && Math.abs(b.x - p.x - s * 0.55) < 1.3 && p.kickT <= 0) { b.x += (p.x + s * 0.6 - b.x) * 0.35; b.y = Math.max(env.r, b.y - 0.1); b.vx = p.vx; b.vy = Math.min(b.vy, 0); w.touch = p.id; }
-        // la glissade emporte le ballon au ras du sol
-        if (p.tackleT > 0 && b.y < 0.9 && Math.abs(b.x - (p.x + p.tdir * 0.55)) < 0.75) { b.vx = p.tdir * 11; b.vy = 3; w.touch = p.id; }
-        // le corps (amorti des ballons qui arrivent doucement) et la tête (gros cercle ; en sautant, plus vive)
-        const toGoal = b.vx * -s;
-        const body = bounceOff(b, env.r, p.x, bodyY(p), bodyR(p), p.vx, p.vy, 0.3);
-        if (body && body < 6.5 && p.ground && p.kickT <= 0 && b.y < 1.4) { b.vx = p.vx + Math.sign(b.x - p.x || s) * 0.8; b.vy = Math.min(b.vy, 1.2); if (w.frame - p.trapAt > 30) { p.trapAt = w.frame; ev.push({ t: 'trap', id: p.id, x: +b.x.toFixed(2), y: +b.y.toFixed(2) }); } }
-        const head = bounceOff(b, env.r, p.x, headY(p), headR(p), p.vx, p.vy + (p.vy > 0 ? 2 : 0), p.vy > 1 ? 0.8 : p.keeper ? 0.45 : 0.6);
-        if (head && p.vy > 1) { b.vx += s * 3; b.vy += 1.5; }
-        if (body || head) w.touch = p.id;
+        if (p.power === 'aimant' && p.ground && b.y < 1.4 && Math.abs(b.x - p.x - s * 0.9) < 1.3 && p.kickT <= 0) { b.x += (p.x + s * 0.95 - b.x) * 0.35; b.y = Math.max(env.r, b.y - 0.1); b.vx = p.vx; b.vy = Math.min(b.vy, 0); w.touch = p.id; }
+        // la chaussure au repos : un ballon qui arrive doucement est amorti
+        const f = footPos(p), toGoal = b.vx * -s;
+        const foot = p.kickT > 0 ? 0 : bounceOff(b, env.r, f.x, f.y, LEG.foot, p.vx, p.vy, 0.3);
+        if (foot && foot < 7 && p.ground && b.y < 1.2) { b.vx = p.vx + Math.sign(b.x - p.x || s) * 0.8; b.vy = Math.min(b.vy, 1.2); if (w.frame - p.trapAt > 30) { p.trapAt = w.frame; ev.push({ t: 'trap', id: p.id, x: +b.x.toFixed(2), y: +b.y.toFixed(2) }); } }
+        // la tête : un gros cercle ; en sautant dedans, elle renvoie plus vite et vers l'avant ; devant son but, parade
+        const head = bounceOff(b, env.r, p.x, headY(p), headR(p), p.vx, p.vy + (p.vy > 0 ? 2 : 0), p.vy > 1 ? 0.85 : p.keeper ? 0.45 : 0.6);
+        if (head && p.vy > 1) { b.vx += s * 3.5; b.vy += 1.5; }
+        // un ballon bas qui arrive doucement contre le bas de la tête est amorti aussi
+        else if (head && head < 7 && p.ground && p.kickT <= 0 && b.y < 1.0) { b.vx = p.vx + Math.sign(b.x - p.x || s) * 0.8; b.vy = Math.min(b.vy, 1.2); if (w.frame - p.trapAt > 30) { p.trapAt = w.frame; ev.push({ t: 'trap', id: p.id, x: +b.x.toFixed(2), y: +b.y.toFixed(2) }); } }
+        if (foot || head) w.touch = p.id;
         if (head && p.keeper && toGoal > 8) ev.push({ t: 'save', id: p.id, x: +b.x.toFixed(2), y: +b.y.toFixed(2) });
         else if (head) { const sp = Math.hypot(b.vx, b.vy); if (sp > 6 && w.frame - (w.headAt ?? 0) > 10) { w.headAt = w.frame; ev.push({ t: 'header', id: p.id, x: +b.x.toFixed(2), y: +b.y.toFixed(2) }); } }
       }
@@ -308,6 +302,17 @@
     }
     return null;
   }
+  function hit(w, p, b, th, f, env, ev) {
+    const v = kickVel(p, b, th, f), d = Math.hypot(b.x - f.x, b.y - f.y) || 1;
+    b.x = f.x + ((b.x - f.x) / d) * (LEG.foot + env.r); b.y = Math.max(env.r, f.y + ((b.y - f.y) / d) * (LEG.foot + env.r));
+    b.vx = v.vx; b.vy = v.vy;
+    if (b.y <= env.r + 0.01 && b.vy < 0) b.vy = -b.vy * 0.5;
+    p.kicked = true; p.kind = v.kind;
+    if (v.kind === 'feu') { p.power = null; p.powerT = 0; b.fire = 2.2; }
+    if (v.kind === 'tornade') { p.power = null; p.powerT = 0; b.zig = 1.6; b.zph = 0; }
+    w.touch = p.id;
+    ev.push({ t: 'kick', id: p.id, x: +b.x.toFixed(2), y: +b.y.toFixed(2), p: +v.pw.toFixed(1), kind: v.kind, perfect: v.perfect, fire: v.kind === 'feu' });
+  }
 
   // entries : [{ id, char, side? }] (sans side : 0 puis 1) ; opts : { mode, stade, bonus, seed }
   function world(entries, opts = {}) {
@@ -317,16 +322,16 @@
   }
   // Coup d'envoi : chacun dans son camp (le second d'une équipe plus en retrait), les ballons tombent au centre.
   function kickoff(w) {
-    for (const side of [0, 1]) w.players.filter(p => p.side === side).forEach((p, k) => Object.assign(p, { x: (side ? 1 : -1) * (k ? 7.5 : 4.5), y: 0, vx: 0, vy: 0, ground: true, kickT: 0, tackleT: 0, stun: 0, frozen: 0, charge: 0 }));
+    for (const side of [0, 1]) w.players.filter(p => p.side === side).forEach((p, k) => Object.assign(p, { x: (side ? 1 : -1) * (k ? 7.5 : 4.5), y: 0, vx: 0, vy: 0, ground: true, perch: 0, kickT: 0, queued: 0, frozen: 0 }));
     const n = w.opts.mode === 'multi' ? 3 : 1;
     w.balls = [[0, 4], [-2.4, 5.5], [2.4, 5.5]].slice(0, n).map(([x, y]) => ({ x, y, vx: 0, vy: 0, fire: 0, zig: 0 }));
     w.touch = null;
   }
 
-  const KEYS = ['x', 'y', 'vx', 'vy', 'ground', 'jumps', 'kickT', 'kickCd', 'kicked', 'kind', 'charge', 'chargeK', 'tackleT', 'tackleCd', 'tackled', 'tdir', 'stun', 'frozen', 'mini', 'big', 'fast', 'keeper', 'gauge', 'power', 'powerT', 'sta', 'tired', 'sprint', 'prevIn'];
+  const KEYS = ['x', 'y', 'vx', 'vy', 'ground', 'perch', 'jumps', 'kickT', 'kickCd', 'kicked', 'lob', 'queued', 'kind', 'frozen', 'mini', 'big', 'fast', 'keeper', 'gauge', 'power', 'powerT', 'sta', 'tired', 'sprint', 'prevIn'];
   const pack = p => { const o = { id: p.id, char: p.char, side: p.side }; for (const k of KEYS) o[k] = typeof p[k] === 'number' ? Math.round(p[k] * 1000) / 1000 : p[k]; return o; };
   const packBall = b => [b.x, b.y, b.vx, b.vy].map(v => Math.round(v * 1000) / 1000).concat([b.fire > 0 ? 1 : 0, b.zig > 0 ? 1 : 0]);
-  const unpackBall = a => ({ x: a[0], y: a[1], vx: a[2], vy: a[3], fire: a[4], zig: a[5] });
+  const unpackBall = a => ({ x: a[0], y: a[1], vx: a[2], vy: a[3], fire: a[4] ? 1 : 0, zig: a[5] ? 1 : 0 });
 
-  return { FPS, DT, IN, F, WALL, BALL, BODY, HEAD, SPRINT, CHARGE, CHARS, CHAR_IDS, POWERS, ITEMS, ITEM_IDS, ACCS, MODES, STADES, envOf, dirOf, kickOf, inReach, player, step, stepBall, stepWorld, world, kickoff, headR, headY, bodyY, bodyR, goalHeights, pack, packBall, unpackBall };
+  return { FPS, DT, IN, F, WALL, BALL, NECK, LEG, SPRINT, CHARS, CHAR_IDS, POWERS, ITEMS, ITEM_IDS, ACCS, MODES, STADES, envOf, dirOf, player, step, stepBall, stepWorld, world, kickoff, baseR, headR, headY, legAngle, footPos, kickVel, bestReach, goalHeights, pack, packBall, unpackBall };
 });

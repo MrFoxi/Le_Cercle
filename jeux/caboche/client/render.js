@@ -1,11 +1,12 @@
 // Rendu 2D de Caboche Cup (Canvas), vue de profil et caméra fixe. Cinq stades (Caboche Arena de nuit, orage, plage au
 // couchant, montagne enneigée, toit de la ville) avec public animé (chants, ola, sauts aux buts), projecteurs, écran géant,
 // panneaux qui défilent, pelouse en perspective, cages aux filets qui ondulent, météo (pluie et éclairs, neige, vent).
-// Personnages en cartoon plat : aplats, ombre franche, contours épais, grands yeux brillants, huit silhouettes (crête,
-// tresses, bonnet, queue de cheval, casquette, afro, chauve barbu, cheveux au vent), accessoires, humeurs et poses
-// (course, sprint, saut, tir, charge, volée, retourné, plongeon, tacle, chute, gel, contrôle, célébration).
+// Personnages façon « grosse tête » : une tête énorme en cartoon plat (aplats, ombre franche, contours épais, grands
+// yeux brillants ; huit silhouettes : crête, tresses, bonnet, queue de cheval, casquette, afro, chauve barbu, cheveux
+// au vent ; accessoires ; humeurs), un col aux couleurs de l'équipe et une grosse chaussure qui balaie son arc au tir.
+// Animations élastiques : petits bonds de course, étirement au saut, écrasement à la réception, gel, célébration.
 // Effets : ballons à motifs, traînées, feu, zigzag, bonus en parachute, murs magiques, confettis, ralenti du replay.
-const CC = window.CC, { F, WALL, BALL, HEAD } = CC;
+const CC = window.CC, { F, WALL, BALL, LEG, NECK } = CC;
 export const TEAM = ['#ff4d4d', '#3d8bff'];
 const TEAM_D = ['#c7303c', '#2a63c9'], TEAM_L = ['#ffb3a8', '#a9cbff'], SHORTS = ['#ffffff', '#1d2a5c'], INK = '#1d1530';
 export const LOOKS = {
@@ -29,43 +30,28 @@ function tone(hex, k) {
 }
 
 /* ================= Personnages ================= */
-function bone(c, x0, y0, x1, y1, w, color) {
-  c.lineCap = 'round';
-  c.strokeStyle = INK; c.lineWidth = w + 0.06; c.beginPath(); c.moveTo(x0, y0); c.lineTo(x1, y1); c.stroke();
-  c.strokeStyle = color; c.lineWidth = w; c.beginPath(); c.moveTo(x0, y0); c.lineTo(x1, y1); c.stroke();
-}
 function blob(c, fill, line = 0.05) { c.fillStyle = fill; c.fill(); c.strokeStyle = INK; c.lineWidth = line; c.lineJoin = 'round'; c.stroke(); }
-function leg(c, hx, hy, a, k, side, look, dk) {
-  const kx = hx + Math.sin(a) * 0.19, ky = hy + Math.cos(a) * 0.19, sa = a - k, fx = kx + Math.sin(sa) * 0.19, fy = ky + Math.cos(sa) * 0.19;
-  bone(c, hx, hy, kx, ky, 0.17, tone(SHORTS[side] === '#ffffff' ? look.skin : look.skin, dk));
-  bone(c, kx, ky, fx, fy, 0.16, tone(TEAM[side], dk));
-  c.save(); c.translate(fx, fy); c.rotate(-sa);
-  c.beginPath(); c.moveTo(-0.1, -0.05); c.quadraticCurveTo(-0.13, 0.08, 0.0, 0.08); c.lineTo(0.2, 0.08); c.quadraticCurveTo(0.27, 0.07, 0.24, -0.01); c.quadraticCurveTo(0.17, -0.08, 0.04, -0.07); c.closePath();
-  blob(c, tone(look.boot, dk), 0.045);
-  c.fillStyle = 'rgba(255,255,255,.45)'; c.beginPath(); c.ellipse(0.12, -0.03, 0.06, 0.02, 0, 0, TAU); c.fill();
-  c.restore();
-}
-function arm(c, sx, sy, a, bend, side, look, dk) {
-  const ex = sx + Math.sin(a) * 0.17, ey = sy + Math.cos(a) * 0.17, fa = a + bend, hx = ex + Math.sin(fa) * 0.15, hy = ey + Math.cos(fa) * 0.15;
-  bone(c, sx, sy, ex, ey, 0.14, tone(TEAM[side], dk));
-  bone(c, ex, ey, hx, hy, 0.11, tone(look.skin, dk));
-  c.beginPath(); c.arc(hx, hy, look.gloves ? 0.11 : 0.075, 0, TAU); blob(c, tone(look.gloves ?? look.skin, dk), 0.04);
-}
-function torso(c, side, look, lean, t, speed) {
-  c.save(); c.rotate(lean);
-  // maillot : un œuf avec une ombre franche du côté du dos
-  c.beginPath(); c.roundRect(-0.28, -1.0, 0.56, 0.66, 0.24);
-  c.save(); c.fillStyle = TEAM_D[side]; c.fill(); c.clip(); c.fillStyle = TEAM[side]; c.beginPath(); c.roundRect(-0.18, -1.05, 0.56, 0.66, 0.24); c.fill();
-  c.fillStyle = 'rgba(255,255,255,.9)'; c.fillRect(0.02, -1.05, 0.08, 0.8); // bande
-  c.fillStyle = 'rgba(255,255,255,.25)'; c.beginPath(); c.ellipse(0.12, -0.85, 0.08, 0.04, -0.5, 0, TAU); c.fill();
-  c.restore();
-  c.beginPath(); c.roundRect(-0.28, -1.0, 0.56, 0.66, 0.24); c.strokeStyle = INK; c.lineWidth = 0.05; c.stroke();
-  c.beginPath(); c.roundRect(-0.27, -0.5, 0.54, 0.17, 0.07); blob(c, SHORTS[side], 0.045);
-  if (look.style === 'bonnet') { // écharpe qui flotte
+// Col du maillot sous le menton (et l'écharpe de Givre)
+function collar(c, side, look, R, t, speed) {
+  const y = -NECK - 0.02;
+  c.beginPath(); c.ellipse(0, y, R * 0.62, 0.17, 0, 0, Math.PI); c.closePath(); blob(c, TEAM[side], 0.045);
+  c.fillStyle = '#ffffff'; c.beginPath(); c.moveTo(R * 0.1, y); c.lineTo(R * 0.3, y); c.lineTo(R * 0.2, y + 0.12); c.closePath(); c.fill();
+  if (look.style === 'bonnet') {
     const fl = Math.sin(t * 9) * 0.04 + speed * 0.02;
-    c.beginPath(); c.roundRect(-0.25, -1.02, 0.5, 0.12, 0.05); blob(c, '#5fc8ff', 0.04);
-    c.beginPath(); c.moveTo(-0.2, -0.95); c.lineTo(-0.45 - speed * 0.04, -0.85 + fl); c.lineTo(-0.42 - speed * 0.04, -0.72 + fl); c.lineTo(-0.12, -0.9); c.closePath(); blob(c, '#5fc8ff', 0.04);
+    c.beginPath(); c.ellipse(0, y - 0.02, R * 0.66, 0.12, 0, 0, Math.PI * 2); blob(c, '#5fc8ff', 0.04);
+    c.beginPath(); c.moveTo(-R * 0.4, y); c.lineTo(-R * 0.75 - speed * 0.05, y + 0.1 + fl); c.lineTo(-R * 0.7 - speed * 0.05, y + 0.26 + fl); c.lineTo(-R * 0.25, y + 0.08); c.closePath(); blob(c, '#5fc8ff', 0.04);
   }
+}
+// La grosse chaussure, au bout de la jambe (angle th) ; rotation légère dans le sens du geste.
+function shoe(c, side, look, th) {
+  const fx = Math.sin(th) * LEG.len, fy = -LEG.pivot + Math.cos(th) * LEG.len;
+  c.save(); c.translate(fx, fy - 0.05); c.rotate(-(th - LEG.rest) * 0.55); c.scale(1.45, 1.45); // chaussure dessinée plus grosse que sa zone de contact
+  c.beginPath(); c.moveTo(-0.2, 0.06); c.quadraticCurveTo(-0.24, -0.16, -0.06, -0.18); c.lineTo(0.08, -0.16); c.quadraticCurveTo(0.34, -0.12, 0.38, 0.0); c.quadraticCurveTo(0.4, 0.1, 0.3, 0.11); c.lineTo(-0.14, 0.11); c.quadraticCurveTo(-0.22, 0.11, -0.2, 0.06); c.closePath();
+  blob(c, look.boot, 0.05);
+  c.fillStyle = TEAM[side]; c.beginPath(); c.moveTo(-0.08, -0.17); c.lineTo(0.06, -0.16); c.lineTo(0.14, 0.05); c.lineTo(0.0, 0.05); c.closePath(); c.fill(); // bande aux couleurs de l'équipe
+  c.fillStyle = '#ffffff'; c.fillRect(-0.18, 0.06, 0.5, 0.045); // semelle
+  c.fillStyle = INK; for (const x of [-0.1, 0.06, 0.2]) c.fillRect(x, 0.105, 0.05, 0.035); // crampons
+  c.fillStyle = 'rgba(255,255,255,.55)'; c.beginPath(); c.ellipse(0.16, -0.08, 0.08, 0.03, -0.3, 0, Math.PI * 2); c.fill();
   c.restore();
 }
 
@@ -174,16 +160,16 @@ function head(c, R, look, side, mood, lx, ly, blink, t, swing, speed, acc) {
   c.fillStyle = 'rgba(255,105,120,.4)'; c.beginPath(); c.ellipse(0.62 * W, 0.32 * R, 0.15 * R, 0.09 * R, 0, 0, TAU); c.fill();
   if (look.freckles) { c.fillStyle = tone(look.shade, 0.75); for (const [x, y] of [[0.5, 0.2], [0.6, 0.25], [0.55, 0.32], [0.08, 0.25]]) { c.beginPath(); c.arc(x * W, y * R, 0.025 * R, 0, TAU); c.fill(); } }
   // yeux : grands, ronds, deux reflets
-  const eyes = [[0.12 * W, 0.92], [0.58 * W, 0.82]], ey = -0.04 * R;
+  const eyes = [[0.1 * W, 0.92], [0.6 * W, 0.84]], ey = -0.02 * R;
   for (const [ex, sq] of eyes) {
-    const rx = 0.19 * R * sq, ry = 0.25 * R;
+    const rx = 0.23 * R * sq, ry = 0.29 * R;
     if (mood === 'dizzy') { c.strokeStyle = INK; c.lineWidth = 0.055; c.beginPath(); c.moveTo(ex - rx, ey - ry * 0.6); c.lineTo(ex + rx, ey + ry * 0.6); c.moveTo(ex - rx, ey + ry * 0.6); c.lineTo(ex + rx, ey - ry * 0.6); c.stroke(); continue; }
     if (blink || mood === 'joy') { c.strokeStyle = INK; c.lineWidth = 0.055; c.lineCap = 'round'; c.beginPath(); mood === 'joy' ? c.arc(ex, ey + ry * 0.35, rx, Math.PI * 1.15, Math.PI * 1.85) : c.arc(ex, ey, rx, 0.25, Math.PI - 0.25); c.stroke(); continue; }
     const open = mood === 'oh' || mood === 'shout' || mood === 'cold' ? 1.1 : mood === 'grit' || mood === 'focus' ? 0.8 : 1;
     c.beginPath(); c.ellipse(ex, ey, rx, ry * open, 0, 0, TAU); blob(c, '#ffffff', 0.04);
     const px = ex + lx * rx * 0.42, py = ey + ly * ry * 0.4 * open;
-    c.fillStyle = look.iris; c.beginPath(); c.arc(px, py, 0.135 * R * sq, 0, TAU); c.fill();
-    c.fillStyle = INK; c.beginPath(); c.arc(px, py, 0.075 * R * sq, 0, TAU); c.fill();
+    c.fillStyle = look.iris; c.beginPath(); c.arc(px, py, 0.15 * R * sq, 0, TAU); c.fill();
+    c.fillStyle = INK; c.beginPath(); c.arc(px, py, 0.085 * R * sq, 0, TAU); c.fill();
     c.fillStyle = '#ffffff'; c.beginPath(); c.arc(px + 0.04 * R, py - 0.05 * R, 0.045 * R, 0, TAU); c.fill(); c.beginPath(); c.arc(px - 0.04 * R, py + 0.04 * R, 0.02 * R, 0, TAU); c.fill();
     if (mood === 'grit' || mood === 'focus' || mood === 'evil') { c.fillStyle = look.skin; c.beginPath(); c.ellipse(ex, ey - ry * 0.98, rx * 1.2, ry * 0.42, 0, 0, TAU); c.fill(); c.strokeStyle = INK; c.lineWidth = 0.035; c.beginPath(); c.ellipse(ex, ey - ry * 0.98, rx * 1.05, ry * 0.42, 0, 0.2, Math.PI - 0.2); c.stroke(); }
     if (look.lashes) { c.strokeStyle = INK; c.lineWidth = 0.03; c.beginPath(); c.moveTo(ex + rx * 0.7, ey - ry * 0.7); c.lineTo(ex + rx * 1.05, ey - ry * 0.95); c.stroke(); }
@@ -222,58 +208,41 @@ function head(c, R, look, side, mood, lx, ly, blink, t, swing, speed, acc) {
 
 // Pose selon l'état, puis dessin dans le repère local (pieds en 0,0, y vers le bas, tourné vers +x).
 function drawPlayer(c, P, a, t, rel) {
-  const look = LOOKS[P.char] ?? LOOKS.bouboule, side = P.side;
-  const R0 = CC.CHARS[P.char].head * (P.power === 'tete' ? 2 : 1) * (P.big > 0 ? 1.6 : 1) * (P.mini > 0 ? 0.55 : 1);
-  const hy0 = HEAD.y * (P.power === 'tete' ? 1.2 : 1) * (P.big > 0 ? 1.1 : 1) * (P.mini > 0 ? 0.7 : 1);
-  const bk = P.mini > 0 ? 0.7 : 1, R = R0 / bk * a.headK, hy = hy0 / bk;
-  const fwd = P.vx * (side ? -1 : 1), speed = Math.abs(P.vx);
-  let L1 = 0.08, K1 = 0.1, L2 = -0.08, K2 = 0.1, A1 = -0.2, B1 = -0.5, A2 = 0.2, B2 = -0.4, lean = 0, rot = 0, lift = Math.sin(t * 3 + a.seed) * 0.015, mood = 'smile', sq = a.squash;
-  if (P.ground && speed > 0.4) { // course
-    const amp = Math.min(1, speed / 6) * (P.sprint ? 1.25 : 1), s = Math.sin(a.phase);
-    L1 = s * 1.0 * amp; L2 = -L1; K1 = 0.2 + Math.max(0, -s) * 1.3 * amp; K2 = 0.2 + Math.max(0, s) * 1.3 * amp;
-    A1 = -s * 1.1 * amp; A2 = s * 1.1 * amp; B1 = B2 = -1.2;
-    lean = Math.sign(fwd) * (P.sprint ? 0.26 : 0.1) * amp; lift = Math.abs(Math.cos(a.phase)) * 0.07 * amp;
-    if (fwd < 0) { L1 = -L1; L2 = -L2; }
-  }
-  if (!P.ground) { const up = P.vy > 0; L1 = 0.7; K1 = up ? 1.4 : 0.6; L2 = 0.1; K2 = up ? 1.1 : 0.3; A1 = -2.6; A2 = -2.2; B1 = B2 = 0.3; mood = 'oh'; }
-  if (P.charge > 0.05) { const k = P.charge / CC.CHARGE; L1 = -0.7 - k * 0.5; K1 = 1.0 + k * 0.4; A1 = 1.0; A2 = -1.2; lean = -0.1 - k * 0.1; mood = 'grit'; lift += Math.sin(t * 40) * 0.01 * k; }
-  if (P.kickT > 0) { // tir : la jambe avant arme puis fouette
-    const u = 1 - P.kickT / 0.22, air = !P.ground, top = air ? 2.2 : 1.6;
-    L1 = u < 0.3 ? -0.9 * (u / 0.3) : -0.9 + Math.min(1, (u - 0.3) / 0.3) * (0.9 + top); K1 = u < 0.3 ? 1.2 : Math.max(0, 1.2 - (u - 0.3) * 5);
-    L2 = -0.15; K2 = 0.2; A1 = -1.3; A2 = 1.4; B1 = -0.3; B2 = -0.6; lean = -0.15; mood = 'shout';
-    if (air) { rot = -0.45 * Math.sin(u * Math.PI); L2 = 0.6; K2 = 1.2; }
-    if (P.kind === 'retourne') { rot = -Math.PI * 1.1 * Math.min(1, u * 1.4); L1 = 2.6; K1 = 0; L2 = 1.2; K2 = 1.0; }
-    if (P.kind === 'plongeon') { rot = 1.25; L1 = -0.3; L2 = -0.5; K1 = K2 = 0.3; A1 = -2.8; A2 = -2.6; }
-  }
-  if (P.tackleT > 0) { rot = -1.05; L1 = 1.5; K1 = 0; L2 = 0.4; K2 = 1.4; A1 = 2.6; A2 = 2.2; B1 = B2 = 0.2; mood = 'grit'; lift = 0; }
-  if (P.stun > 0) { rot = -1.45; L1 = 1.2; K1 = 0.4; L2 = 0.8; K2 = 0.9; A1 = 2.8; A2 = -2.6; B1 = B2 = 0.6; mood = 'dizzy'; lift = 0; }
+  const look = LOOKS[P.char] ?? LOOKS.bouboule, side = P.side, k = P.mini > 0 ? 0.7 : 1;
+  const R = (CC.baseR(P) / k) * a.headK, fwd = P.vx * (side ? -1 : 1), speed = Math.abs(P.vx);
+  const amp = P.ground && speed > 0.4 ? Math.min(1, speed / 6) * (P.sprint ? 1.25 : 1) : 0;
+  let hop = amp * Math.abs(Math.sin(a.phase)) * 0.16, tilt = clamp(fwd * 0.025, -0.18, 0.18), mood = 'smile', stretch = 0;
+  let th = P.kickT > 0 ? CC.legAngle(P) : LEG.rest + Math.sin(a.phase) * 0.55 * amp;
+  if (!P.ground && !P.perch) { mood = 'oh'; stretch = clamp(P.vy * 0.012, -0.06, 0.1); hop = 0; if (!P.kickT) th = 0.6; }
+  if (P.kickT > 0) { const u = 1 - P.kickT / LEG.swing; tilt = -0.22 * Math.sin(u * Math.PI); mood = P.lob ? 'oh' : 'shout'; }
   // contrôle : le ballon arrive doucement contre le joueur
-  if (P.ground && !P.kickT && P.stun <= 0 && P.tackleT <= 0 && !P.charge && rel && Math.hypot(rel.x, rel.y - 0.8) < 1.3 && rel.sp < 6) { A1 = -0.9; A2 = 1.0; B1 = B2 = -0.6; mood = 'focus'; }
+  if (P.ground && !P.kickT && rel && Math.hypot(rel.x - 0.9, rel.y - 0.3) < 0.9 && rel.sp < 6) mood = 'focus';
   if (P.sprint && P.ground && !P.kickT) mood = 'grit';
   else if (P.power && mood === 'smile') mood = 'evil';
   else if (mood === 'smile' && rel && Math.hypot(rel.x, rel.y) < 3) mood = 'focus';
-  if (a.bump > 0 && mood !== 'dizzy') mood = 'ouch';
-  if (P.frozen > 0) { mood = 'cold'; L1 = 0.1; L2 = -0.1; K1 = K2 = 0.1; A1 = -0.4; A2 = 0.5; lift = 0; }
-  if (a.cele === 'win') { mood = 'joy'; A1 = -2.8 + Math.sin(t * 12) * 0.2; A2 = -2.6 - Math.sin(t * 12) * 0.2; B1 = B2 = 0.2; lift = Math.abs(Math.sin(t * 7)) * 0.5; L1 = 0.3; K1 = 0.9; }
-  if (a.cele === 'sad') { mood = 'sad'; A1 = 0.1; A2 = -0.05; B1 = B2 = -0.1; lean = 0.25; }
+  if (a.bump > 0) mood = 'ouch';
+  if (a.bonk > 0) mood = 'dizzy';
+  if (P.frozen > 0) { mood = 'cold'; hop = 0; tilt = 0; th = LEG.rest; }
+  if (a.cele === 'win') { mood = 'joy'; hop = Math.abs(Math.sin(t * 7)) * 0.55; tilt = Math.sin(t * 9) * 0.15; th = LEG.rest + Math.abs(Math.sin(t * 7)) * 0.8; }
+  if (a.cele === 'sad') { mood = 'sad'; tilt = 0.28; hop = 0; }
+  const sq = a.squash;
   c.save();
-  c.scale(bk, bk);
-  c.translate(0, -lift); c.scale(1 + sq * 0.6, 1 - sq);
-  c.translate(0, -0.6); c.rotate(rot); c.translate(0, 0.6);
-  arm(c, -0.08, -0.9, A2, B2, side, look, 0.78); leg(c, -0.07, -0.38, L2, K2, side, look, 0.78);
-  torso(c, side, look, lean, t, speed);
-  leg(c, 0.07, -0.38, L1, K1, side, look, 1);
-  c.save(); c.rotate(lean); arm(c, 0.08, -0.88, A1, B1, side, look, 1); c.restore();
-  const sad = a.cele === 'sad';
-  c.save(); c.translate(Math.sin(lean) * 1.3, -hy + (sad ? 0.1 : 0)); c.rotate(lean * 0.5 + (sad ? 0.35 : 0));
-  const dd = rel ? Math.hypot(rel.x, rel.y - 1.5) + 0.5 : 1, lx = clamp(rel ? rel.x / dd : 0.6, -1, 1), ly = clamp(rel ? -(rel.y - 1.5) / dd : 0, -1, 1);
+  c.scale(k, k);
+  c.translate(0, -hop);
+  c.scale(1 + sq * 0.7 - stretch * 0.5, 1 - sq + stretch);
+  // traînée de la jambe pendant le geste
+  if (P.kickT > 0) { c.strokeStyle = P.lob ? 'rgba(160,220,255,.55)' : 'rgba(255,255,255,.6)'; c.lineWidth = 0.14; c.lineCap = 'round'; c.beginPath(); c.arc(0, -LEG.pivot, LEG.len, Math.PI / 2 - th, Math.PI / 2 - Math.max(LEG.from, th - 1.6)); c.stroke(); }
+  collar(c, side, look, R, t, speed);
+  c.save(); c.translate(0, -NECK - R); c.rotate(tilt);
+  const dd = rel ? Math.hypot(rel.x, rel.y - NECK - R) + 0.5 : 1, lx = clamp(rel ? rel.x / dd : 0.6, -1, 1), ly = clamp(rel ? -(rel.y - NECK - R) / dd : 0, -1, 1);
   head(c, R, look, side, mood, lx, ly, a.blink > 0, t, clamp(-fwd * 0.06, -0.4, 0.4), speed, P.acc);
-  if (P.stun > 0) for (let k = 0; k < 3; k++) { const an = t * 5 + (k * TAU) / 3; star(c, Math.cos(an) * R * 0.9, -R * 1.05 + Math.sin(an) * R * 0.25, 0.1, '#ffe14a'); }
+  if (a.bonk > 0) for (let n = 0; n < 3; n++) { const an = t * 6 + (n * TAU) / 3; star(c, Math.cos(an) * R * 0.9, -R * 1.05 + Math.sin(an) * R * 0.25, 0.1, '#ffe14a'); }
   c.restore();
+  shoe(c, side, look, th);
   if (P.frozen > 0) { // bloc de glace
     c.fillStyle = 'rgba(170,230,255,.45)'; c.strokeStyle = 'rgba(255,255,255,.9)'; c.lineWidth = 0.05;
-    c.beginPath(); c.roundRect(-R * 1.15, -hy - R * 1.2, R * 2.3, hy + R * 1.25, 0.15); c.fill(); c.stroke();
-    c.strokeStyle = 'rgba(255,255,255,.7)'; c.beginPath(); c.moveTo(-R * 0.8, -hy - R * 0.9); c.lineTo(-R * 0.3, -hy - R * 0.4); c.moveTo(R * 0.6, -0.3); c.lineTo(R * 0.9, -0.6); c.stroke();
+    c.beginPath(); c.roundRect(-R * 1.15, -NECK - R * 2.2, R * 2.3, NECK + R * 2.25, 0.15); c.fill(); c.stroke();
+    c.strokeStyle = 'rgba(255,255,255,.7)'; c.beginPath(); c.moveTo(-R * 0.8, -NECK - R * 1.9); c.lineTo(-R * 0.3, -NECK - R * 1.4); c.moveTo(R * 0.6, -0.3); c.lineTo(R * 0.9, -0.6); c.stroke();
   }
   c.restore();
 }
@@ -282,15 +251,16 @@ function star(c, x, y, r, color) {
   for (let k = 0; k < 10; k++) { const a = -Math.PI / 2 + (k * Math.PI) / 5, rr = k % 2 ? r * 0.45 : r; c.lineTo(x + Math.cos(a) * rr, y + Math.sin(a) * rr); }
   c.closePath(); blob(c, color, 0.025);
 }
-const newAnim = () => ({ phase: 0, blink: 0, nextBlink: 2 + Math.random() * 3, squash: 0, wasGround: true, bump: 0, cele: null, celeT: 0, headK: 1, seed: Math.random() * 10 });
+const newAnim = () => ({ phase: 0, blink: 0, nextBlink: 2 + Math.random() * 3, squash: 0, wasGround: true, bump: 0, bonk: 0, cele: null, celeT: 0, headK: 1, seed: Math.random() * 10 });
 function tickAnim(a, P, dt) {
-  a.phase += Math.abs(P.vx) * dt * 2.6;
+  a.phase += Math.abs(P.vx) * dt * 2.2;
   if ((a.nextBlink -= dt) <= 0) { a.blink = 0.13; a.nextBlink = 2 + Math.random() * 3.5; }
   a.blink -= dt;
-  if (P.ground && !a.wasGround) a.squash = 0.18;
-  a.wasGround = P.ground;
+  const onFeet = P.ground || P.perch > 0;
+  if (onFeet && !a.wasGround) a.squash = 0.2;
+  a.wasGround = onFeet;
   a.squash *= Math.exp(-dt * 10);
-  a.bump = Math.max(0, a.bump - dt);
+  a.bump = Math.max(0, a.bump - dt); a.bonk = Math.max(0, a.bonk - dt);
   if (a.celeT > 0 && (a.celeT -= dt) <= 0) a.cele = null;
 }
 
@@ -300,11 +270,11 @@ export function drawPortrait(canvas, char, side = 0, t = 0, acc = 'aucun', locke
   c.clearRect(0, 0, W, H);
   const g = c.createRadialGradient(W / 2, H * 0.4, 0, W / 2, H * 0.45, W * 0.6); g.addColorStop(0, 'rgba(255,240,200,.8)'); g.addColorStop(1, 'rgba(255,240,200,0)');
   c.fillStyle = g; c.fillRect(0, 0, W, H);
-  c.fillStyle = 'rgba(0,0,0,.18)'; c.beginPath(); c.ellipse(W / 2, H * 0.95, W * 0.22, H * 0.035, 0, 0, TAU); c.fill();
-  const u = H / 2.7, a = newAnim(); a.seed = 0;
-  c.save(); c.translate(W / 2, H * 0.95); c.scale(u, u);
+  c.fillStyle = 'rgba(0,0,0,.18)'; c.beginPath(); c.ellipse(W / 2, H * 0.93, W * 0.2, H * 0.03, 0, 0, TAU); c.fill();
+  const u = H / 2.65, a = newAnim(); a.seed = 0;
+  c.save(); c.translate(W / 2, H * 0.92); c.scale(u, u);
   if (locked) c.filter = 'brightness(0.15) saturate(0)';
-  drawPlayer(c, { char, side, acc, vx: 0, vy: 0, ground: true, kickT: 0, tackleT: 0, stun: 0, power: null }, a, t, { x: 1.5 + Math.sin(t) * 0.6, y: 2.4 + Math.cos(t * 1.3) * 0.4, sp: 99 });
+  drawPlayer(c, { char, side, acc, vx: 0, vy: 0, ground: true, kickT: 0, power: null }, a, t, { x: 1.5 + Math.sin(t) * 0.6, y: 2.4 + Math.cos(t * 1.3) * 0.4, sp: 99 });
   c.restore();
 }
 
@@ -609,6 +579,8 @@ export function createPitch(canvas) {
       for (let k = 0; k < 40; k++) { const a = Math.random() * TAU, v = 4 + Math.random() * 8; emit(gx, 1.3, { kind: 'streak', vx: Math.cos(a) * v, vy: Math.sin(a) * v, life: 0.6, size: 0.14, color: '#ffe680' }); }
       fx.shake(1);
     },
+    boing(e) { const a = anims.get(e.on) ?? anims.set(e.on, newAnim()).get(e.on); a.bonk = 0.8; a.squash = 0.3; emit(e.x, e.y + 0.3, { kind: 'ring', size: 0.3, life: 0.3, color: '#ffe14a' }); for (let k = 0; k < 5; k++) emit(e.x, e.y + 0.4, { kind: 'star', vx: (Math.random() - 0.5) * 4, vy: 2 + Math.random() * 2, g: 8, life: 0.5, size: 0.08, color: '#ffe14a', spin: 6 }); },
+    bump(e) { fx.spark(e.x, e.y, '#ffffff', 10); fx.shake(0.15); },
     chance(side) { exc[side] = Math.max(exc[side], 0.6); },
     shake(a) { shake = Math.max(shake, a); },
   };
@@ -648,10 +620,9 @@ export function createPitch(canvas) {
     for (const p of players) {
       const a = anims.get(p.id) ?? anims.set(p.id, newAnim()).get(p.id);
       tickAnim(a, p, dt);
-      for (const o of players) if (o !== p && Math.abs(o.x - p.x) < 1.0 && Math.abs(o.y - p.y) < 1 && (o.vx - p.vx) * (o.x - p.x) < -4) a.bump = 0.3;
+      for (const o of players) if (o !== p && Math.abs(o.x - p.x) < CC.baseR(o) + CC.baseR(p) + 0.05 && Math.abs(o.y - p.y) < 1 && (o.vx - p.vx) * (o.x - p.x) < -4) a.bump = 0.3;
       if (p.sprint && p.ground && Math.random() < 0.5) emit(p.x - Math.sign(p.vx) * 0.3, 0.05, { vx: -p.vx * 0.2, vy: Math.random(), g: 3, life: 0.35, size: 0.07, grow: 1.5, color: 'rgba(255,255,255,.7)' });
-      if (p.tackleT > 0 && Math.random() < 0.7) fx.dust(p.x, 1);
-      const glow = p.power ? { super: '255,140,40', tornade: '80,255,220', tete: '190,120,255', ressort: '120,255,120', aimant: '255,80,120' }[p.power] : p.fast > 0 ? '255,230,80' : p.charge > 0.3 ? '255,200,60' : p.keeper ? '255,240,160' : null;
+      const glow = p.power ? { super: '255,140,40', tornade: '80,255,220', tete: '190,120,255', ressort: '120,255,120', aimant: '255,80,120' }[p.power] : p.fast > 0 ? '255,230,80' : p.keeper ? '255,240,160' : null;
       if (glow) { c.save(); c.globalCompositeOperation = 'lighter'; const g = c.createRadialGradient(sx(p.x), sy(p.y + 1.2), 0, sx(p.x), sy(p.y + 1.2), u * 2); g.addColorStop(0, `rgba(${glow},.4)`); g.addColorStop(1, 'rgba(0,0,0,0)'); c.fillStyle = g; c.fillRect(sx(p.x) - u * 2, sy(p.y + 1.2) - u * 2, u * 4, u * 4); c.restore(); if (Math.random() < 0.35) emit(p.x + (Math.random() - 0.5), p.y + Math.random() * 2.4, { vy: 1.5, life: 0.5, size: 0.07, glow: true, color: `rgb(${glow})` }); }
       if (p.gauge >= 1 && Math.random() < 0.25) emit(p.x + (Math.random() - 0.5) * 0.9, p.y + Math.random() * 2, { vy: 1.2, life: 0.6, size: 0.05, glow: true, color: '#ffe14a' });
       const s = p.side ? -1 : 1, nb = balls.reduce((m, b) => (Math.hypot(b.x - p.x, b.y - p.y) < Math.hypot(m.x - p.x, m.y - p.y) ? b : m), balls[0]);
@@ -664,7 +635,7 @@ export function createPitch(canvas) {
     for (const d of [0, 1]) { magicWall(c, d, gh[d], scene?.walls?.[d], t); goalFront(c, d, gh[d]); }
     drawParts(c, dt);
     weather(c, dt, t, wind);
-    // noms, endurance, charge
+    // noms et endurance
     for (const p of players) {
       const top = sy(CC.headY(p) + CC.headR(p)) - 14, x = sx(p.x);
       c.font = '800 13px "Baloo 2", sans-serif'; c.textAlign = 'center'; c.textBaseline = 'middle';
@@ -672,7 +643,6 @@ export function createPitch(canvas) {
       c.fillStyle = TEAM[p.side]; c.strokeStyle = INK; c.lineWidth = 2; c.beginPath(); c.roundRect(x - w / 2, top - 20, w, 18, 9); c.fill(); c.stroke();
       c.fillStyle = '#fff'; c.fillText(label, x, top - 10.5);
       c.fillStyle = 'rgba(0,0,0,.45)'; c.fillRect(x - 22, top + 2, 44, 5); c.fillStyle = p.tired ? '#ff6b6b' : '#7dff9a'; c.fillRect(x - 22, top + 2, 44 * (p.sta ?? 1), 5);
-      if (p.charge > 0.05) { const k = p.charge / CC.CHARGE; c.fillStyle = 'rgba(0,0,0,.5)'; c.fillRect(x - 22, top + 9, 44, 6); c.fillStyle = `hsl(${50 - k * 50},100%,55%)`; c.fillRect(x - 22, top + 9, 44 * k, 6); }
       if (p.me) { c.fillStyle = '#ffd23f'; c.beginPath(); c.moveTo(x - 6, top - 26); c.lineTo(x + 6, top - 26); c.lineTo(x, top - 20); c.closePath(); c.fill(); }
     }
     c.restore();
