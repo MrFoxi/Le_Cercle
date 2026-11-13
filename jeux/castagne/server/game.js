@@ -6,7 +6,9 @@
 const BR = require('../client/sim');
 const { PartyRoom } = require('../../../lib/room-base');
 
-const SETTINGS = { rounds: [1, 3, 5], stocks: [1, 3, 5], time: [120, 180, 300] };
+const SETTINGS = { rounds: [1, 3, 5], stocks: [1, 3, 5], time: [120, 180, 300], mode: ['ffa', 'duel', 'teams', 'lms'] };
+// Modes : mêlée générale, duel (exactement 2), équipes (rouge contre bleu, sans se taper dessus), dernier debout (une vie).
+const MODES = { ffa: 'Mêlée générale', duel: 'Duel 1 contre 1', teams: '2 contre 2 (équipes)', lms: 'Dernier debout' };
 const COUNTDOWN_MS = 3200, ROUND_END_MS = 6000, TICK_MS = 1000 / BR.FPS, QUEUE_MAX = 12;
 const COLORS = ['#ff5a5f', '#3d8bff', '#ffc93c', '#2fd47a', '#a46bff', '#ff8a3d', '#22d3ee', '#f472b6'];
 const BOT_NAMES = ['Robot Torgnole', 'Robot Mandale', 'Robot Baffe', 'Robot Gnon', 'Robot Pichenette', 'Robot Taloche', 'Robot Beigne'];
@@ -19,7 +21,7 @@ class Room extends PartyRoom {
   static BOT_NAMES = BOT_NAMES;
   constructor(...args) {
     super(...args);
-    this.settings = { rounds: 3, stocks: 3, time: 180, arena: 'phare' };
+    this.settings = { rounds: 3, stocks: 3, time: 180, arena: 'phare', mode: 'ffa' };
     this.timer = null;
   }
   newPlayer(name, extra) { return { ...super.newPlayer(name, extra), char: extra?.bot ? BR.CHAR_IDS[Math.floor(this.rng() * BR.CHAR_IDS.length)] : 'fenna' }; }
@@ -33,7 +35,10 @@ class Room extends PartyRoom {
 
   start(name) {
     this.hostOnly(name);
-    if (this.players.length < 2) throw new Error('Il faut au moins 2 combattants (ajoute des robots !)');
+    const n = this.players.length, mode = this.settings.mode;
+    if (n < 2) throw new Error('Il faut au moins 2 combattants (ajoute des robots !)');
+    if (mode === 'duel' && n !== 2) throw new Error('Un duel se joue à 2 exactement');
+    if (mode === 'teams' && (n < 4 || n % 2)) throw new Error('En équipes, il faut un nombre pair de combattants, au moins 4');
     this.round++;
     this.roundNo = 0;
     for (const p of this.players) p.points = 0;
@@ -43,8 +48,8 @@ class Room extends PartyRoom {
     this.roundNo++;
     this.phase = 'countdown';
     this.phaseAt = this.clock();
-    const order = [...this.players].sort(() => this.rng() - 0.5);
-    this.world = BR.world(this.settings.arena, order.map(p => ({ id: p.name, char: p.char })), this.settings.stocks);
+    const order = [...this.players].sort(() => this.rng() - 0.5), teams = this.settings.mode === 'teams';
+    this.world = BR.world(this.settings.arena, order.map((p, k) => ({ id: p.name, char: p.char, team: teams ? (k % 2 ? 'bleu' : 'rouge') : null })), this.settings.mode === 'lms' ? 1 : this.settings.stocks);
     this.queues = {}; this.held = {}; this.acks = {};
     this.brains = {};
     this.out = []; // éliminés, dans l'ordre
@@ -73,7 +78,7 @@ class Room extends PartyRoom {
     if (!Array.isArray(list) || !this.world) return;
     const q = (this.queues[name] ??= []), last = this.acks[name] ?? 0;
     for (const e of list.slice(0, 20)) {
-      if (!Array.isArray(e) || !Number.isInteger(e[0]) || !Number.isInteger(e[1]) || e[1] < 0 || e[1] > 255) continue;
+      if (!Array.isArray(e) || !Number.isInteger(e[0]) || !Number.isInteger(e[1]) || e[1] < 0 || e[1] > 511) continue;
       if (e[0] <= last || (q.length && e[0] <= q.at(-1)[0])) continue;
       q.push([e[0], e[1]]);
     }
@@ -96,19 +101,21 @@ class Room extends PartyRoom {
       }
       BR.stepWorld(w, inputs, this.events);
       for (const e of this.events) if (e.t === 'ko' && e.left <= 0 && !this.out.includes(e.id)) this.out.push(e.id);
-      if (this.phase === 'fight' && BR.alive(w).length <= 1) this.endRound();
+      const left = BR.alive(w), sides = new Set(left.map(f => f.team ?? f.id));
+      if (this.phase === 'fight' && sides.size <= 1) this.endRound();
     }
     this.ticks = (this.ticks ?? 0) + 1;
-    if (this.ticks % 2 === 0) this.emit?.('snap', { f: w.frame, p: w.fighters.map(BR.pack), ack: this.acks, ev: this.events.splice(0) });
+    if (this.ticks % 2 === 0) this.emit?.('snap', { f: w.frame, p: w.fighters.map(BR.pack), ...BR.packItems(w), ack: this.acks, ev: this.events.splice(0) });
   }
   // Fin de manche : classement (le dernier debout gagne ; au temps : plus de vies, puis moins de dégâts).
   endRound() {
     const w = this.world;
     const standing = w.fighters.filter(f => !this.out.includes(f.id)).sort((a, b) => b.stocks - a.stocks || a.dmg - b.dmg);
     const ranking = [...standing.map(f => f.id), ...[...this.out].reverse()];
-    const n = ranking.length;
-    ranking.forEach((id, k) => { const p = this.get(id); if (p) p.points += n - 1 - k + (k === 0 ? 2 : 0); });
-    this.result = { ranking, kos: Object.fromEntries(w.fighters.map(f => [f.id, f.kos])), falls: Object.fromEntries(w.fighters.map(f => [f.id, f.falls])) };
+    const n = ranking.length, winTeam = this.settings.mode === 'teams' ? w.fighters.find(f => f.id === ranking[0])?.team : null;
+    if (winTeam) for (const f of w.fighters) { const p = this.get(f.id); if (p && f.team === winTeam) p.points += 3; }
+    else ranking.forEach((id, k) => { const p = this.get(id); if (p) p.points += n - 1 - k + (k === 0 ? 2 : 0); });
+    this.result = { ranking, team: winTeam, kos: Object.fromEntries(w.fighters.map(f => [f.id, f.kos])), falls: Object.fromEntries(w.fighters.map(f => [f.id, f.falls])) };
     this.phase = 'roundEnd';
     this.phaseAt = this.clock();
     this.notify?.();
@@ -121,6 +128,7 @@ class Room extends PartyRoom {
     const b = (this.brains[f.id] ??= { next: 0, hold: 0, bits: 0 }), w = this.world, A = BR.ARENAS[w.arena], S = A.solids[0];
     if (w.frame < b.next) return b.bits & ~(IN.LIGHT | IN.HEAVY | IN.DODGE | (b.release ? IN.JUMP : 0));
     let bits = 0;
+    if (f.state === 'ledge') { b.bits = IN.U; b.next = w.frame + 4; return IN.U; } // remonter sur l'île
     const off = f.x < S.x0 - 10 || f.x > S.x1 + 10;
     if (off || f.y > 30) {
       // revenir : vers le centre, sauter, puis coup de remontée
@@ -129,7 +137,9 @@ class Room extends PartyRoom {
       b.bits = bits; b.next = w.frame + 8; b.release = true;
       return bits;
     }
-    const foes = w.fighters.filter(o => o !== f && o.state !== 'out' && o.dead === 0);
+    const item = !f.weapon && w.items.find(i => i.ground && Math.abs(i.x - f.x) < 260 && Math.abs(i.y - f.y) < 40);
+    if (item) { bits |= item.x > f.x ? IN.R : IN.L; if (Math.abs(item.x - f.x) < 40) bits = IN.PICK; b.bits = bits; b.next = w.frame + 4; return bits; }
+    const foes = w.fighters.filter(o => o !== f && o.state !== 'out' && o.dead === 0 && !(f.team && o.team === f.team));
     if (!foes.length) return 0;
     const t = foes.reduce((m, o) => (Math.hypot(o.x - f.x, o.y - f.y) < Math.hypot(m.x - f.x, m.y - f.y) ? o : m));
     const dx = t.x - f.x, dy = t.y - f.y, near = Math.abs(dx) < 75 && Math.abs(dy) < 70;
@@ -150,7 +160,7 @@ class Room extends PartyRoom {
 
   viewFor(name) {
     const v = this.baseView(name);
-    return { ...v, arena: this.settings.arena, result: this.result, out: this.out ?? [], players: v.players.map(p => ({ ...p, char: this.get(p.name).char })) };
+    return { ...v, arena: this.settings.arena, teams: Object.fromEntries((this.world?.fighters ?? []).map(f => [f.id, f.team])), result: this.result, out: this.out ?? [], players: v.players.map(p => ({ ...p, char: this.get(p.name).char })) };
   }
 }
-module.exports = { Room, SETTINGS };
+module.exports = { Room, SETTINGS, MODES };

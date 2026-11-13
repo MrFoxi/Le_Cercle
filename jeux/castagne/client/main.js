@@ -39,14 +39,19 @@ if (!BR.CHARS[myChar]) myChar = 'fenna';
 const ui = party({
   id: 'castagne', socket, max: 8, bots: 3, busy: '🥊 en combat', onError: t => toast(t),
   onRoom: (s, host) => {
-    for (const id of ['stocksSel', 'timeSel']) $(`#${id}`).disabled = !host;
-    $('#stocksSel').value = s.settings.stocks; $('#timeSel').value = s.settings.time;
+    for (const id of ['stocksSel', 'timeSel', 'modeSel']) $(`#${id}`).disabled = !host;
+    $('#stocksSel').value = s.settings.stocks; $('#timeSel').value = s.settings.time; $('#modeSel').value = s.settings.mode;
+    $('#stocksSel').disabled = !host || s.settings.mode === 'lms';
+    const n = s.players.length, m = s.settings.mode;
+    if (host && m === 'duel' && n !== 2) $('#roomHint').textContent = 'Un duel se joue à 2 exactement.';
+    if (host && m === 'teams' && (n < 4 || n % 2)) $('#roomHint').textContent = 'En équipes : un nombre pair de combattants, au moins 4 (ajoute des robots).';
     renderPicks(s);
   },
 });
 const { show, act } = ui;
 $('#stocksSel').onchange = e => act('configure', 'stocks', Number(e.target.value));
 $('#timeSel').onchange = e => act('configure', 'time', Number(e.target.value));
+$('#modeSel').onchange = e => act('configure', 'mode', e.target.value);
 // Choix du personnage : une carte par combattant, avec son portrait et ses forces
 function charCards(box) {
   box.innerHTML = BR.CHAR_IDS.map(id => { const c = BR.CHARS[id]; return `<button class="char" data-char="${id}" style="--c:${LOOKS[id].fur}"><canvas width="140" height="140"></canvas><b>${c.name}</b><small>${c.title}</small><span class="stats">${Object.entries(c.stats).map(([k, v]) => `<i><em>${k}</em><u style="width:${v * 20}%"></u></i>`).join('')}</span></button>`; }).join('');
@@ -97,7 +102,8 @@ socket.on('snap', snap => {
     if (before && Math.hypot(before.x - pred.x, before.y - pred.y) < 120) { vis.x += before.x - pred.x; vis.y += before.y - pred.y; }
   }
 });
-const names = () => Object.fromEntries((S?.players ?? []).map(p => [p.name, p]));
+const TEAM = { rouge: '#ff4a4a', bleu: '#3d8bff' };
+const names = () => Object.fromEntries((S?.players ?? []).map(p => [p.name, { ...p, color: TEAM[S.teams?.[p.name]] ?? p.color }]));
 function onEvent(e, me) {
   const P = names();
   if (['jump', 'airjump', 'walljump', 'land', 'dodge'].includes(e.t)) {
@@ -105,9 +111,16 @@ function onEvent(e, me) {
     sideFx(e);
     return;
   }
+  if (e.t === 'pick') { R.fx.ring(e.x, e.y - 20, '#ffe07a', 10, 260); blip(600, 1200, 0.15, 'triangle', 0.07); if (e.id === me) toast(`${BR.WEAPONS[e.weapon].icon} ${BR.WEAPONS[e.weapon].name} ! (E pour la lancer)`); return; }
+  if (e.t === 'throw') { SFX.whoosh(); return; }
+  if (e.t === 'shot') { blip(900, 300, 0.08, 'square', 0.05); return; }
+  if (e.t === 'item') { blip(1200, 1600, 0.2, 'sine', 0.05); return; }
+  if (e.t === 'ledge' || e.t === 'climb') { if (e.id !== me) R.fx.dust(e.x, e.y, 4); return; }
   if (e.t === 'pound' || e.t === 'bounce') { R.fx.dust(e.x, e.y, 18, 2); R.fx.ring(e.x, e.y, '#fff4d0', 10, 420); SFX.pound(); return; }
   if (e.t === 'hit') {
     R.fx.hit(e, P[e.a]?.color ?? '#ffffff');
+    if (e.combo > 1) R.fx.combo(e.x, e.y, e.combo, P[e.a]?.color ?? '#ffffff');
+    if (e.big) { R.fx.focus(e.x, e.y); SFX.ko(); }
     SFX.hit(e.heavy);
     flashes[e.b] = 1;
     const card = cards[e.b]; if (card) { card.classList.remove('shake'); void card.offsetWidth; card.classList.add('shake'); }
@@ -128,7 +141,7 @@ function sideFx(e) {
 
 /* ---------------- Commandes : clavier, souris, manette ---------------- */
 const keys = new Set();
-const KEYMAP = { KeyA: IN.L, KeyQ: IN.L, ArrowLeft: IN.L, KeyD: IN.R, ArrowRight: IN.R, KeyW: IN.U | IN.JUMP, KeyZ: IN.U | IN.JUMP, ArrowUp: IN.U | IN.JUMP, KeyS: IN.D, ArrowDown: IN.D, Space: IN.JUMP, KeyJ: IN.LIGHT, KeyX: IN.LIGHT, KeyK: IN.HEAVY, KeyC: IN.HEAVY, KeyL: IN.DODGE, ShiftLeft: IN.DODGE, ShiftRight: IN.DODGE, KeyV: IN.DODGE };
+const KEYMAP = { KeyA: IN.L, KeyQ: IN.L, ArrowLeft: IN.L, KeyD: IN.R, ArrowRight: IN.R, KeyW: IN.U | IN.JUMP, KeyZ: IN.U | IN.JUMP, ArrowUp: IN.U | IN.JUMP, KeyS: IN.D, ArrowDown: IN.D, Space: IN.JUMP, KeyJ: IN.LIGHT, KeyX: IN.LIGHT, KeyK: IN.HEAVY, KeyC: IN.HEAVY, KeyL: IN.DODGE, ShiftLeft: IN.DODGE, ShiftRight: IN.DODGE, KeyV: IN.DODGE, KeyE: IN.PICK, KeyH: IN.PICK, KeyB: IN.PICK };
 let mouse = 0;
 addEventListener('keydown', e => { if (e.target.closest?.('input, select')) return; if (KEYMAP[e.code] !== undefined && document.body.classList.contains('playing')) { e.preventDefault(); keys.add(e.code); audio(); } });
 addEventListener('keyup', e => keys.delete(e.code));
@@ -146,7 +159,8 @@ function readInput() {
     if (ax > 0.35 || b(15)) bits |= IN.R;
     if (ay < -0.5 || b(12)) bits |= IN.U;
     if (ay > 0.5 || b(13)) bits |= IN.D;
-    if (b(0) || b(3)) bits |= IN.JUMP;
+    if (b(0)) bits |= IN.JUMP;
+    if (b(3)) bits |= IN.PICK;
     if (b(2)) bits |= IN.LIGHT;
     if (b(1)) bits |= IN.HEAVY;
     if (b(4) || b(5) || b(6) || b(7)) bits |= IN.DODGE;
@@ -162,7 +176,7 @@ function buildCards(s) {
   for (const k in cards) delete cards[k];
   for (const p of s.players) {
     const el = document.createElement('div');
-    el.className = 'pcard'; el.style.setProperty('--c', p.color);
+    el.className = 'pcard'; el.style.setProperty('--c', TEAM[s.teams?.[p.name]] ?? p.color);
     el.innerHTML = `<canvas width="64" height="64"></canvas><div><b>${esc(p.name)}</b><span class="dmg">0</span><span class="stocks"></span></div>`;
     drawPortrait(el.querySelector('canvas'), p.char, true);
     box.append(el); cards[p.name] = el;
@@ -177,6 +191,7 @@ function hud(list) {
     const st = f.state === 'out' ? '💀' : '❤️'.repeat(Math.max(0, f.stocks));
     const sEl = el.querySelector('.stocks'); if (sEl.textContent !== st) sEl.textContent = st;
     el.classList.toggle('out', f.state === 'out');
+    el.dataset.weapon = f.weapon ? BR.WEAPONS[f.weapon].icon : '';
   }
   const s = S;
   if (s?.phase === 'fight') { const left = Math.max(0, Math.ceil((s.deadline - s.now - (performance.now() - stateAt)) / 1000)); $('#timer').textContent = `${Math.floor(left / 60)}:${String(left % 60).padStart(2, '0')}`; }
@@ -194,7 +209,7 @@ let toastT = 0;
 function toast(t) { const el = $('#toast'); el.textContent = t; el.hidden = false; clearTimeout(toastT); toastT = setTimeout(() => (el.hidden = true), 2200); }
 function showBoard(s) {
   const over = s.phase === 'over', r = s.result;
-  $('#boardTitle').textContent = over ? `🏆 ${s.ranking[0]?.name === s.me ? 'Tu remportes la castagne !' : `${s.ranking[0]?.name} remporte la castagne !`}` : `🥇 ${r?.ranking[0] ?? ''} gagne la manche !`;
+  $('#boardTitle').textContent = over ? `🏆 ${s.ranking[0]?.name === s.me ? 'Tu remportes la castagne !' : `${s.ranking[0]?.name} remporte la castagne !`}` : (r?.team ? `🥇 L’équipe ${r.team} gagne la manche !` : `🥇 ${r?.ranking[0] ?? ''} gagne la manche !`);
   const rows = over ? s.ranking.map(p => ({ name: p.name, points: p.points, color: p.color })) : (r?.ranking ?? []).map(n => s.players.find(p => p.name === n)).filter(Boolean);
   $('#boardList').innerHTML = rows.map((p, k) => `<li class="${p.name === s.me ? 'me' : ''}"><b>${k + 1}</b><i class="dot" style="background:${p.color}"></i><span>${esc(p.name)}</span>${over ? '' : `<em>💥 ${r?.kos[p.name] ?? 0} · 🕳 ${r?.falls[p.name] ?? 0}</em>`}<strong>${p.points} pts</strong></li>`).join('');
   $('#boardHint').textContent = over ? '' : `Manche ${s.roundNo}/${s.settings.rounds}${s.roundNo < s.settings.rounds ? ' · la suivante arrive…' : ''}`;
@@ -248,8 +263,8 @@ function frame(now) {
       list.push(f);
     }
   }
-  const colors = Object.fromEntries((s?.players ?? []).map(p => [p.name, p.color]));
-  R.draw(list, dt, t, colors);
+  const colors = Object.fromEntries(Object.values(names()).map(p => [p.name, p.color])), lastSnap = snaps.at(-1)?.s;
+  R.draw(list, dt, t, colors, inFight(s) ? lastSnap?.items ?? [] : [], inFight(s) ? lastSnap?.shots ?? [] : []);
   if (inFight(s)) hud(list);
 }
 const vfx = {};

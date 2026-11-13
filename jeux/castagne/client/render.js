@@ -51,9 +51,10 @@ function poseOf(f, t) {
   if (f.state === 'air') return f.vy < 0 ? P({ lF: [45, 80], lB: [-5, 50], aF: [-40, 50], aB: [-70, 40], lean: 6, sq: 1.06 }) : P({ lF: [20, 30], lB: [-25, 40], aF: [70, 30], aB: [100, 30], lean: -4 });
   if (f.state === 'lag') return P({ bob: 14, sq: 0.84, lF: [35, 70], lB: [-35, 70], aF: [50, 60], aB: [40, 60], face: 'grit' });
   if (f.state === 'dodge') return P({ bob: f.ground ? 10 : 0, lF: [70, 120], lB: [50, 120], aF: [60, 130], aB: [40, 130], lean: 30, face: 'calm', ghost: true });
+  if (f.state === 'ledge') return P({ aF: [178, 12], aB: [172, 18], lF: [8, 25], lB: [-12, 35], lean: -6, face: 'grit', head: -10 });
   if (f.state === 'hitstun') { const w = t * 30; return P({ lF: [Math.sin(w) * 40 - 20, 40], lB: [Math.cos(w) * 40 + 20, 50], aF: [140 + Math.sin(w * 1.3) * 30, 30], aB: [-120 + Math.cos(w) * 30, 30], lean: -20, face: 'hurt', tumble: true }); }
   if (f.state === 'attack' && MOVE_POSES[f.move]) {
-    const m = BR.CHARS[f.char].moves[f.move], h = m.hits[0], P2 = MOVE_POSES[f.move], mt = f.mt;
+    const m = BR.movesOf(f)[f.move], h = m.hits[0], P2 = MOVE_POSES[f.move], mt = f.mt;
     if (mt < h.s) return mix(BASE, P2.W, ease(clamp(mt / Math.max(1, h.s), 0, 1)));
     if (mt <= h.e || m.pound) return mix(P2.W, P2.K, ease(clamp((mt - h.s + 1) / 2.5, 0, 1)));
     return mix(P2.K, BASE, ease(clamp((mt - h.e) / Math.max(1, m.f - h.e), 0, 1)));
@@ -75,10 +76,12 @@ function limb(c, x, y, a1, a2, l1, l2, w, col, end, endCol) {
   if (end === 'foot') c.ellipse(tx + Math.cos(rad(a1)) * 4, ty + 1, w * 0.85, w * 0.55, 0, 0, TAU);
   else c.arc(tx, ty, w * 0.7, 0, TAU);
   c.fill(); c.stroke();
+  return { x: tx, y: ty, a: a1 + a2 * (end === 'foot' ? -1 : 1) };
 }
 function blob(c, x, y, rx, ry, fill, rot = 0) { c.beginPath(); c.ellipse(x, y, rx, ry, rot, 0, TAU); c.fillStyle = fill; c.fill(); c.strokeStyle = INK; c.lineWidth = 3; c.stroke(); }
 
 export function drawFighter(c, f, t, o = {}) {
+  o.tip = null;
   const L = LOOKS[f.char], p = o.pose ?? poseOf(f, t), g = L.girth;
   c.save();
   c.translate(f.x, f.y);
@@ -86,7 +89,7 @@ export function drawFighter(c, f, t, o = {}) {
   // vol plané : le corps tourne avec la vitesse
   let spin = 0;
   if (p.tumble) spin = (f.spinA ?? 0);
-  if (p.spin && f.state === 'attack') { const m = BR.CHARS[f.char].moves[f.move], h = m.hits[0]; spin = clamp((f.mt - h.s) / Math.max(1, h.e - h.s), 0, 1) * TAU; }
+  if (p.spin && f.state === 'attack') { const m = BR.movesOf(f)[f.move], h = m.hits[0]; spin = clamp((f.mt - h.s) / Math.max(1, h.e - h.s), 0, 1) * TAU; }
   c.scale(f.facing, 1);
   const hipY = -40 + p.bob;
   c.translate(0, hipY);
@@ -96,7 +99,8 @@ export function drawFighter(c, f, t, o = {}) {
   // ombre portée colorée (anneau du joueur)
   // membres arrière
   limb(c, -3, 0, p.lB[0], p.lB[1], L.limb, L.limb + 2, 11 * g, L.fur2, 'foot', L.dark);
-  limb(c, sh.x - 6, sh.y, p.aB[0], p.aB[1], L.arm, L.arm, 9 * g, L.fur2, 'hand', L.dark);
+  const backHand = limb(c, sh.x - 6, sh.y, p.aB[0], p.aB[1], L.arm, L.arm, 9 * g, L.fur2, 'hand', L.dark);
+  if (f.weapon === 'pistolets' || f.weapon === 'gantelets') drawWeapon(c, f.weapon, backHand, g * 0.9);
   // queue de renard
   if (L.tail) {
     const sw = Math.sin(t * 5 + (f.x || 0) * 0.01) * 10 - clamp(f.vx * f.facing, -8, 8) * 3;
@@ -159,8 +163,29 @@ export function drawFighter(c, f, t, o = {}) {
   c.restore();
   // jambe et bras avant
   limb(c, 3, 0, p.lF[0], p.lF[1], L.limb, L.limb + 2, 12 * g, L.fur, 'foot', L.dark);
-  c.save(); c.rotate(rad(p.lean)); limb(c, sh.x + 4, sh.y, p.aF[0], p.aF[1], L.arm, L.arm, 10 * g, L.fur, 'hand', f.char === 'gromm' ? '#8a8f98' : L.dark); c.restore();
+  c.save(); c.rotate(rad(p.lean));
+  const hand = limb(c, sh.x + 4, sh.y, p.aF[0], p.aF[1], L.arm, L.arm, 10 * g, L.fur, 'hand', f.char === 'gromm' ? '#8a8f98' : L.dark);
+  if (f.weapon) o.tip = drawWeapon(c, f.weapon, hand, g, true);
   c.restore();
+  c.restore();
+  return o.tip;
+}
+// Une arme dans la main (h : position et angle de l'avant-bras). Renvoie la pointe, en pixels de l'écran (pour la traînée).
+const METAL = '#d8dde6', STEEL = '#9aa2ae', WOOD = '#8a5a34', GOLD = '#e8b84a';
+export function drawWeapon(c, w, h, g = 1, held = false) {
+  c.save(); c.translate(h.x, h.y); c.rotate(-rad(h.a)); // l'axe +y suit l'avant-bras, vers l'extérieur
+  c.lineJoin = 'round'; c.lineCap = 'round'; c.strokeStyle = INK; c.lineWidth = 3;
+  let tip = 60;
+  const shape = (pts, fill) => { c.beginPath(); pts.forEach(([x, y], k) => (k ? c.lineTo(x, y) : c.moveTo(x, y))); c.closePath(); c.fillStyle = fill; c.fill(); c.stroke(); };
+  if (w === 'epee') { shape([[-3, -8], [3, -8], [3, 6], [-3, 6]], WOOD); shape([[-12, 6], [12, 6], [12, 11], [-12, 11]], GOLD); shape([[-5, 11], [5, 11], [4, 66], [0, 76], [-4, 66]], METAL); c.strokeStyle = 'rgba(255,255,255,.7)'; c.lineWidth = 1.5; c.beginPath(); c.moveTo(1.5, 14); c.lineTo(1, 64); c.stroke(); tip = 76; }
+  if (w === 'lance') { c.strokeStyle = INK; c.lineWidth = 9; c.beginPath(); c.moveTo(0, -40); c.lineTo(0, 108); c.stroke(); c.strokeStyle = WOOD; c.lineWidth = 5; c.stroke(); shape([[0, 102], [9, 118], [0, 140], [-9, 118]], METAL); shape([[-7, 100], [7, 100], [5, 106], [-5, 106]], '#c8402e'); tip = 140; }
+  if (w === 'marteau') { c.strokeStyle = INK; c.lineWidth = 10; c.beginPath(); c.moveTo(0, -8); c.lineTo(0, 62); c.stroke(); c.strokeStyle = WOOD; c.lineWidth = 6; c.stroke(); shape([[-22, 56], [22, 56], [24, 86], [-24, 86]], STEEL); shape([[-22, 56], [22, 56], [20, 62], [-20, 62]], METAL); shape([[-6, 60], [6, 60], [6, 84], [-6, 84]], '#6a7080'); tip = 86; }
+  if (w === 'hache') { c.strokeStyle = INK; c.lineWidth = 9; c.beginPath(); c.moveTo(0, -8); c.lineTo(0, 70); c.stroke(); c.strokeStyle = WOOD; c.lineWidth = 5; c.stroke(); c.beginPath(); c.moveTo(2, 44); c.quadraticCurveTo(34, 40, 36, 60); c.quadraticCurveTo(34, 82, 2, 74); c.closePath(); c.fillStyle = METAL; c.fill(); c.stroke(); tip = 70; }
+  if (w === 'pistolets') { shape([[-4, -2], [4, -2], [6, 10], [-3, 12]], WOOD); shape([[-3, 6], [4, 6], [4, 34], [-3, 34]], STEEL); c.fillStyle = GOLD; c.beginPath(); c.arc(0, 10, 3, 0, TAU); c.fill(); tip = 34; }
+  if (w === 'gantelets') { c.beginPath(); c.arc(0, 4, 11 * g, 0, TAU); c.fillStyle = STEEL; c.fill(); c.stroke(); c.fillStyle = METAL; c.beginPath(); c.arc(-3, 1, 5 * g, 0, TAU); c.fill(); for (const k of [-6, 0, 6]) { c.beginPath(); c.arc(k * g, 12 * g, 2.5, 0, TAU); c.fillStyle = GOLD; c.fill(); } tip = 14; }
+  const m = c.getTransform(), q = m.transformPoint(new DOMPoint(0, tip));
+  c.restore();
+  return held ? { x: q.x, y: q.y } : null;
 }
 // Portrait : en pied (cartes de choix) ou en buste (cartes du combat).
 export function drawPortrait(canvas, char, bust = false) {
@@ -252,7 +277,8 @@ export function createRenderer(canvas) {
 
   /* ---- Effets ---- */
   const parts = [], texts = [];
-  let shake = 0, flash = 0;
+  let shake = 0, flash = 0, focus = null;
+  const trails = {}; // traînées des coups d'arme, en pixels de l'écran
   const cam = { x: 0, y: -150, z: 0.8 };
   const fx = {
     hit(e, colA) {
@@ -271,6 +297,8 @@ export function createRenderer(canvas) {
     },
     dust(x, y, n = 6, s = 1) { for (let k = 0; k < n; k++) parts.push({ k: 'dust', x: x + (rnd() - 0.5) * 20 * s, y: y - 4, vx: (rnd() - 0.5) * 3 * s, vy: -rnd() * 1.6, r: (6 + rnd() * 8) * s, life: 0.5 + rnd() * 0.3, max: 0.8, c: 'rgba(240,225,205,' }); },
     ring(x, y, c = '#ffffff', r = 6, vr = 180) { parts.push({ k: 'ring', x, y, r, vr, life: 0.3, max: 0.3, c }); },
+    focus(x, y) { focus = { x, y, t: 0.55 }; },
+    combo(x, y, n, col) { texts.push({ x: x + 30, y: y - 70, s: `×${n} COMBO`, life: 0.9, max: 0.9, c: col, small: true }); },
     trail(f, col) { parts.push({ k: 'ghost', f: { ...f }, life: 0.25, max: 0.25, c: col }); },
     streak(x, y, vx, vy, col) { parts.push({ k: 'streak', x, y, vx, vy, life: 0.35, max: 0.35, c: col }); },
   };
@@ -283,7 +311,7 @@ export function createRenderer(canvas) {
 
   // Une image : caméra qui cadre tout le monde, décor en couches, combattants, effets.
   let gulls = Array.from({ length: 5 }, () => ({ x: rnd() * 2000 - 1000, y: -500 - rnd() * 250, s: 0.6 + rnd() * 0.5, v: 30 + rnd() * 30 }));
-  function draw(list, dt, t, colors) {
+  function draw(list, dt, t, colors, items = [], shots = []) {
     // caméra
     const live = list.filter(f => f.state !== 'out' && f.state !== 'dead');
     let x0 = -500, x1 = 500, y0 = -450, y1 = 120;
@@ -291,7 +319,9 @@ export function createRenderer(canvas) {
     x0 = Math.min(x0, -480); x1 = Math.max(x1, 480); y1 = Math.max(y1, 160); y0 = Math.min(y0, -420);
     const tz = clamp(Math.min(W / (x1 - x0), H / (y1 - y0)), 0.42, 1.25);
     const k = 1 - Math.exp(-dt * 4);
-    cam.z = lerp(cam.z, tz, k); cam.x = lerp(cam.x, (x0 + x1) / 2, k); cam.y = lerp(cam.y, (y0 + y1) / 2, k);
+    let fx0 = (x0 + x1) / 2, fy0 = (y0 + y1) / 2, fz = tz, kk = k;
+    if (focus) { focus.t -= dt; fx0 = focus.x; fy0 = focus.y; fz = Math.min(1.6, tz * 1.6); kk = 1 - Math.exp(-dt * 12); if (focus.t <= 0) focus = null; }
+    cam.z = lerp(cam.z, fz, kk); cam.x = lerp(cam.x, fx0, kk); cam.y = lerp(cam.y, fy0, kk);
     shake = Math.max(0, shake - dt * 60); flash = Math.max(0, flash - dt);
     const sx = (rnd() - 0.5) * shake, sy = (rnd() - 0.5) * shake;
     c.setTransform(dpr, 0, 0, dpr, 0, 0);
@@ -318,6 +348,21 @@ export function createRenderer(canvas) {
     c.fillStyle = 'rgba(180,230,255,.55)'; c.fillRect(S.x1 - 70, 60, 26, 700);
     for (let k = 0; k < 10; k++) { c.fillStyle = 'rgba(255,255,255,.55)'; const yy = 60 + (((t * 260 + k * 70) % 700)); c.fillRect(S.x1 - 66, yy, 18, 22); }
     c.drawImage(stage, SX0, SY0, SW, SH);
+    // caisses d'armes : rayon de lumière en tombant, éclat posées
+    for (const [, ix, iy, gr] of items) {
+      if (!gr) { c.save(); c.globalCompositeOperation = 'lighter'; const lg = c.createLinearGradient(ix, iy, ix, iy + 900); lg.addColorStop(0, 'rgba(255,230,140,.5)'); lg.addColorStop(1, 'rgba(255,230,140,0)'); c.fillStyle = lg; c.fillRect(ix - 16, iy, 32, 900); c.restore(); }
+      const bob = gr ? Math.sin(t * 4 + ix) * 3 : 0, y = iy - 22 + bob;
+      c.save(); c.globalCompositeOperation = 'lighter'; const gg = c.createRadialGradient(ix, y, 0, ix, y, 46); gg.addColorStop(0, 'rgba(255,220,120,.7)'); gg.addColorStop(1, 'rgba(255,220,120,0)'); c.fillStyle = gg; c.beginPath(); c.arc(ix, y, 46, 0, TAU); c.fill(); c.restore();
+      c.save(); c.translate(ix, y); c.rotate(Math.sin(t * 2 + ix) * 0.1);
+      c.fillStyle = '#b8783e'; c.strokeStyle = INK; c.lineWidth = 3; c.fillRect(-18, -16, 36, 32); c.strokeRect(-18, -16, 36, 32);
+      c.fillStyle = GOLD; c.fillRect(-18, -3, 36, 6); c.strokeRect(-18, -3, 36, 6);
+      c.font = '20px serif'; c.textAlign = 'center'; c.textBaseline = 'middle'; c.fillText('⚔️', 0, 0);
+      c.restore();
+    }
+    for (const [, kind, sx, sy, svx, svy, sw, spin] of shots) {
+      if (kind === 'balle') { c.save(); c.globalCompositeOperation = 'lighter'; c.strokeStyle = '#ffe07a'; c.lineWidth = 6; c.beginPath(); c.moveTo(sx, sy); c.lineTo(sx - svx * 2.2, sy - svy * 2.2); c.stroke(); c.fillStyle = '#ffffff'; c.beginPath(); c.arc(sx, sy, 4, 0, TAU); c.fill(); c.restore(); }
+      else { c.save(); c.translate(sx, sy); drawWeapon(c, sw, { x: 0, y: -30, a: spin * 57.3 }); c.restore(); }
+    }
     // ombres au sol et combattants
     for (const f of list) {
       if (f.state === 'out' || f.state === 'dead') continue;
@@ -328,7 +373,9 @@ export function createRenderer(canvas) {
       if (f.state === 'dodge') c.globalAlpha = 0.6;
       // anneau à la couleur du joueur
       c.strokeStyle = col; c.lineWidth = 4; c.beginPath(); c.ellipse(f.x, f.y + 2, 24, 6, 0, 0, TAU); c.stroke();
-      drawFighter(c, f, t);
+      const fo = {}, tip = drawFighter(c, f, t, fo);
+      const tr = (trails[f.id] ??= []);
+      if (tip && f.state === 'attack') { tr.push({ ...tip, t }); if (tr.length > 8) tr.shift(); } else tr.length = 0;
       c.globalAlpha = 1;
       if (f.flash > 0) { c.save(); c.globalCompositeOperation = 'lighter'; c.globalAlpha = f.flash; drawFighter(c, f, t); c.restore(); }
       // nom au-dessus
@@ -353,10 +400,19 @@ export function createRenderer(canvas) {
       if (tx.life <= 0) { texts.splice(i, 1); continue; }
       const a = tx.life / tx.max, s = 1 + (1 - a) * 0.25 + (a > 0.85 ? (a - 0.85) * 3 : 0);
       c.save(); c.translate(tx.x, tx.y - (1 - a) * 30); c.rotate(-0.12); c.scale(s, s); c.globalAlpha = Math.min(1, a * 2);
-      c.font = '900 38px "Baloo 2", system-ui'; c.textAlign = 'center'; c.lineJoin = 'round'; c.lineWidth = 9; c.strokeStyle = INK; c.strokeText(tx.s, 0, 0); c.fillStyle = '#ffe14a'; c.fillText(tx.s, 0, 0); c.lineWidth = 2; c.strokeStyle = tx.c; c.strokeText(tx.s, 0, 0);
+      c.font = `900 ${tx.small ? 26 : 38}px "Baloo 2", system-ui`; c.textAlign = 'center'; c.lineJoin = 'round'; c.lineWidth = 9; c.strokeStyle = INK; c.strokeText(tx.s, 0, 0); c.fillStyle = '#ffe14a'; c.fillText(tx.s, 0, 0); c.lineWidth = 2; c.strokeStyle = tx.c; c.strokeText(tx.s, 0, 0);
       c.restore();
     }
-    // brume au premier plan et éclair de K.O.
+    // traînées d'arme (en pixels de l'écran)
+    c.setTransform(1, 0, 0, 1, 0, 0);
+    for (const [id, tr] of Object.entries(trails)) {
+      if (tr.length < 2) continue;
+      c.save(); c.globalCompositeOperation = 'lighter';
+      for (let i = 1; i < tr.length; i++) { c.strokeStyle = `rgba(255,255,255,${(i / tr.length) * 0.7})`; c.lineWidth = (i / tr.length) * 14 * dpr; c.lineCap = 'round'; c.beginPath(); c.moveTo(tr[i - 1].x, tr[i - 1].y); c.lineTo(tr[i].x, tr[i].y); c.stroke(); }
+      c.restore();
+      void id;
+    }
+    // éclair de K.O.
     c.setTransform(dpr, 0, 0, dpr, 0, 0);
     if (flash > 0) { c.fillStyle = `rgba(255,255,255,${flash})`; c.fillRect(0, 0, W, H); }
   }

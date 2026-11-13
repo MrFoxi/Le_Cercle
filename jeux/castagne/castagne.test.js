@@ -80,13 +80,82 @@ assert(launch(120) > launch(0) * 2, 'éjection bien plus forte à 120 de dégât
   assert.throws(() => r.pick('Moi', 'dragon'), /inconnu/);
 }
 
+// Rebord : en tombant près du bord, on s'accroche ; haut pour remonter sur l'île.
+{
+  const S = A.solids[0], f = BR.fighter('a', 'fenna', [S.x1 + BR.HW + 4, -40]);
+  for (let k = 0; k < 40 && f.state !== 'ledge'; k++) BR.step(f, 0, A);
+  assert.strictEqual(f.state, 'ledge', 'accroché au rebord');
+  BR.step(f, IN.U, A);
+  assert(f.ground && f.y === 0 && f.x < S.x1, 'remonté sur l’île');
+}
+
+// Armes : une caisse tombe, on la ramasse (les coups changent), on la lance sur quelqu'un.
+{
+  const w = BR.world('phare', [{ id: 'a', char: 'gromm' }, { id: 'b', char: 'fenna' }], 3), [a, b] = w.fighters;
+  for (let k = 0; k < 60; k++) BR.stepWorld(w, {});
+  w.items.push({ id: 99, x: a.x, y: a.y, vy: 0, ground: true, life: 500 });
+  const ev = BR.stepWorld(w, { a: IN.PICK });
+  assert(ev.some(e => e.t === 'pick') && BR.CHARS.gromm.weapons.includes(a.weapon), 'arme ramassée');
+  assert.notStrictEqual(BR.movesOf(a).sHeavy.hits[0].dmg, BR.CHARS.gromm.moves.sHeavy.hits[0].dmg, 'les coups changent avec l’arme');
+  Object.assign(b, { x: a.x + 160, y: a.y }); a.facing = 1;
+  BR.stepWorld(w, {}); BR.stepWorld(w, { a: IN.PICK });
+  assert(a.weapon === null && w.shots.length === 1, 'arme lancée');
+  let hit = false;
+  for (let k = 0; k < 30 && !hit; k++) hit = BR.stepWorld(w, {}).some(e => e.t === 'hit' && e.b === 'b');
+  assert(hit && b.dmg > 0, 'l’arme lancée touche');
+}
+
+// Pistolets : le coup léger tire une balle qui touche de loin.
+{
+  const w = BR.world('phare', [{ id: 'a', char: 'fenna' }, { id: 'b', char: 'gromm' }], 3), [a, b] = w.fighters;
+  for (let k = 0; k < 60; k++) BR.stepWorld(w, {});
+  a.weapon = 'pistolets'; Object.assign(b, { x: a.x + 300, y: a.y }); a.facing = 1;
+  let hit = false;
+  for (let k = 0; k < 50 && !hit; k++) hit = BR.stepWorld(w, { a: k === 0 ? IN.LIGHT : 0 }).some(e => e.t === 'hit' && e.b === 'b');
+  assert(hit, 'la balle touche à 300 px');
+}
+
+// Combo et esquive qui annule : deux coups enchaînés comptent ×2 ; l'esquive annule un coup qui a touché.
+{
+  const a = BR.fighter('a', 'fenna', [0, 0]), b = BR.fighter('b', 'gromm', [50, 0]);
+  settle(a); settle(b); a.facing = 1;
+  const ev = [];
+  for (let k = 0; k < 12; k++) { BR.step(a, k === 0 ? IN.LIGHT : 0, A); BR.step(b, 0, A); BR.resolve([a, b], ev); }
+  assert.strictEqual(ev.length, 1);
+  while (a.hitlag > 0) BR.step(a, 0, A);
+  BR.step(a, IN.DODGE, A);
+  assert.strictEqual(a.state, 'dodge', 'l’esquive annule le coup');
+  b.state = 'hitstun'; b.hitstun = 30; b.invuln = 0;
+  const a2 = BR.fighter('c', 'fenna', [b.x - 50, 0]); settle(a2); a2.facing = 1;
+  for (let k = 0; k < 12; k++) { BR.step(a2, k === 0 ? IN.LIGHT : 0, A); BR.resolve([a2, b], ev); }
+  assert(ev.at(-1).combo >= 2, 'combo compté');
+}
+
+// Équipes : pas de coup entre coéquipiers ; duel à 2, équipes en nombre pair.
+{
+  const a = BR.fighter('a', 'fenna', [0, 0]), b = BR.fighter('b', 'gromm', [50, 0]);
+  settle(a); settle(b); a.facing = 1; a.team = b.team = 'rouge';
+  const ev = [];
+  for (let k = 0; k < 12; k++) { BR.step(a, k === 0 ? IN.LIGHT : 0, A); BR.resolve([a, b], ev); }
+  assert.strictEqual(ev.length, 0, 'pas de coup entre coéquipiers');
+  const r = new Room('MODE1', Math.random, false, () => 0);
+  r.addPlayer('Moi'); r.addBot('Moi'); r.addBot('Moi');
+  r.configure('Moi', 'mode', 'duel');
+  assert.throws(() => r.start('Moi'), /2 exactement/);
+  r.configure('Moi', 'mode', 'teams');
+  assert.throws(() => r.start('Moi'), /pair/);
+  r.addBot('Moi'); r.start('Moi'); r.stop();
+  assert.deepStrictEqual(new Set(r.world.fighters.map(f => f.team)), new Set(['rouge', 'bleu']));
+}
+
 // Parties complètes entre robots : chaque manche se termine (un seul debout, ou le temps), la partie aussi.
-for (let game = 0; game < 6; game++) {
+for (let game = 0; game < 8; game++) {
   let now = 0;
   const r = new Room('BOTS1', Math.random, false, () => now);
   r.addPlayer('Moi');
   for (let k = 0; k < 1 + (game % 6); k++) r.addBot('Moi');
   r.configure('Moi', 'rounds', 1); r.configure('Moi', 'stocks', 1);
+  if (game >= 6) { while (r.players.length < 4) r.addBot('Moi'); r.configure('Moi', 'mode', game === 6 ? 'teams' : 'lms'); }
   r.start('Moi'); r.stop();
   r.emit = () => {};
   now = r.deadline; r.timeout();
