@@ -9,7 +9,7 @@ const { PartyRoom } = require('../../../lib/room-base');
 const SETTINGS = { rounds: [1, 3, 5], stocks: [1, 3, 5], time: [120, 180, 300], mode: ['ffa', 'duel', 'teams', 'lms'] };
 // Modes : mêlée générale, duel (exactement 2), équipes (rouge contre bleu, sans se taper dessus), dernier debout (une vie).
 const MODES = { ffa: 'Mêlée générale', duel: 'Duel 1 contre 1', teams: '2 contre 2 (équipes)', lms: 'Dernier debout' };
-const COUNTDOWN_MS = 3200, ROUND_END_MS = 6000, TICK_MS = 1000 / BR.FPS, QUEUE_MAX = 12;
+const COUNTDOWN_MS = 3200, ROUND_END_MS = 6000, TICK_MS = 1000 / BR.FPS, QUEUE_MAX = 4, MAX_STEPS = 5;
 const COLORS = ['#ff5a5f', '#3d8bff', '#ffc93c', '#2fd47a', '#a46bff', '#ff8a3d', '#22d3ee', '#f472b6'];
 const BOT_NAMES = ['Robot Torgnole', 'Robot Mandale', 'Robot Baffe', 'Robot Gnon', 'Robot Pichenette', 'Robot Taloche', 'Robot Beigne'];
 const { IN } = BR;
@@ -56,6 +56,7 @@ class Room extends PartyRoom {
     this.events = [];
     this.result = null;
     this.stop();
+    this.lastTick = this.clock(); this.debt = 0;
     this.timer = setInterval(() => this.tick(), TICK_MS);
     this.timer.unref?.();
   }
@@ -88,8 +89,18 @@ class Room extends PartyRoom {
   tick() {
     if (!this.players.length) return this.stop();
     if (this.phase !== 'fight' && this.phase !== 'countdown' && this.phase !== 'roundEnd') return;
+    const w = this.world, now = this.clock();
+    // autant d'images que le temps réellement écoulé (la minuterie peut prendre du retard) ; au plus 5 d'un coup
+    this.debt = Math.min(MAX_STEPS * TICK_MS, (this.debt ?? 0) + now - (this.lastTick ?? now));
+    this.lastTick = now;
+    let steps = 0;
+    while (this.debt >= TICK_MS - 0.5 && (this.phase === 'fight' || this.phase === 'roundEnd')) { this.debt -= TICK_MS; steps++; this.stepOnce(); }
+    if (this.phase === 'countdown') this.debt = 0;
+    if (steps || this.phase === 'countdown') this.emit?.('snap', { f: w.frame, p: w.fighters.map(BR.pack), ...BR.packItems(w), ack: this.acks, ev: this.events.splice(0) });
+  }
+  stepOnce() {
     const w = this.world, inputs = {};
-    if (this.phase === 'fight' || this.phase === 'roundEnd') {
+    {
       for (const f of w.fighters) {
         const p = this.get(f.id);
         if (p?.bot) inputs[f.id] = this.think(f);
@@ -104,8 +115,6 @@ class Room extends PartyRoom {
       const left = BR.alive(w), sides = new Set(left.map(f => f.team ?? f.id));
       if (this.phase === 'fight' && sides.size <= 1) this.endRound();
     }
-    this.ticks = (this.ticks ?? 0) + 1;
-    if (this.ticks % 2 === 0) this.emit?.('snap', { f: w.frame, p: w.fighters.map(BR.pack), ...BR.packItems(w), ack: this.acks, ev: this.events.splice(0) });
   }
   // Fin de manche : classement (le dernier debout gagne ; au temps : plus de vies, puis moins de dégâts).
   endRound() {
@@ -142,7 +151,7 @@ class Room extends PartyRoom {
     const foes = w.fighters.filter(o => o !== f && o.state !== 'out' && o.dead === 0 && !(f.team && o.team === f.team));
     if (!foes.length) return 0;
     const t = foes.reduce((m, o) => (Math.hypot(o.x - f.x, o.y - f.y) < Math.hypot(m.x - f.x, m.y - f.y) ? o : m));
-    const dx = t.x - f.x, dy = t.y - f.y, near = Math.abs(dx) < 75 && Math.abs(dy) < 70;
+    const dx = t.x - f.x, dy = t.y - f.y, near = Math.abs(dx) < 100 && Math.abs(dy) < 80;
     if (Math.abs(dx) > 50) bits |= dx > 0 ? IN.R : IN.L;
     if (dy < -90 && f.ground) bits |= IN.JUMP;
     if (dy > 90 && f.ground) bits |= IN.D;

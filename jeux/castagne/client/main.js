@@ -142,16 +142,28 @@ function sideFx(e) {
 /* ---------------- Commandes : clavier, souris, manette ---------------- */
 const keys = new Set();
 const KEYMAP = { KeyA: IN.L, KeyQ: IN.L, ArrowLeft: IN.L, KeyD: IN.R, ArrowRight: IN.R, KeyW: IN.U | IN.JUMP, KeyZ: IN.U | IN.JUMP, ArrowUp: IN.U | IN.JUMP, KeyS: IN.D, ArrowDown: IN.D, Space: IN.JUMP, KeyJ: IN.LIGHT, KeyX: IN.LIGHT, KeyK: IN.HEAVY, KeyC: IN.HEAVY, KeyL: IN.DODGE, ShiftLeft: IN.DODGE, ShiftRight: IN.DODGE, KeyV: IN.DODGE, KeyE: IN.PICK, KeyH: IN.PICK, KeyB: IN.PICK };
-let mouse = 0;
+let mouse = 0, aim = 0, aimT = 0;
+const opt = { upJump: store.get('castagne-upjump') !== '0', mouseAim: store.get('castagne-aim') === '1' };
+$('#optUpJump').checked = opt.upJump; $('#optAim').checked = opt.mouseAim;
+$('#optUpJump').onchange = e => { opt.upJump = e.target.checked; store.set('castagne-upjump', opt.upJump ? '1' : '0'); };
+$('#optAim').onchange = e => { opt.mouseAim = e.target.checked; store.set('castagne-aim', opt.mouseAim ? '1' : '0'); };
+// Viser à la souris : le coup part vers le curseur (gauche, droite, haut ou bas de mon combattant)
+function aimAt(e) {
+  if (!opt.mouseAim || !pred) return 0;
+  const cv = $('#view'), cam = R.cam, wx = cam.x + (e.clientX - cv.clientWidth / 2) / cam.z, wy = cam.y + (e.clientY - cv.clientHeight / 2) / cam.z;
+  const dx = wx - pred.x, dy = wy - (pred.y - 45);
+  return Math.abs(dx) > Math.abs(dy) * 0.8 ? (dx > 0 ? IN.R : IN.L) : dy < 0 ? IN.U : IN.D;
+}
 addEventListener('keydown', e => { if (e.target.closest?.('input, select')) return; if (KEYMAP[e.code] !== undefined && document.body.classList.contains('playing')) { e.preventDefault(); keys.add(e.code); audio(); } });
 addEventListener('keyup', e => keys.delete(e.code));
 addEventListener('blur', () => { keys.clear(); mouse = 0; });
-$('#view').addEventListener('mousedown', e => { audio(); mouse |= e.button === 2 ? IN.HEAVY : IN.LIGHT; });
+$('#view').addEventListener('mousedown', e => { audio(); mouse |= e.button === 2 ? IN.HEAVY : IN.LIGHT; aim = aimAt(e); aimT = 4; });
 addEventListener('mouseup', e => { mouse &= e.button === 2 ? ~IN.HEAVY : ~IN.LIGHT; });
 $('#view').addEventListener('contextmenu', e => e.preventDefault());
 function readInput() {
   let bits = mouse;
-  for (const k of keys) bits |= KEYMAP[k];
+  for (const k of keys) bits |= opt.upJump ? KEYMAP[k] : KEYMAP[k] & ~(k === 'Space' ? 0 : IN.JUMP);
+  if (aimT > 0) { aimT--; bits |= aim; }
   for (const g of navigator.getGamepads?.() ?? []) {
     if (!g) continue;
     const ax = g.axes[0] ?? 0, ay = g.axes[1] ?? 0, b = i => g.buttons[i]?.pressed;
@@ -244,7 +256,7 @@ function frame(now) {
   // les autres : 100 ms en arrière, entre deux états
   const list = [];
   if (inFight(s) && snaps.length) {
-    const rt = now - 100;
+    const rt = now - 50;
     let i = snaps.findIndex(x => x.at > rt); if (i < 0) i = snaps.length - 1;
     const B = snaps[i].s, Aa = snaps[Math.max(0, i - 1)].s, k = snaps[i].at > snaps[Math.max(0, i - 1)].at ? Math.max(0, Math.min(1, (rt - snaps[Math.max(0, i - 1)].at) / (snaps[i].at - snaps[Math.max(0, i - 1)].at))) : 1;
     for (const b of B.p) {

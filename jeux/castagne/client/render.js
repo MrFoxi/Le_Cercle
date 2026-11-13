@@ -33,6 +33,7 @@ const MOVE_POSES = {
   sAir: { W: P({ lF: [80, 130], lB: [10, 90], lean: -10 }), K: P({ lF: [96, 0], lB: [-10, 70], lean: -28, aF: [-40, 40], aB: [60, 40], face: 'shout' }) },
   dAir: { W: P({ lF: [80, 120], lB: [70, 120], aF: [140, 60], aB: [140, 60] }), K: P({ lF: [10, 0], lB: [-6, 0], aF: [160, 20], aB: [150, 20], lean: 0, face: 'shout' }) },
   recovery: { W: P({ bob: 10, aF: [10, 130], lF: [60, 90] }), K: P({ aF: [178, 0], aB: [170, 10], lF: [-10, 30], lB: [20, 60], lean: -8, face: 'shout', spin: true }) },
+  aHeavy: { W: P({ lF: [70, 120], lB: [20, 90], aF: [-40, 80], aB: [40, 60], lean: -12, face: 'grit' }), K: P({ lF: [100, 0], lB: [-20, 60], aF: [95, 0], aB: [-60, 30], lean: 18, face: 'shout' }) },
   pound: { W: P({ lF: [90, 140], lB: [90, 140], aF: [150, 40], aB: [150, 40], rot: -20 }), K: P({ lF: [4, 0], lB: [-4, 0], aF: [170, 10], aB: [170, 10], lean: 0, face: 'grit' }) },
 };
 function mix(a, b, t) {

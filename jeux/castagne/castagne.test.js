@@ -125,7 +125,7 @@ assert(launch(120) > launch(0) * 2, 'éjection bien plus forte à 120 de dégât
   while (a.hitlag > 0) BR.step(a, 0, A);
   BR.step(a, IN.DODGE, A);
   assert.strictEqual(a.state, 'dodge', 'l’esquive annule le coup');
-  b.state = 'hitstun'; b.hitstun = 30; b.invuln = 0;
+  b.state = 'hitstun'; b.hitstun = 30; b.invuln = 0; b.combo = 1;
   const a2 = BR.fighter('c', 'fenna', [b.x - 50, 0]); settle(a2); a2.facing = 1;
   for (let k = 0; k < 12; k++) { BR.step(a2, k === 0 ? IN.LIGHT : 0, A); BR.resolve([a2, b], ev); }
   assert(ev.at(-1).combo >= 2, 'combo compté');
@@ -146,6 +146,27 @@ assert(launch(120) > launch(0) * 2, 'éjection bien plus forte à 120 de dégât
   assert.throws(() => r.start('Moi'), /pair/);
   r.addBot('Moi'); r.start('Moi'); r.stop();
   assert.deepStrictEqual(new Set(r.world.fighters.map(f => f.team)), new Set(['rouge', 'bleu']));
+}
+
+// Mémoire des touches : un coup demandé pendant le précédent part dès que possible ; portée d'au moins 80 px.
+{
+  const f = BR.fighter('a', 'fenna', [0, 0]); settle(f); f.facing = 1;
+  BR.step(f, IN.LIGHT, A); BR.step(f, 0, A);
+  run(f, k => (k === 13 ? IN.HEAVY : 0), 14);
+  for (let k = 0; k < 40 && f.move !== 'nHeavy'; k++) BR.step(f, 0, A);
+  assert.strictEqual(f.move, 'nHeavy', 'le coup lourd demandé trop tôt est parti');
+  assert(BR.CHARS.fenna.moves.jab.hits[0].x + BR.CHARS.fenna.moves.jab.hits[0].w / 2 >= 80, 'portée du coup léger');
+}
+
+// Serveur en retard : il calcule les images manquées (au plus 5 d'un coup).
+{
+  let now = 0;
+  const r = new Room('LAG01', Math.random, false, () => now);
+  r.addPlayer('Moi'); r.addBot('Moi'); r.start('Moi'); r.stop();
+  now = r.deadline; r.timeout(); r.tick();
+  const f0 = r.world.frame;
+  now += 50; r.tick();
+  assert.strictEqual(r.world.frame - f0, 3, '50 ms = 3 images');
 }
 
 // Parties complètes entre robots : chaque manche se termine (un seul debout, ou le temps), la partie aussi.

@@ -12,6 +12,7 @@
   const FPS = 60;
   const IN = { L: 1, R: 2, U: 4, D: 8, JUMP: 16, LIGHT: 32, HEAVY: 64, DODGE: 128, PICK: 256 };
   const HW = 22, HH = 86; // demi-largeur et hauteur du corps (pieds en y)
+  const BUFMASK = IN.JUMP | IN.LIGHT | IN.HEAVY | IN.DODGE | IN.PICK;
 
   /* ---------------- Arène ---------------- */
   const ARENAS = {
@@ -34,17 +35,18 @@
     const T = n => Math.max(1, Math.round(n * k.spd)), P = n => +(n * k.pow).toFixed(2), R = n => Math.round(n * k.reach);
     const hit = (s, e, x, y, w, h, dmg, kb, ks, dx, dy, o = {}) => ({ s: T(s), e: T(e), x: R(x), y, w: R(w), h, dmg: P(dmg), kb: P(kb), ks, dx, dy: dy + (k.lift ?? 0) * (dy < 0 ? 1 : 0), ...o });
     const m = {
-      jab: { f: T(18), hits: [hit(4, 7, 36, -56, 44, 28, 5, 3.2, 0.025, 1, -0.3)] },
-      sLight: { f: T(24), vel: [[2, 10.5, null]], hits: [hit(6, 11, 38, -52, 48, 30, 7, 4, 0.045, 1, -0.35)] },
-      dLight: { f: T(26), vel: [[2, 9, null]], hits: [hit(5, 12, 30, -14, 54, 24, 6, 4.5, 0.035, 0.45, -1)] },
-      nHeavy: { f: T(40), vel: [[T(11), 1.5, -3]], hits: [hit(11, 17, 16, -104, 52, 64, 13, 6, 0.1, 0.15, -1)], heavy: true },
-      sHeavy: { f: T(44), vel: [[T(14), 7, null]], hits: [hit(15, 20, 48, -52, 64, 36, 16, 7, 0.13, 1, -0.42)], heavy: true },
-      dHeavy: { f: T(42), hits: [hit(14, 19, 0, -22, 150, 32, 14, 6.5, 0.11, 1, -0.6, { both: true })], heavy: true },
-      nAir: { f: T(26), air: true, land: 6, hits: [hit(5, 14, 0, -46, 92, 72, 8, 4, 0.05, 0.6, -0.8, { both: true })] },
-      sAir: { f: T(26), air: true, land: 7, hits: [hit(6, 12, 42, -46, 52, 32, 9, 5, 0.07, 1, -0.3)] },
-      dAir: { f: T(30), air: true, land: 8, hits: [hit(7, 14, 6, 4, 50, 36, 10, 5, 0.07, 0.25, 1, { spike: true })] },
-      recovery: { f: T(38), air: true, land: 10, grav: 0.45, once: true, vel: [[3, 3, -15.5]], hits: [hit(4, 14, 14, -82, 58, 84, 11, 6, 0.08, 0.3, -1)], heavy: true },
-      pound: { f: T(60), air: true, land: 14, pound: true, vel: [[T(8), 0, 22]], hits: [hit(8, 60, 0, 2, 72, 44, 14, 6.5, 0.1, 0.7, -0.7, { both: true })], heavy: true },
+      jab: { f: T(20), vel: [[2, 4.5, null]], hits: [hit(3, 10, 52, -56, 72, 34, 5, 3.2, 0.025, 1, -0.3)] },
+      sLight: { f: T(26), vel: [[2, 11.5, null]], hits: [hit(5, 14, 58, -52, 76, 36, 7, 4, 0.045, 1, -0.35)] },
+      dLight: { f: T(28), vel: [[2, 10, null]], hits: [hit(4, 14, 48, -14, 82, 28, 6, 4.5, 0.035, 0.45, -1)] },
+      nHeavy: { f: T(42), vel: [[T(10), 2, -3]], hits: [hit(10, 22, 28, -104, 84, 84, 13, 6, 0.1, 0.15, -1)], heavy: true },
+      sHeavy: { f: T(46), vel: [[T(13), 8, null]], hits: [hit(13, 24, 76, -52, 104, 44, 16, 7, 0.13, 1, -0.42)], heavy: true },
+      dHeavy: { f: T(44), hits: [hit(12, 24, 0, -22, 200, 36, 14, 6.5, 0.11, 1, -0.6, { both: true })], heavy: true },
+      nAir: { f: T(28), air: true, land: 5, hits: [hit(4, 16, 0, -46, 124, 92, 8, 4, 0.05, 0.6, -0.8, { both: true })] },
+      sAir: { f: T(28), air: true, land: 6, vel: [[4, 8, null]], hits: [hit(5, 16, 62, -46, 82, 40, 9, 5, 0.07, 1, -0.3)] },
+      dAir: { f: T(32), air: true, land: 7, hits: [hit(6, 18, 6, 6, 66, 44, 10, 5, 0.07, 0.25, 1, { spike: true })] },
+      aHeavy: { f: T(38), air: true, land: 9, vel: [[T(9), 6, -2]], hits: [hit(9, 19, 66, -50, 96, 54, 13, 6.5, 0.11, 1, -0.45)], heavy: true },
+      recovery: { f: T(38), air: true, land: 10, grav: 0.45, once: true, vel: [[3, 3, -17]], hits: [hit(3, 16, 14, -82, 74, 92, 11, 6, 0.08, 0.3, -1)], heavy: true },
+      pound: { f: T(60), air: true, land: 12, pound: true, vel: [[T(8), 0, 24]], hits: [hit(8, 60, 0, 2, 96, 48, 14, 6.5, 0.1, 0.7, -0.7, { both: true })], heavy: true },
     };
     tweak?.(m, hit, T);
     return m;
@@ -53,8 +55,8 @@
   /* ---------------- Armes ---------------- */
   // Chaque famille change la vitesse, la force, la portée et parfois la forme des coups.
   const WEAPONS = {
-    epee: { name: 'Épée', icon: '🗡️', k: { spd: 0.92, pow: 1.05, reach: 1.45 } },
-    lance: { name: 'Lance', icon: '🔱', k: { spd: 1.08, pow: 1.0, reach: 1.95 }, tweak: m => { m.sLight.vel = [[2, 13, null]]; } },
+    epee: { name: 'Épée', icon: '🗡️', k: { spd: 0.92, pow: 1.05, reach: 1.3 } },
+    lance: { name: 'Lance', icon: '🔱', k: { spd: 1.08, pow: 1.0, reach: 1.6 }, tweak: m => { m.sLight.vel = [[2, 13, null]]; } },
     pistolets: {
       name: 'Pistolets', icon: '🔫', k: { spd: 0.95, pow: 0.95, reach: 1 },
       tweak: (m, hit) => {
@@ -64,16 +66,16 @@
         m.dAir.hits = [hit(7, 7, 0, 10, 14, 10, 5, 3, 0.03, 0, 1, { shot: { speed: 17, life: 26, down: true } })];
       },
     },
-    marteau: { name: 'Marteau', icon: '🔨', k: { spd: 1.3, pow: 1.5, reach: 1.5 } },
-    hache: { name: 'Hache', icon: '🪓', k: { spd: 1.15, pow: 1.3, reach: 1.4, lift: -0.35 } },
-    gantelets: { name: 'Gantelets', icon: '🥊', k: { spd: 0.8, pow: 0.9, reach: 1.05 }, tweak: (m, hit) => { m.jab.hits = [hit(4, 6, 34, -56, 44, 28, 3.5, 2, 0.01, 1, -0.2), hit(10, 12, 38, -56, 46, 28, 4.5, 3.6, 0.03, 1, -0.4)]; m.jab.f = 22; } },
+    marteau: { name: 'Marteau', icon: '🔨', k: { spd: 1.25, pow: 1.5, reach: 1.35 } },
+    hache: { name: 'Hache', icon: '🪓', k: { spd: 1.12, pow: 1.3, reach: 1.3, lift: -0.35 } },
+    gantelets: { name: 'Gantelets', icon: '🥊', k: { spd: 0.8, pow: 0.9, reach: 1.05 }, tweak: (m, hit) => { m.jab.hits = [hit(3, 7, 50, -56, 70, 34, 3.5, 2, 0.01, 1, -0.2), hit(10, 15, 54, -56, 74, 34, 4.5, 3.6, 0.03, 1, -0.4)]; m.jab.f = 24; } },
   };
   const WEAPON_IDS = Object.keys(WEAPONS);
 
   /* ---------------- Personnages ---------------- */
   const CHARS = {
-    fenna: { name: 'Fenna', title: 'la renarde voltigeuse', weight: 90, run: 7.4, accel: 1.15, airSpeed: 6.4, airAccel: 0.55, jump: 15.6, airJump: 13.6, grav: 0.72, fall: 13, fastFall: 19, k: { spd: 1, pow: 1, reach: 1 }, weapons: ['epee', 'lance', 'pistolets'], stats: { vitesse: 5, force: 2, poids: 2, portée: 3 } },
-    gromm: { name: 'Gromm', title: 'l’ours forgeron', weight: 118, run: 5.9, accel: 0.8, airSpeed: 5.3, airAccel: 0.42, jump: 14.6, airJump: 12.6, grav: 0.78, fall: 14.5, fastFall: 20, k: { spd: 1.18, pow: 1.28, reach: 1.15 }, weapons: ['marteau', 'hache', 'gantelets'], stats: { vitesse: 2, force: 5, poids: 5, portée: 4 } },
+    fenna: { name: 'Fenna', title: 'la renarde voltigeuse', weight: 90, run: 9.6, accel: 1.7, airSpeed: 8.2, airAccel: 0.8, jump: 16, airJump: 13.4, grav: 0.63, fall: 12.5, fastFall: 20, k: { spd: 1, pow: 1, reach: 1 }, weapons: ['epee', 'lance', 'pistolets'], stats: { vitesse: 5, force: 2, poids: 2, portée: 3 } },
+    gromm: { name: 'Gromm', title: 'l’ours forgeron', weight: 118, run: 7.8, accel: 1.25, airSpeed: 6.8, airAccel: 0.62, jump: 15.8, airJump: 12.8, grav: 0.67, fall: 13.5, fastFall: 21, k: { spd: 1.18, pow: 1.28, reach: 1.15 }, weapons: ['marteau', 'hache', 'gantelets'], stats: { vitesse: 2, force: 5, poids: 5, portée: 4 } },
   };
   const CHAR_IDS = Object.keys(CHARS);
   // Coups de chaque personnage, à mains nues et avec chacune de ses armes
@@ -88,7 +90,7 @@
 
   /* ---------------- Un combattant ---------------- */
   function fighter(id, char, [x, y], facing = 1) {
-    return { id, char, x, y, vx: 0, vy: 0, facing, state: 'air', move: null, mt: 0, ground: false, jumps: 2, wallJumps: 3, coyote: 0, drop: 0, dmg: 0, stocks: 3, hitstun: 0, hitlag: 0, invuln: 0, dodgeCd: 0, airDodge: false, recovery: true, prevIn: 0, hitIds: [], lag: 0, dead: 0, wall: 0, lastHit: null, kos: 0, falls: 0, weapon: null, ledgeT: 0, ledgeCd: 0, combo: 0 };
+    return { id, char, x, y, vx: 0, vy: 0, facing, state: 'air', move: null, mt: 0, ground: false, jumps: 2, wallJumps: 3, coyote: 0, drop: 0, dmg: 0, stocks: 3, hitstun: 0, hitlag: 0, invuln: 0, dodgeCd: 0, airDodge: false, recovery: true, prevIn: 0, hitIds: [], lag: 0, dead: 0, wall: 0, lastHit: null, kos: 0, falls: 0, weapon: null, ledgeT: 0, ledgeCd: 0, combo: 0, buf: 0, bufT: 0 };
   }
   const C = f => CHARS[f.char];
 
@@ -100,13 +102,13 @@
     const side = (inp & IN.L ? -1 : 0) + (inp & IN.R ? 1 : 0), down = inp & IN.D;
     if (side) f.facing = side;
     if (f.ground) return heavy ? (down ? 'dHeavy' : side ? 'sHeavy' : 'nHeavy') : down ? 'dLight' : side ? 'sLight' : 'jab';
-    if (heavy) return down ? 'pound' : f.recovery ? 'recovery' : null;
+    if (heavy) return down ? 'pound' : inp & IN.U ? (f.recovery ? 'recovery' : null) : 'aHeavy';
     return down ? 'dAir' : side ? 'sAir' : 'nAir';
   }
   function startDodge(f, inp, dir) {
     f.state = 'dodge'; f.mt = 0; f.dodgeCd = 54; f.hitIds = [];
     const dy = (inp & IN.D ? 1 : 0) - (inp & IN.U ? 1 : 0);
-    if (!f.ground && (dir || dy)) { const l = Math.hypot(dir, dy); f.move = 'air'; f.vx = (dir / l) * 11; f.vy = (dy / l) * 11; f.invuln = 14; f.airDodge = true; }
+    if (!f.ground && (dir || dy)) { const l = Math.hypot(dir, dy); f.move = 'air'; f.vx = (dir / l) * 13; f.vy = (dy / l) * 13; f.invuln = 14; f.airDodge = true; }
     else { f.move = 'spot'; f.invuln = 20; if (!f.ground) f.airDodge = true; }
     f.events?.push('dodge');
   }
@@ -137,9 +139,12 @@
   function step(f, inp, A) {
     if (f.state === 'out') return;
     if (f.dead > 0) { if (--f.dead === 0) respawn(f, A); return; }
+    const fresh = inp & ~f.prevIn & BUFMASK;
+    if (fresh) { f.buf = fresh; f.bufT = 8; } else if (f.bufT > 0 && --f.bufT === 0) f.buf = 0; // une touche appuyée trop tôt reste en mémoire
     if (f.hitlag > 0) { f.hitlag--; f.prevIn = inp; return; } // gel de l'impact
-    const c = C(f), M = movesOf(f), pressed = inp & ~f.prevIn;
+    const c = C(f), M = movesOf(f), pressed = (inp & ~f.prevIn) | (f.bufT > 0 ? f.buf : 0);
     f.prevIn = inp;
+    const used = bits => { f.buf &= ~bits; if (!f.buf) f.bufT = 0; };
     const dir = (inp & IN.R ? 1 : 0) - (inp & IN.L ? 1 : 0);
     if (f.invuln > 0) f.invuln--;
     if (f.dodgeCd > 0) f.dodgeCd--;
@@ -151,8 +156,8 @@
     if (f.state === 'ledge') {
       f.ledgeT++;
       const away = dir === -f.facing;
-      if (pressed & IN.JUMP) { f.state = 'air'; f.vy = -c.jump; f.ledgeCd = 30; f.events?.push('jump'); }
-      else if ((pressed & IN.U) || (dir === f.facing && f.ledgeT > 6) || (pressed & (IN.LIGHT | IN.HEAVY))) { f.x += f.facing * (HW * 2 + 6); f.y -= 56; f.state = 'lag'; f.lag = 8; f.ground = true; f.ledgeCd = 20; f.events?.push('climb'); }
+      if (pressed & IN.JUMP) { used(IN.JUMP); f.state = 'air'; f.vy = -c.jump; f.ledgeCd = 30; f.events?.push('jump'); }
+      else if ((inp & IN.U) || (dir === f.facing && f.ledgeT > 6) || (pressed & (IN.LIGHT | IN.HEAVY))) { used(IN.LIGHT | IN.HEAVY); f.x += f.facing * (HW * 2 + 6); f.y -= 56; f.state = 'lag'; f.lag = 8; f.ground = true; f.ledgeCd = 20; f.events?.push('climb'); }
       else if ((pressed & IN.D) || (away && f.ledgeT > 6) || f.ledgeT > 150) { f.state = 'air'; f.ledgeCd = 40; f.x -= f.facing * 6; }
       return;
     }
@@ -170,13 +175,14 @@
     } else if (f.state === 'attack') {
       const m = M[f.move];
       f.mt++;
+      if (f.mt <= 3 && dir && !f.hitIds.length && !m.pound) f.facing = dir; // on peut encore se retourner
       for (const [fr, vx, vy] of m.vel ?? []) if (fr === f.mt) { if (vx !== null) f.vx = vx * f.facing; if (vy !== null) f.vy = vy; }
       for (const h of m.hits) if (h.shot && f.mt === h.s) f.spawn?.push({ kind: 'balle', x: f.x + h.x * f.facing * h.dx, y: f.y + (h.shot.down ? -10 : h.y), vx: h.shot.down ? 0 : h.shot.speed * Math.sign(h.dx) * f.facing, vy: h.shot.down ? h.shot.speed : 0, life: h.shot.life, h });
       if (f.ground && !m.air) f.vx *= 0.9;
       else { f.vx += dir * c.airAccel * 0.5; f.vx = Math.max(-c.airSpeed, Math.min(c.airSpeed, f.vx)); }
       if (m.grav !== undefined && f.mt < m.f * 0.6) grav = c.grav * m.grav;
       if (m.pound) { grav = 0; maxFall = 24; }
-      if (pressed & IN.DODGE && f.hitIds.length && f.dodgeCd === 0) startDodge(f, inp, dir); // l'esquive annule un coup qui a touché
+      if (pressed & IN.DODGE && f.hitIds.length && f.dodgeCd === 0) { used(IN.DODGE); startDodge(f, inp, dir); } // l'esquive annule un coup qui a touché
       else if (f.mt >= m.f && !m.pound) { f.state = f.ground ? 'idle' : 'air'; f.move = null; }
     } else {
       // libre : courir, sauter, tomber vite, traverser une planche, esquiver, attaquer, ramasser ou lancer une arme
@@ -192,7 +198,8 @@
         f.state = 'air';
         if (inp & IN.D && f.vy > -2) { f.vy = Math.max(f.vy, c.fastFall * 0.8); maxFall = c.fastFall; }
       }
-      if (pressed & IN.JUMP) {
+      if (pressed & IN.JUMP && (f.ground || f.coyote > 0 || (f.wall && f.wallJumps > 0) || f.jumps > 0)) {
+        used(IN.JUMP);
         if (f.ground || f.coyote > 0) { f.vy = -c.jump; f.ground = false; f.coyote = 0; f.events?.push('jump'); }
         else if (f.wall && f.wallJumps > 0) { f.wallJumps--; f.vy = -c.airJump; f.vx = -f.wall * 7.5; f.facing = -f.wall; f.events?.push('walljump'); }
         else if (f.jumps > 0) { f.jumps--; f.vy = -c.airJump; if (dir) f.vx = dir * c.airSpeed; f.events?.push('airjump'); }
@@ -200,14 +207,15 @@
       if (!(inp & IN.JUMP) && f.vy < -4 && !f.ground) f.vy += c.grav * 0.9; // saut court si on relâche tôt
       if (f.ground && pressed & IN.D) { for (const p of A.plats) if (f.x > p.x0 && f.x < p.x1 && Math.abs(f.y - p.y) < 0.5) { f.drop = 12; f.ground = false; f.vy = 2; } }
       if (pressed & IN.PICK) {
+        used(IN.PICK);
         if (f.weapon) { // lancer son arme droit devant (ou vers le haut, vers le bas)
           const up = inp & IN.U ? -1 : inp & IN.D ? 1 : 0;
           f.spawn?.push({ kind: 'arme', weapon: f.weapon, x: f.x + f.facing * 20, y: f.y - 60, vx: f.facing * (up ? 9 : 19), vy: up * 15 - 3, life: 70, spin: 0, h: { dmg: 9, kb: 6, ks: 0.06, dx: 1, dy: -0.5 } });
           f.weapon = null; f.events?.push('throw');
         } else f.wantPick = true;
       }
-      if (pressed & IN.DODGE && f.dodgeCd === 0 && (f.ground || !f.airDodge)) startDodge(f, inp, dir);
-      else if (pressed & (IN.LIGHT | IN.HEAVY)) { const id = pickMove(f, inp, pressed & IN.HEAVY); if (id) startMove(f, id); }
+      if (pressed & IN.DODGE && f.dodgeCd === 0 && (f.ground || !f.airDodge)) { used(IN.DODGE); startDodge(f, inp, dir); }
+      else if (pressed & (IN.LIGHT | IN.HEAVY)) { const id = pickMove(f, inp, pressed & IN.HEAVY); used(IN.LIGHT | IN.HEAVY); if (id) startMove(f, id); }
     }
     if (f.state === 'dodge' && f.move === 'spot' && !f.ground) grav *= 0.4;
 
@@ -266,7 +274,7 @@
     b.vx = (dx / l) * v; b.vy = (dy / l) * v;
     b.state = 'hitstun'; b.hitstun = Math.round(Math.min(75, 8 + v * 2.3)); b.move = null; b.ground = false; b.lastHit = by; b.recovery = true;
     b.y -= 1;
-    const big = v > 19, lag = Math.round(3 + h.dmg * 0.45 + (h.ks >= 0.08 ? 2 : 0) + (big ? 12 : 0));
+    const big = v > 19, lag = Math.round(2 + h.dmg * 0.3 + (h.ks >= 0.08 ? 1 : 0) + (big ? 8 : 0));
     if (a) a.hitlag = lag;
     b.hitlag = lag;
     if (b.facing === Math.sign(dx)) b.facing = -b.facing;
@@ -362,7 +370,7 @@
   const alive = w => w.fighters.filter(f => f.state !== 'out');
 
   // Combattant envoyé sur le réseau (et rejoué tel quel par le navigateur)
-  const KEYS = ['x', 'y', 'vx', 'vy', 'facing', 'state', 'move', 'mt', 'ground', 'jumps', 'wallJumps', 'coyote', 'drop', 'dmg', 'stocks', 'hitstun', 'hitlag', 'invuln', 'dodgeCd', 'airDodge', 'recovery', 'prevIn', 'lag', 'dead', 'wall', 'kos', 'falls', 'weapon', 'ledgeT', 'ledgeCd', 'combo'];
+  const KEYS = ['x', 'y', 'vx', 'vy', 'facing', 'state', 'move', 'mt', 'ground', 'jumps', 'wallJumps', 'coyote', 'drop', 'dmg', 'stocks', 'hitstun', 'hitlag', 'invuln', 'dodgeCd', 'airDodge', 'recovery', 'prevIn', 'lag', 'dead', 'wall', 'kos', 'falls', 'weapon', 'ledgeT', 'ledgeCd', 'combo', 'buf', 'bufT'];
   const pack = f => { const o = { id: f.id, char: f.char, team: f.team }; for (const k of KEYS) o[k] = typeof f[k] === 'number' ? Math.round(f[k] * 100) / 100 : f[k]; o.hitIds = f.hitIds; return o; };
   const packItems = w => ({ items: w.items.map(i => [i.id, Math.round(i.x), Math.round(i.y), i.ground ? 1 : 0]), shots: w.shots.map(s => [s.id, s.kind, Math.round(s.x), Math.round(s.y), +s.vx.toFixed(1), +s.vy.toFixed(1), s.weapon ?? '', +(s.spin ?? 0).toFixed(2), s.owner]) });
 
