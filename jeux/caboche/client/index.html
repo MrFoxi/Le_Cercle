@@ -1,0 +1,87 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Caboche Cup</title>
+  <link rel="icon" href="favicon.svg" type="image/svg+xml">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@600;700;800&family=Nunito:wght@600;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+  <script src="/socket.io/socket.io.js"></script>
+  <script src="sim.js"></script>
+  <script src="/loupgarou/rules.js"></script>
+  <script type="importmap">{ "imports": { "three": "/vendor/three/build/three.module.js", "three/addons/": "/vendor/three/addons/" } }</script>
+  <script type="module" src="main.js"></script>
+  <script src="/shared/presence.js" defer></script>
+</head>
+<body>
+  <canvas id="view" aria-label="Le stade"></canvas>
+  <div id="labels" aria-hidden="true"></div>
+
+  <!-- Accueil -->
+  <section id="home" class="screen">
+    <a class="back" href="../">← Le Cercle</a>
+    <header class="hero">
+      <h1>Caboche <span>Cup</span></h1>
+      <p class="tagline">Du foot à un contre un avec des têtes énormes : tirs de mule, têtes plongeantes, tacles et super-pouvoirs, sous les projecteurs du stade.</p>
+    </header>
+    <form class="card" id="nameForm"><label>Ton nom de joueur <input name="pseudo" maxlength="20" required autocomplete="nickname" placeholder="Pseudo"></label></form>
+    <div class="card"><h2>Ton joueur</h2><div class="picks" id="homePicks"></div></div>
+    <div class="grid">
+      <div class="card"><h2>Tout de suite</h2><p class="hint">Un match contre un robot, sans attendre.</p><button class="primary big" id="soloBtn">⚽ Jouer</button></div>
+      <div class="card"><h2>Match rapide</h2><p class="hint">Contre un vrai joueur : rejoint un salon qui attend, sinon en ouvre un.</p><button class="primary big" id="quickBtn">⚡ Trouver un adversaire</button></div>
+      <form class="card" id="createForm"><h2>Créer un salon</h2>
+        <div class="chips"><label class="chip"><input type="radio" name="vis" value="public" checked> 🌍 Public</label><label class="chip"><input type="radio" name="vis" value="private"> 🔒 Privé</label></div>
+        <button class="primary">Créer</button></form>
+    </div>
+    <div class="grid two">
+      <form class="card" id="joinForm"><h2>Avec un code</h2><input name="code" maxlength="5" required autocomplete="off" class="code-input" placeholder="ABCDE" aria-label="Code du salon"><div class="row"><button class="primary" name="mode" value="play">Rejoindre</button><button class="ghost" name="mode" value="watch">👁</button></div></form>
+      <div class="card"><h2>Salons ouverts</h2><ul id="rooms" class="list"></ul></div>
+    </div>
+    <div class="card rules"><h2>Les commandes</h2>
+      <ul>
+        <li><kbd>Z</kbd><kbd>Q</kbd><kbd>S</kbd><kbd>D</kbd>, <kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> ou les flèches : courir · <kbd>Espace</kbd> : sauter (pour les têtes !).</li>
+        <li><b>Clic gauche</b> (ou <kbd>J</kbd>) : tirer, dans la direction où tu cours ; le tir file un peu vers le but adverse. En l'air : reprise de volée.</li>
+        <li><b>Clic droit</b> (ou <kbd>K</kbd> / <kbd>Maj</kbd>) : tacle glissé. Il fait tomber l'adversaire… mais rate-le et tu restes au sol un moment.</li>
+        <li><kbd>E</kbd> : super-pouvoir quand la jauge est pleine. Bouboule : 🔥 Super Tir (le prochain tir part en boulet de feu). Lila : 🎈 Tête Géante (une tête deux fois plus grosse).</li>
+        <li>La jauge se remplit avec le temps, et d'un coup quand on encaisse un but. Égalité à la fin : <b>but en or</b>.</li>
+        <li>Manette : stick, <b>A</b> sauter, <b>X</b>/RT tirer, <b>B</b>/LT tacler, <b>Y</b> pouvoir.</li>
+      </ul>
+    </div>
+  </section>
+
+  <!-- Salon -->
+  <section id="room" class="screen" hidden>
+    <button class="back" id="leave">← Quitter le salon</button>
+    <h1 class="title">Salon <span class="code" id="roomCode"></span> <button class="ghost small" id="copyLink">🔗 Copier le lien</button></h1>
+    <div class="card"><h2>Ton joueur</h2><div class="picks" id="picks"></div></div>
+    <div class="grid two">
+      <div class="card"><h2>Joueurs <small id="count"></small></h2><ul id="players" class="list"></ul><button class="ghost" id="addBot">🤖 Ajouter un robot</button><p class="hint" id="spect"></p></div>
+      <div class="card"><h2>Règles</h2>
+        <label>Matchs <select id="rounds"><option value="1">1 match</option><option value="3">3 matchs</option><option value="5">5 matchs</option></select></label>
+        <label>Durée <select id="timeSel"><option value="120">2 min</option><option value="180">3 min</option></select></label>
+        <label>Niveau du robot <select id="levelSel"><option value="1">🙂 Facile</option><option value="2">😤 Normal</option><option value="3">😈 Coriace</option></select></label>
+        <p class="hint" id="roomHint"></p>
+        <button class="primary big" id="startBtn">⚽ Coup d'envoi !</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- Match -->
+  <section id="hud" hidden>
+    <button class="ghost small quit" id="quitGame">Quitter</button>
+    <div class="sb"><span class="team l" id="sbL"></span><b id="sbScore">0 - 0</b><span class="team r" id="sbR"></span><em id="sbClock"></em></div>
+    <div class="gauge l" id="gL"><span></span></div>
+    <div class="gauge r" id="gR"><span></span></div>
+    <div class="cd" id="cd" hidden></div>
+    <div class="banner" id="banner" hidden></div>
+    <div class="flash" id="flash" hidden></div>
+    <ul id="feed" class="feed"></ul>
+    <p class="toast" id="toast" hidden></p>
+  </section>
+
+  <div id="board" class="overlay" hidden><div class="card end"><h2 id="boardTitle"></h2><ol id="boardList" class="ranking"></ol><p class="hint" id="boardHint"></p><div class="row center" id="boardButtons"></div></div></div>
+</body>
+</html>
