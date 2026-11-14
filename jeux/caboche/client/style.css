@@ -197,3 +197,4 @@ body.touch .comment { bottom: 150px; }
 
 @media (max-width: 760px) { .modes, .defis, .duo, .grid.three { grid-template-columns: 1fr 1fr; } .mode b { font-size: 1.05rem; } .mode i { font-size: 1.8rem; } }
 @media (max-width: 480px) { .modes, .defis { grid-template-columns: 1fr; } }
+.snd { position: absolute; top: 12px; right: 12px; }

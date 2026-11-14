@@ -32,8 +32,8 @@ const SFX = {
   post: () => { blip(1400, 1300, 0.6, 'triangle', 0.12); blip(2100, 2000, 0.4, 'sine', 0.06); },
   wall: () => noise(0.08, 2400, 0.12, 'highpass'),
   whistle: (n = 1) => { for (let k = 0; k < n; k++) blip(2600, 2500, 0.28, 'sine', 0.08, k * 0.36); },
-  goal: () => { noise(3, 900, 0.55, 'bandpass', 600); noise(2.5, 400, 0.4, 'lowpass', 200, 0.1); fanfare([523, 659, 784, 1046], 0.1); },
-  ooh: () => noise(1.2, 700, 0.25, 'bandpass', 450),
+  goal: () => { const v = crowdVol(); if (v) { noise(2.6, 520, 0.16 * v, 'lowpass', 300); noise(2.2, 900, 0.06 * v, 'bandpass', 600, 0.15); } fanfare([523, 659, 784, 1046], 0.1); },
+  ooh: () => { const v = crowdVol(); if (v) noise(1.1, 480, 0.1 * v, 'lowpass', 300); },
   boing: () => { blip(220, 660, 0.18, 'triangle', 0.12); blip(660, 330, 0.15, 'sine', 0.06, 0.12); },
   bump: () => { blip(120, 50, 0.15, 'sine', 0.25); noise(0.08, 400, 0.15, 'lowpass'); },
   perfect: () => { blip(880, 1760, 0.12, 'square', 0.07); blip(1320, 2640, 0.2, 'triangle', 0.06, 0.05); },
@@ -43,17 +43,24 @@ const SFX = {
   freeze: () => { noise(0.6, 4000, 0.2, 'highpass'); blip(2000, 600, 0.5, 'sine', 0.06); },
   coin: () => { blip(988, 988, 0.08, 'square', 0.05); blip(1319, 1319, 0.2, 'square', 0.05, 0.08); },
 };
-V.onThunder = () => noise(2.8, 140, 0.5, 'lowpass', 50);
-// rumeur du public en continu, qui monte quand le ballon approche d'un but
-let crowdNode = null;
+V.onThunder = () => noise(2.8, 140, 0.25 * crowdVol(), 'lowpass', 50);
+// Rumeur du public : un bruit « brun » (grave et doux, comme une foule au loin) en stéréo, qui ondule lentement et
+// monte quand le ballon approche d'un but. Réglable dans le match : fort, doux, coupé (gardé dans le navigateur).
+const CROWD_VOL = [['🔊', 1], ['🔉', 0.4], ['🔇', 0]];
+let crowdNode = null, crowdStep = Math.max(0, CROWD_VOL.findIndex(([, v]) => String(v) === store.get('caboche-crowd')));
+const crowdVol = () => CROWD_VOL[crowdStep][1];
 function crowd(level) {
   const ac = sound(); if (!ac) return;
   if (!crowdNode) {
-    const b = ac.createBuffer(1, ac.sampleRate * 2, ac.sampleRate), d = b.getChannelData(0); for (let k = 0; k < d.length; k++) d[k] = Math.random() * 2 - 1;
-    const s = ac.createBufferSource(), f = ac.createBiquadFilter(), g = ac.createGain(); s.buffer = b; s.loop = true; f.type = 'bandpass'; f.frequency.value = 600; f.Q.value = 0.6; g.gain.value = 0;
-    s.connect(f).connect(g).connect(ac.destination); s.start(); crowdNode = g;
+    const len = ac.sampleRate * 4, b = ac.createBuffer(2, len, ac.sampleRate);
+    for (let ch = 0; ch < 2; ch++) { const d = b.getChannelData(ch); let last = 0; for (let k = 0; k < len; k++) { last = (last + 0.02 * (Math.random() * 2 - 1)) / 1.02; d[k] = last * 3.5; } }
+    const s = ac.createBufferSource(), f = ac.createBiquadFilter(), sway = ac.createGain(), lfo = ac.createOscillator(), depth = ac.createGain(), g = ac.createGain();
+    s.buffer = b; s.loop = true; f.type = 'lowpass'; f.frequency.value = 650; f.Q.value = 0.4;
+    lfo.frequency.value = 0.11; depth.gain.value = 0.25; sway.gain.value = 0.8; lfo.connect(depth).connect(sway.gain); lfo.start(); // houle lente
+    g.gain.value = 0;
+    s.connect(f).connect(sway).connect(g).connect(ac.destination); s.start(); crowdNode = g;
   }
-  crowdNode.gain.setTargetAtTime(level, ac.currentTime, 0.4);
+  crowdNode.gain.setTargetAtTime(level * 0.28 * crowdVol(), ac.currentTime, 0.6);
 }
 
 /* ---------------- Profil : pièces, objets, statistiques (dans le navigateur) ---------------- */
@@ -372,6 +379,10 @@ function hud(list, clockMs, golden) {
   return clock;
 }
 for (const el of $$('[data-close]')) el.onclick = () => ($(`#${el.dataset.close}`).hidden = true);
+// bouton du bruit du public : fort, doux, coupé
+function renderSnd() { $('#sndBtn').textContent = `${CROWD_VOL[crowdStep][0]} Public`; }
+$('#sndBtn').onclick = () => { audio(); crowdStep = (crowdStep + 1) % CROWD_VOL.length; store.set('caboche-crowd', String(crowdVol())); renderSnd(); crowd(0.14); };
+renderSnd();
 // « Quitter » pendant une partie hors ligne : on revient à l'accueil (le salon en ligne garde son propre bouton)
 document.addEventListener('click', e => { if (L && e.target.closest('#quitGame')) { e.stopPropagation(); quitLocal(); } }, true);
 function quitLocal() { L = null; $('#board').hidden = true; show('home'); V.setTheme('nuit'); }
