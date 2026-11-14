@@ -94,3 +94,71 @@ function incoming(dist, press = true) {
   assert(ev.filter(e => e.t === 'reflect').length > 10, `des renvois (${ev.filter(e => e.t === 'reflect').length})`);
   assert(ev.some(e => e.t === 'kill'));
 }
+
+/* ---- Modes et arènes ---- */
+const near = (w, id, dx = 0.3) => { const t = w.players.find(p => p.id === id); w.ball = null; BD.spawn(w); Object.assign(w.ball, { x: t.x + dx, y: P.chest, z: t.z, dx: -1, dy: 0, dz: 0, v: 12, target: id, team: 1 - t.team, launch: 0 }); };
+
+// Chacun pour soi : pas de moitiés, dernier debout gagne.
+{
+  const w = BD.world([{ id: 'a', team: 0 }, { id: 'b', team: 1 }, { id: 'c', team: 2 }], { mode: 'chacun' });
+  assert.strictEqual(w.halves, false);
+  const [a] = w.players; a.x = 0; a.yaw = 0; run(w, { a: [IN.F, 0] }, 120); assert(a.x > 3, 'on traverse le milieu');
+  w.players[1].alive = false; near(w, 'c');
+  const { win } = run(w, {}, 60 * 3);
+  assert.strictEqual(win, 0, 'a, dernier debout, gagne');
+}
+
+// Patate chaude : au bout de 10 s, la boule explose sur sa cible.
+{
+  const w = BD.world([{ id: 'a', team: 0 }, { id: 'b', team: 1 }], { mode: 'patate' }); w.players[0].x = -15; w.players[1].x = 15;
+  BD.spawn(w); w.ball.target = 'a'; w.ball.fuse = 0.1; w.ball.launch = 0; w.ball.x = 0;
+  const { ev } = run(w, {}, 20);
+  assert(ev.some(e => e.t === 'kill' && e.how === 'patate'), 'explosion de la patate chaude');
+}
+
+// Ciel : qui sort des îles tombe et est éliminé ; cantine : la boule rebondit sur une table ; piscine : le bassin la freine.
+{
+  const w = BD.world([{ id: 'a', team: 0 }, { id: 'b', team: 1 }], { arena: 'ciel' }), [a] = w.players;
+  Object.assign(a, { x: -5.5, z: 6, yaw: 0 }); // entre deux îles
+  const { ev } = run(w, {}, 120);
+  assert(!a.alive && ev.some(e => e.t === 'kill' && e.how === 'chute'), 'tombé dans le vide');
+  const c = BD.world([{ id: 'a', team: 0 }, { id: 'b', team: 1 }], { arena: 'cantine' }); c.players[0].x = -16; c.players[1].x = 16;
+  BD.spawn(c); Object.assign(c.ball, { x: -8, y: 0.6, z: -5, dx: -1, dy: 0, dz: 0, v: 15, launch: 0, target: 'a' });
+  const out = run(c, {}, 20);
+  assert(out.ev.some(e => e.t === 'thud'), 'la table arrête la boule');
+  const pz = BD.world([{ id: 'a', team: 0 }, { id: 'b', team: 1 }], { arena: 'piscine' }); pz.players[0].x = -16; pz.players[1].x = 16;
+  BD.spawn(pz); Object.assign(pz.ball, { x: 3.5, y: 0.6, z: 0, dx: -1, dy: 0, dz: 0, v: 30, launch: 0, target: 'a', team: 1 });
+  run(pz, {}, 20);
+  assert(pz.ball.v < 30, `le bassin freine la boule (${pz.ball.v.toFixed(1)})`);
+}
+
+// Visée automatique (tactile) : le renvoi part vers l'adversaire le plus proche.
+{
+  const w = BD.world([{ id: 'a', team: 0 }, { id: 'b', team: 1 }, { id: 'c', team: 1 }]), [a, b, c] = w.players;
+  a.z = 0; b.x = 4; b.z = 8; c.x = 15; c.z = -1; a.yaw = Math.atan2(-1, c.x - a.x);
+  assert.strictEqual(BD.aimTarget(w, a).id, 'c'); assert.strictEqual(BD.aimTarget(w, a, true).id, 'b');
+}
+
+// Salon : entraînement (personne n'est éliminé), survie (la vague augmente), coupe (demi-finales puis finale), emotes.
+function play(mode, frames, set = {}) {
+  let now = 0, seed = 5; const rng = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
+  const r = new Room('M' + mode.slice(0, 4), rng, false, () => now); r.addPlayer('Moi'); r.configure('Moi', 'mode', mode); for (const [k, v] of Object.entries(set)) r.configure('Moi', k, v);
+  r.start('Moi'); r.stop();
+  const ev = []; const o = r.stepOnce.bind(r); r.stepOnce = () => { const n = r.events.length; o(); ev.push(...r.events.slice(n)); };
+  for (let k = 0; k < frames && r.phase !== 'over'; k++) { now += 1000 / 60; r.timeout(); if (r.phase !== 'over') r.tick(); }
+  r.stop();
+  return { r, ev };
+}
+{
+  const t = play('entrainement', 60 * 40);
+  assert(t.r.phase === 'play' && t.r.world.players.every(p => p.alive), 'entraînement : personne n’est éliminé');
+  assert(t.ev.some(e => e.t === 'miss'), 'un raté remet l’échange à zéro');
+  const s = play('survie', 60 * 60 * 6);
+  assert.strictEqual(s.r.phase, 'over', 'la survie finit quand on perd une manche');
+  const c = play('coupe', 60 * 60 * 30, { teamSize: 1 });
+  assert.strictEqual(c.r.phase, 'over'); assert.strictEqual(c.r.cup.matches.length, 3, 'deux demi-finales et une finale');
+  assert(c.r.cup.champion !== undefined && c.r.cup.winners.length === 3);
+  const e = new Room('EMOTE', Math.random, false, () => 0); e.addPlayer('Moi'); e.start('Moi'); e.stop();
+  e.emote('Moi', 'danse'); e.emote('Moi', 'nimporte'); e.emote('Moi', 'bravo'); // la deuxième est refusée, la troisième arrive trop tôt
+  assert.deepStrictEqual(e.events.filter(x => x.t === 'emote').map(x => x.e), ['danse']);
+}

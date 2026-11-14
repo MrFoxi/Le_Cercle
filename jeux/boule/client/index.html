@@ -22,16 +22,21 @@
 
   <!-- Accueil -->
   <section id="home" class="screen">
-    <a class="back" href="../">← Le Cercle</a>
+    <div class="topbar"><a class="back" href="../">← Le Cercle</a><span class="coins pill"></span><button class="ghost small" id="shopBtn">🛒 Boutique</button><button class="ghost small" id="statsBtn">📊 Stats</button><button class="ghost small" id="boardBtn">🌍 Classement</button><button class="ghost small" id="setBtn">⚙️</button></div>
     <header class="hero">
       <h1>Boule <span>de Pute</span></h1>
       <p class="tagline">RENVOIE-LUI DANS LA GUEULE. Une boule d'énergie à tête chercheuse fonce sur toi : renvoie-la au dernier moment, elle repart plus vite vers l'équipe d'en face. Dernière équipe debout gagne la manche.</p>
     </header>
     <form class="card" id="nameForm"><label>Ton pseudo <input name="pseudo" maxlength="20" required autocomplete="nickname" placeholder="Pseudo"></label></form>
-    <div class="card"><h2>Ton personnage</h2><div class="picks" id="homePicks"></div></div>
+    <div class="card"><h2>Ton personnage <small>les 🔒 se débloquent avec des pièces</small></h2><div class="picks" id="homePicks"></div></div>
+    <div class="modes">
+      <button class="mode m1" id="soloBtn"><i>⚔️</i><b>Équipes</b><small>2 contre 2 avec des robots</small></button>
+      <button class="mode m2" id="chacunBtn"><i>🤪</i><b>Chacun pour soi</b><small>Contre 3 robots, tous contre tous</small></button>
+      <button class="mode m3" id="survieBtn"><i>💀</i><b>Survie</b><small>Des vagues de robots · classement mondial</small></button>
+      <button class="mode m4" id="trainBtn"><i>🎯</i><b>Entraînement</b><small>Face à un lanceur qui renvoie tout</small></button>
+    </div>
     <div class="grid">
-      <div class="card"><h2>Tout de suite</h2><p class="hint">2 contre 2 avec des robots, sans attendre.</p><button class="primary big" id="soloBtn">💥 Jouer</button></div>
-      <form class="card" id="createForm"><h2>Créer une partie</h2>
+            <form class="card" id="createForm"><h2>Créer une partie</h2>
         <div class="chips"><label class="chip"><input type="radio" name="vis" value="public" checked> 🌍 Publique</label><label class="chip"><input type="radio" name="vis" value="private"> 🔒 Privée</label></div>
         <button class="primary">Créer</button></form>
       <form class="card" id="joinForm"><h2>Rejoindre</h2><input name="code" maxlength="5" required autocomplete="off" class="code-input" placeholder="ABCDE" aria-label="Code de la partie"><div class="row"><button class="primary" name="mode" value="play">Rejoindre</button><button class="ghost" name="mode" value="watch">👁</button></div></form>
@@ -39,11 +44,13 @@
     <div class="card"><h2>Parties ouvertes</h2><ul id="rooms" class="list"></ul></div>
     <div class="card rules"><h2>Comment on joue</h2>
       <ul>
+        <li><b>Patate chaude</b>, <b>Coupe des amis</b> (tournoi à 4 équipes) et six arènes se choisissent dans une partie créée.</li>
         <li><kbd>Z</kbd><kbd>Q</kbd><kbd>S</kbd><kbd>D</kbd> (ou <kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd>) : bouger · la <b>souris</b> tourne la caméra (clique dans l'arène pour la capturer, <kbd>Échap</kbd> pour la relâcher ; <kbd>←</kbd> <kbd>→</kbd> marchent aussi) · <kbd>Espace</kbd> : sauter.</li>
         <li><b>Clic gauche</b> (ou <kbd>F</kbd>, <kbd>E</kbd>) : impulsion de renvoi, juste devant toi et pendant un court instant. Si la boule y entre, elle repart vers l'adversaire que tu regardes, plus vite.</li>
         <li>Renvoie-la <b>au tout dernier moment</b> (tout près de toi) : <b>renvoi parfait</b>, encore plus rapide. Trop tôt, et tu restes sans défense le temps de recharger.</li>
         <li>Quand elle te vise : anneau rouge à tes pieds, bip qui s'accélère, bords de l'écran qui rougissent. Si elle te touche, tu es pulvérisé jusqu'à la manche suivante.</li>
-        <li>Chaque renvoi l'accélère, et elle accélère aussi toute seule : à la fin, ça va très, très vite.</li>
+        <li>Chaque renvoi l'accélère, et elle accélère aussi toute seule : à la fin, ça va très, très vite. La <b>mire jaune</b> montre l'adversaire qui la recevra ; le <b>cercle</b> autour de la boule se resserre : quand il devient vert, c'est le moment.</li>
+        <li><kbd>G</kbd> (ou <kbd>T</kbd>) maintenu : roue des emotes ; <kbd>1</kbd> à <kbd>4</kbd> : emote directe. Même éliminé, tu peux te moquer.</li>
       </ul>
     </div>
   </section>
@@ -56,6 +63,9 @@
     <div class="grid two">
       <div class="card"><h2>Joueurs <small id="count"></small></h2><ul id="players" class="list"></ul><button class="ghost" id="addBot">🤖 Ajouter un robot</button><p class="hint">Les équipes alternent dans l'ordre de la liste ; les robots complètent.</p><p class="hint" id="spect"></p></div>
       <div class="card"><h2>Règles</h2>
+        <label>Mode <select id="modeSel"></select></label>
+        <p class="hint" id="modeHint"></p>
+        <label>Arène <select id="arenaSel"></select></label>
         <label>Équipes <select id="teamSel"><option value="1">1 contre 1</option><option value="2">2 contre 2</option><option value="3">3 contre 3</option><option value="4">4 contre 4</option></select></label>
         <label>Manches <select id="rounds"><option value="3">Au meilleur des 3</option><option value="5">Au meilleur des 5</option><option value="7">Au meilleur des 7</option></select></label>
         <label>Robots <select id="levelSel"><option value="1">🙂 Mous</option><option value="2">😤 Vifs</option><option value="3">😈 Réflexes de chat</option></select></label>
@@ -68,9 +78,18 @@
   <!-- Partie -->
   <section id="hud" hidden>
     <button class="ghost small quit" id="quitGame">Quitter</button>
-    <div class="sb"><span class="team l">MANDARINES <b id="sL">0</b></span><em id="need"></em><span class="team r"><b id="sR">0</b> LAGONS</span>
+    <button class="ghost small snd" id="setBtn2" title="Réglages">⚙️</button>
+    <div class="sb" id="sb"><span class="team l">MANDARINES <b id="sL">0</b></span><em id="need"></em><span class="team r"><b id="sR">0</b> LAGONS</span>
       <div class="alive l" id="alive0"></div><div class="alive r" id="alive1"></div></div>
     <div class="speed" id="speed">—</div>
+    <div class="fuse" id="fuse" hidden></div>
+    <div class="rally" id="rally" hidden><b></b></div>
+    <div class="comment" id="comment" hidden><i>🎙️</i><span></span></div>
+    <ol class="awards" id="awards" hidden></ol>
+    <div class="replay" id="replay" hidden><i></i> REPLAY · VU DE LA BOULE</div>
+    <div id="wheel" hidden><button data-e="danse" style="--a:0">🕺<small>Danse</small></button><button data-e="moque" style="--a:1">😜<small>Moquerie</small></button><button data-e="pleure" style="--a:2">😭<small>Pleurs</small></button><button data-e="bravo" style="--a:3">👏<small>Bravo</small></button></div>
+    <button class="ghost small emo-btn" id="emoteBtn" title="Emotes (G)">😜</button>
+    <div id="touch" aria-hidden="true"><div id="lookZone"></div><div id="stick"><i></i></div><div class="tb"><button data-bit="JUMP">⤒</button><button data-bit="HIT" class="big">💥</button></div></div>
     <div class="cross"><i id="cool"></i></div>
     <div class="warn">⚠️ ELLE ARRIVE !</div>
     <div class="cd" id="cd" hidden></div>
@@ -81,5 +100,6 @@
   </section>
 
   <div id="board" class="overlay" hidden><div class="card end"><h2 id="boardTitle"></h2><ol id="boardList" class="ranking"></ol><p class="hint" id="boardHint"></p><div class="row center" id="boardButtons"></div></div></div>
+  <div id="panel" class="overlay" hidden><div class="card sheet"><button class="ghost small close" data-close="panel" aria-label="Fermer">✕</button><h2 id="panelTitle"></h2><div id="panelBody"></div></div></div>
 </body>
 </html>
