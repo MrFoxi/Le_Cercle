@@ -9,6 +9,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@600;700;800&family=Nunito:wght@400;700;800;900&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="style.css">
+  <script type="importmap">{ "imports": { "three": "/vendor/three/build/three.module.js", "three/addons/": "/vendor/three/addons/" } }</script>
   <script src="/socket.io/socket.io.js"></script>
   <script src="physics.js"></script>
   <script src="holes.js"></script>
@@ -17,15 +18,15 @@
   <script src="/shared/presence.js" defer></script>
 </head>
 <body>
-  <div class="sky" aria-hidden="true"><i></i><i></i><i></i></div>
+  <div class="sky" aria-hidden="true"><i></i><i></i><i></i><i></i></div>
 
   <!-- Pseudo -->
   <section id="name" class="screen">
     <a class="back" href="../">← Le Cercle</a>
     <header class="hero">
-      <canvas class="hero-canvas" width="520" height="220" aria-hidden="true"></canvas>
+      <div class="hero-stage"><canvas class="hero-canvas" width="680" height="330" aria-hidden="true"></canvas></div>
       <h1>Mini-golf</h1>
-      <p class="tagline">10 trous fous · de 1 à 8 joueurs · robots, paris, chaos</p>
+      <p class="tagline">12 trous suspendus dans les nuages · de 1 à 8 joueurs · robots, paris, chaos</p>
     </header>
     <form class="card narrow" id="nameForm">
       <h2>Choisis ton pseudo</h2>
@@ -38,7 +39,7 @@
   <section id="home" class="screen wide" hidden>
     <a class="back" href="../">← Le Cercle</a>
     <header class="hero compact">
-      <canvas class="hero-canvas small" width="360" height="150" aria-hidden="true"></canvas>
+      <div class="hero-stage small"><canvas class="hero-canvas" width="420" height="210" aria-hidden="true"></canvas></div>
       <div>
         <h1>Mini-golf</h1>
         <p class="whoami">Salut <b id="meName"></b> <span id="meTitle"></span> · <a href="#" id="changeName">changer de pseudo</a></p>
@@ -139,7 +140,7 @@
       <div class="course-wrap">
         <p class="status" id="status" aria-live="polite"></p>
         <div class="canvas-box">
-          <canvas id="course" aria-label="Parcours de mini-golf vu du dessus"></canvas>
+          <canvas id="course" aria-label="Parcours de mini-golf en 3D"></canvas>
           <div class="banner" id="banner" hidden></div>
           <div class="replay-tag" id="replayTag" hidden>🎬 Ralenti</div>
           <div class="overlay" id="overlay" hidden></div>

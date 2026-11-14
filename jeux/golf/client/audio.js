@@ -100,6 +100,8 @@ const MOODS = {
   ice: { bpm: 80, scale: [0, 2, 4, 7, 9], root: 69, chords: [[0, 4, 7], [-3, 0, 4], [5, 9, 12], [7, 11, 14]], wave: 'sine', amb: 'wind' },
   fair: { bpm: 132, scale: [0, 2, 4, 5, 7, 9], root: 65, chords: [[0, 4, 7], [7, 11, 14], [0, 4, 7], [5, 9, 12]], wave: 'square', amb: null },
   sea: { bpm: 78, scale: [0, 2, 4, 7, 9], root: 58, chords: [[0, 4, 7, 11], [5, 9, 12, 16], [2, 5, 9, 12], [7, 11, 14, 17]], wave: 'sine', amb: 'bubbles' },
+  factory: { bpm: 112, scale: [0, 2, 3, 7, 9], root: 55, chords: [[0, 3, 7], [5, 8, 12], [7, 10, 14], [3, 7, 10]], wave: 'square', amb: 'hum' },
+  desert: { bpm: 88, scale: [0, 1, 4, 5, 7, 8, 10], root: 62, chords: [[0, 4, 7], [1, 5, 8], [0, 4, 7], [-2, 1, 5]], wave: 'triangle', amb: 'wind' },
   jungle: { bpm: 100, scale: [0, 3, 5, 7, 10], root: 57, chords: [[0, 3, 7], [5, 8, 12], [3, 7, 10], [7, 10, 14]], wave: 'triangle', amb: 'birds' },
 };
 const midi = n => 440 * 2 ** ((n - 69) / 12);

@@ -82,7 +82,7 @@ const hole = id => HO.resolve(id);
 
 // Parcours et trou du jour
 {
-  assert.strictEqual(HO.COURSES.grandtour.holes().length, 10);
+  assert.strictEqual(HO.COURSES.grandtour.holes().length, 12);
   assert.strictEqual(HO.COURSES.marathon.holes(Math.random).length, 18);
   assert.ok(HO.COURSES.aleatoire.holes(Math.random).every(id => hole(id)));
   assert.strictEqual(HO.dailyId('2026-10-31'), HO.dailyId('2026-10-31'));

@@ -1,4 +1,4 @@
-// Mini-golf : les 10 trous, leurs versions miroir, les parcours, le trou du jour et les modificateurs du mode chaos.
+// Mini-golf : les 12 trous, leurs versions miroir, les parcours, le trou du jour et les modificateurs du mode chaos.
 // Partagé par le serveur et le navigateur (window.GolfHoles ou require()). Ajouter un trou = ajouter un objet à HOLES
 // (jeux/golf/golf.test.js vérifie qu'un joueur automatique arrive à le terminer, ainsi que sa version miroir).
 (function (root) {
@@ -111,6 +111,27 @@
       bumpers: [{ x: 220, y: 250, r: 18, palm: true }, { x: 650, y: 380, r: 18, palm: true }],
       deco: [{ t: 'leaves' }],
     },
+    usine: {
+      name: 'L’Usine à bulles', theme: 'factory', par: 4, tee: [110, 480], cup: [880, 470],
+      hint: 'Le tapis roulant te remonte, la barrière coulisse, et le tuyau vert est un sacré raccourci.',
+      walls: [box(0, 0, W, H), [260, 0, 260, 370], [530, H, 530, 230]],
+      gates: [{ x1: 530, y1: 30, x2: 530, y2: 110, dx: 0, dy: 1, amp: 50, period: 3.2 }],
+      zones: [{ t: 'belt', r: [300, 250, 190, 330], dir: [0, -1], f: 220 }, { t: 'fan', r: [600, 30, 130, 300], dir: [0, 1], f: 260, period: 4, on: 2 }, { t: 'water', c: [690, 520, 45] }],
+      pipes: [{ from: [150, 140], to: [680, 90], dir: [0, 1], r: 16 }],
+      bumpers: [{ x: 400, y: 120, r: 18, bolt: true }, { x: 830, y: 300, r: 18, bolt: true }, { x: 140, y: 300, r: 16, bolt: true }],
+      deco: [],
+    },
+    oasis: {
+      name: 'L’Oasis', theme: 'desert', par: 3, tee: [110, 300], cup: [905, 300],
+      hint: 'Saute le muret avec la rampe des dunes, ou contourne-le en évitant les bassins de l’oasis.',
+      walls: [box(0, 0, W, H), { pts: [640, 130, 640, 470], low: true }],
+      zones: [
+        { t: 'water', c: [400, 125, 68] }, { t: 'water', c: [410, 480, 58] }, { t: 'ramp', r: [520, 250, 80, 100], dir: [1, 0] },
+        { t: 'sand', c: [770, 160, 58] }, { t: 'sand', c: [770, 445, 58] }, { t: 'slope', r: [200, 230, 110, 140], dir: [1, 0], f: 110 },
+      ],
+      bumpers: [{ x: 300, y: 175, r: 16, palm: true }, { x: 310, y: 430, r: 16, palm: true }, { x: 800, y: 300, r: 16, cactus: true }, { x: 900, y: 215, r: 14, cactus: true }, { x: 900, y: 385, r: 14, cactus: true }],
+      deco: [],
+    },
   };
   const ORDER = Object.keys(HOLES);
 
@@ -155,11 +176,11 @@
 
   const COURSES = {
     decouverte: { name: 'Découverte', desc: 'Les 5 trous d’origine, du moulin aux bonbons', holes: () => ORDER.slice(0, 5) },
-    mondes: { name: 'Nouveaux mondes', desc: 'Manoir hanté, banquise, fête foraine, fond marin, jungle', holes: () => ORDER.slice(5) },
-    grandtour: { name: 'Grand Tour', desc: 'Les 10 trous à la suite', holes: () => [...ORDER] },
+    mondes: { name: 'Nouveaux mondes', desc: 'Manoir hanté, banquise, fête foraine, fond marin, jungle, usine, oasis', holes: () => ORDER.slice(5) },
+    grandtour: { name: 'Grand Tour', desc: 'Les 12 trous à la suite', holes: () => [...ORDER] },
     express: { name: 'Express', desc: '3 trous au hasard, pour une partie rapide', holes: rng => shuffle([...ORDER], rng).slice(0, 3) },
     aleatoire: { name: 'Aléatoire', desc: '9 trous au hasard, parfois retournés en miroir', holes: rng => shuffle([...ORDER], rng).slice(0, 9).map(id => id + MIRRORS[Math.floor(rng() * 4)]) },
-    marathon: { name: 'Marathon', desc: '18 trous : les 10, puis 8 en miroir', holes: rng => [...ORDER, ...shuffle([...ORDER], rng).slice(0, 8).map(id => id + MIRRORS[1 + Math.floor(rng() * 3)])] },
+    marathon: { name: 'Marathon', desc: '18 trous : les 12, puis 6 en miroir', holes: rng => [...ORDER, ...shuffle([...ORDER], rng).slice(0, 6).map(id => id + MIRRORS[1 + Math.floor(rng() * 3)])] },
     jour: { name: 'Trou du jour', desc: 'Le même trou pour tout le monde aujourd’hui, avec son classement', holes: (rng, day) => [dailyId(day)] },
   };
 

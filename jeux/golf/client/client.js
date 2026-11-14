@@ -2,7 +2,8 @@
 // serveur rejouées au même moment chez tout le monde, effets, caméra, ralentis), paris, émotes, chat, succès.
 /* global io, Golf, GolfHoles, GolfLooks */
 import { swapButton } from '/shared/party.js';
-import { createRenderer, drawBall, drawClub } from './render.js';
+import { drawBall, drawClub } from './render.js';
+import { createRenderer } from './world.js';
 import { startAudio, setAudio, settings as audioSettings, sfx, setMood } from './audio.js';
 import { loadProfile, saveProfile, unlocked, onHole, onGame, onEvent } from './profile.js';
 
@@ -142,17 +143,34 @@ function miniGreen(c, w, h) {
   c.strokeStyle = '#9a6431'; c.lineWidth = 12; c.strokeRect(6, 6, w - 12, h - 12);
   c.strokeStyle = '#e7b276'; c.lineWidth = 2; c.strokeRect(2, 2, w - 4, h - 4);
 }
+// Accueil : une île du parcours en 3D qui flotte au-dessus de la page ; ta balle y joue un vrai tir, en boucle
+const SHOWCASE = ['moulin', 'ile', 'bonbons', 'fete', 'oasis', 'usine', 'jungle', 'banquise'];
+const heroes = new Map();
+function demoShot(h) {
+  let best = null;
+  const a0 = Math.atan2(h.cup[1] - h.tee[1], h.cup[0] - h.tee[0]);
+  for (let i = -6; i <= 6; i++) for (const power of [0.45, 0.6, 0.75, 0.9]) {
+    const s = Golf.shot1(h, h.tee[0], h.tee[1], a0 + i * 0.12, power, 0);
+    const d = s.result === 'holed' ? -1 : s.result === 'water' ? 1e9 : Math.hypot(s.x - h.cup[0], s.y - h.cup[1]);
+    if (!best || d < best.d) best = { d, path: s.path, holed: s.result === 'holed' };
+  }
+  return best;
+}
 function drawHero(cv, t) {
-  const c = cv.getContext('2d'), w = cv.width, h = cv.height, cup = [w * 0.78, h * 0.5];
-  miniGreen(c, w, h);
-  c.fillStyle = 'rgba(255,255,255,.5)'; c.beginPath(); c.arc(cup[0], cup[1], 16, 0, 7); c.fill();
-  c.fillStyle = '#0d1510'; c.beginPath(); c.arc(cup[0], cup[1], 11, 0, 7); c.fill();
-  const cycle = t % 3.2, k = Math.min(1, cycle / 2.2), e = 1 - (1 - k) ** 3;
-  const sx = w * 0.15, sy = h * 0.68, x = sx + (cup[0] - sx) * e, y = sy + (cup[1] - sy) * e + Math.sin(e * Math.PI) * -h * 0.18;
-  if (k < 1) drawBall(c, x, y, 9, profile.look, t, [x, y]);
-  else if (cycle < 2.6) { c.font = '900 26px "Baloo 2", sans-serif'; c.fillStyle = '#fff'; c.textAlign = 'center'; c.fillText('⛳ Trou en un !', w / 2, 40); }
-  c.strokeStyle = '#eee'; c.lineWidth = 2.5; c.beginPath(); c.moveTo(cup[0], cup[1]); c.lineTo(cup[0] + 4, cup[1] - 52); c.stroke();
-  c.fillStyle = '#ff4d5a'; c.beginPath(); c.moveTo(cup[0] + 4, cup[1] - 52); c.quadraticCurveTo(cup[0] + 20, cup[1] - 50 + Math.sin(t * 4) * 3, cup[0] + 34, cup[1] - 44); c.lineTo(cup[0] + 4, cup[1] - 34); c.fill();
+  let h = heroes.get(cv);
+  if (!h) heroes.set(cv, (h = { r: createRenderer(cv, { transparent: true }), k: -1, last: t, roll: [0, 0] }));
+  const dt = Math.min(0.05, t - h.last), k = Math.floor(t / 9) % SHOWCASE.length;
+  h.last = t;
+  if (k !== h.k) { h.k = k; h.hole = GolfHoles.resolve(SHOWCASE[k]); h.shot = demoShot(h.hole); h.start = t; h.roll = [0, 0]; h.prev = null; h.r.setHole(h.hole); h.r.overview(); h.r.snap(); }
+  const e = t - h.start - 1.2, path = h.shot.path, i = Math.max(0, Math.min(path.length - 1, Math.floor(e * FPS)));
+  const [x, y, z = 0] = e < 0 ? h.hole.tee : path[i], moving = e >= 0 && i < path.length - 1;
+  if (h.prev && moving) { h.roll[0] += x - h.prev[0]; h.roll[1] += y - h.prev[1]; }
+  h.prev = [x, y];
+  h.r.trail('demo', x, y, z, profile.look, moving);
+  const hidden = !moving && e > 0 && h.shot.holed;
+  if (hidden && !h.sunk) { h.sunk = true; h.r.sink(x, y, profile.look.sink, hexOf(profile.look.color)); }
+  if (e < 0) h.sunk = false;
+  h.r.frame({ t, dt, open: [], balls: hidden ? [] : [{ name: 'demo', x, y, z, look: profile.look, roll: h.roll, ring: e < 0 }], aim: null, preview: null, ballsNear: () => false });
 }
 const lockerTrail = [];
 function drawLocker(cv, t) {
@@ -291,6 +309,8 @@ const renderer = createRenderer($('#course'));
 const anims = new Map(); // tir en cours de lecture -> { shot, fired }
 const ballPos = new Map(), rolls = new Map();
 let hole = null, holeKey = '', overlayKey = '', lastNotice = null, lastBet = null, sent = null, overKey = '', introUntil = 0, bestShot = null, replay = null;
+// ?debug : afficher n'importe quel trou (captures automatiques)
+if (params.has('debug')) window.__golfHole = id => { hole = GolfHoles.resolve(id); renderer.setHole(hole); renderer.overview(); renderer.snap(); introUntil = 0; };
 let mine = null; // ce que je retiens du trou en cours pour mes succès
 let gameMem = { streak: 0, waters: 0 };
 socket.on('state', s => {
