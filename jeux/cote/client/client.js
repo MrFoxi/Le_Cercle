@@ -1,5 +1,6 @@
 // Interface du Demi-Cercle : écrans, thèmes, synchronisation avec le serveur, révélation animée.
 /* global io */
+import { swapButton } from '/shared/party.js';
 import { createDial } from './dial.js';
 
 const socket = io('/cote');
@@ -231,6 +232,7 @@ function renderWait(s) {
   const ready = s.players.length === 2 && s.players.every(p => p.connected);
   $('#waitWatchers').hidden = !s.spectators.length;
   $('#waitWatchers').textContent = `👁 Spectateurs : ${s.spectators.join(', ')}`;
+  swapButton(socket, $('#waitWatchers'), s);
   const b = $('#startBtn');
   b.hidden = s.spectator;
   b.disabled = !(ready && s.me === s.host && s.themes.length);

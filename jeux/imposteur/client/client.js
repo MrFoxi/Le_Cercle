@@ -1,5 +1,6 @@
 // Interface de L'Imposteur : pseudo, salons, réglages, cartes secrètes, indices, vote, révélations, fin de manche.
 /* global io */
+import { swapButton } from '/shared/party.js';
 import { ROLE, esc, card, revealCard, tallyHtml, overHtml, cluesHtml } from './ui.js';
 
 const socket = io('/imposteur');
@@ -162,6 +163,7 @@ function renderLobby(s) {
     + (s.players.length < s.min ? `<li class="empty"><span class="dot wait"></span>Encore ${s.min - s.players.length} joueur${s.min - s.players.length > 1 ? 's' : ''} minimum…</li>` : '');
   $('#waitWatchers').hidden = !s.spectators.length;
   $('#waitWatchers').textContent = `👁 Spectateurs : ${s.spectators.join(', ')}`;
+  swapButton(socket, $('#waitWatchers'), s);
   const ready = s.players.length >= s.min && s.players.every(p => p.connected), b = $('#startBtn'), host = s.me === s.host;
   b.hidden = s.spectator;
   b.disabled = !(ready && host);

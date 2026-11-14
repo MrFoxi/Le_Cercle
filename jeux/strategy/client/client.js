@@ -1,5 +1,6 @@
 // Strategy Club : le club (choix du jeu), l'entrée d'un jeu, le salon, la partie, la fin de partie.
 /* global io */
+import { swapButton } from '/shared/party.js';
 import { createBoard, demoState, kanji, esc } from './boards.js';
 
 const G = window.StrategyGames;
@@ -344,6 +345,7 @@ function renderLobby(v) {
   $('#roomCode').textContent = v.code;
   $('#privacyLine').textContent = v.private ? '🔒 Salon privé : partage le code ou le lien.' : '🌍 Salon public : visible dans la liste du club.';
   $('#watchers').textContent = v.spectators.length ? `👁 Spectateurs : ${v.spectators.join(', ')}` : 'Aucun spectateur.';
+  swapButton(socket, $('#watchers'), v);
 }
 $('#lobby').addEventListener('click', e => {
   const t = e.target;

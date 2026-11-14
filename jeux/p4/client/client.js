@@ -1,3 +1,4 @@
+import { swapButton } from '/shared/party.js';
 // Interface du Puissance 4 : pseudo, salons, grille animée, revanche, sons.
 /* global io */
 const socket = io('/p4');
@@ -187,6 +188,7 @@ function renderWait(s) {
     : '<li class="empty"><span class="dot wait"></span>En attente d’un adversaire…</li>').join('');
   $('#waitWatchers').hidden = !s.spectators.length;
   $('#waitWatchers').textContent = `👁 Spectateurs : ${s.spectators.join(', ')}`;
+  swapButton(socket, $('#waitWatchers'), s);
   const ready = s.players.length === 2 && s.players.every(p => p.connected), b = $('#startBtn');
   b.hidden = s.spectator;
   b.disabled = !(ready && s.me === s.host);

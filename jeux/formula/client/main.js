@@ -1,4 +1,5 @@
 // Top Formula : menus, garage, modes de jeu (course rapide, contre-la-montre, multijoueur), boucle de course, HUD, résultats.
+import { swapButton } from '/shared/party.js';
 import * as THREE from 'three';
 import { TRACKS, trackById, buildTrack, gridSlot, flyingSlot, locate, locateAll } from './tracks.js';
 import { createCar, stepCar, collideCars, aero, KMH, CAR, env } from './physics.js';
@@ -680,6 +681,7 @@ function renderRoom() {
   $('#roomCode').textContent = room.code;
   $('#roomPlayers').innerHTML = room.players.map(p => `<li class="${p.connected ? '' : 'off'}"><i class="dot" style="background:${p.look?.color ?? '#888'}"></i><span>${esc(p.name)}${p.name === room.host ? ' 👑' : ''}${p.wins ? ` · 🏆 ${p.wins}` : ''}</span>${p.name === room.host ? '' : p.ready ? '<b class="ok">PRÊT</b>' : '<em class="hint">en attente</em>'}</li>`).join('');
   $('#roomSpect').textContent = room.spectators.length ? `👁 Spectateurs : ${room.spectators.join(', ')}` : '';
+  swapButton(socket, $('#roomSpect'), room);
   $('#rLaps').value = room.settings.laps; $('#rLaps').disabled = !host;
   renderCond();
   $('#readyBtn').hidden = host || !meP; $('#readyBtn').textContent = meP?.ready ? '✓ Prêt (annuler)' : 'Je suis prêt';

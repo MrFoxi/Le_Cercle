@@ -1,3 +1,4 @@
+import { swapButton } from '/shared/party.js';
 // Interface de la Bataille navale : salons, déploiement de la flotte, poste de commandement, tirs animés, capacités, fin de partie.
 /* global io */
 const socket = io('/bataille');
@@ -248,6 +249,7 @@ function renderLobby(s) {
     : '<li class="empty"><span class="dot wait"></span>En attente d’un adversaire…</li>').join('');
   $('#waitWatchers').hidden = !s.spectators.length;
   $('#waitWatchers').textContent = `👁 Spectateurs : ${s.spectators.join(', ')}`;
+  swapButton(socket, $('#waitWatchers'), s);
   const host = s.me === s.host, ready = s.players.length === 2 && s.players.every(p => p.connected), b = $('#startBtn');
   b.hidden = s.spectator;
   b.disabled = !(ready && host);

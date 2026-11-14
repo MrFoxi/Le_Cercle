@@ -1,6 +1,7 @@
 // Mini-golf : menus, vestiaire et profil, salon et réglages, partie (visée au lance-pierre avec effet, trajectoires du
 // serveur rejouées au même moment chez tout le monde, effets, caméra, ralentis), paris, émotes, chat, succès.
 /* global io, Golf, GolfHoles, GolfLooks */
+import { swapButton } from '/shared/party.js';
 import { createRenderer, drawBall, drawClub } from './render.js';
 import { startAudio, setAudio, settings as audioSettings, sfx, setMood } from './audio.js';
 import { loadProfile, saveProfile, unlocked, onHole, onGame, onEvent } from './profile.js';
@@ -230,6 +231,7 @@ function renderWait(s) {
   $('#addBot').hidden = !host || s.players.length >= 8;
   $('#waitWatchers').hidden = !s.spectators.length;
   $('#waitWatchers').textContent = `👁 Spectateurs : ${s.spectators.join(', ')}`;
+  swapButton(socket, $('#waitWatchers'), s);
   const ready = s.players.every(p => p.connected), b = $('#startBtn');
   b.hidden = s.spectator;
   b.disabled = !(ready && host);

@@ -24,6 +24,17 @@ export function blip(f0, f1, dur, type = 'sine', vol = 0.12, at = 0) {
 }
 export const fanfare = (notes = [523, 659, 784, 1046], gap = 0.12) => notes.forEach((f, k) => blip(f, f, 0.24, 'triangle', 0.11, k * gap));
 
+/* ---------------- Changer de place ---------------- */
+// Bouton « passer spectateur / rejoindre les joueurs » dans le salon, avant la partie (lib/rooms.js, événement « swap »).
+// after : l'élément après lequel le placer (la ligne des spectateurs) ; s : l'état du salon reçu (phase, spectator).
+export function swapButton(socket, after, s, onError = alert) {
+  if (!after) return;
+  let b = after.parentNode.querySelector('.swap-btn');
+  if (!b) { b = document.createElement('button'); b.type = 'button'; b.className = 'ghost small swap-btn'; after.after(b); b.onclick = () => socket.emit('swap', r => r?.error && onError(r.error)); }
+  b.hidden = s.phase !== 'lobby';
+  b.textContent = s.spectator ? '🎮 Rejoindre les joueurs' : '👁 Passer spectateur';
+}
+
 /* ---------------- Salon ---------------- */
 // id : nom du jeu (canal, adresse, clés du navigateur) ; max : joueurs par salon ; bots : robots de la partie solo ;
 // busy : texte des salons en jeu ; onShow(écran) et onRoom(état, créateur ?) : ce que le jeu ajoute.
@@ -89,6 +100,7 @@ export function party({ id, socket, max, bots = 5, busy = '🎮 en jeu', onShow,
     $('#count').textContent = `(${s.players.length}/${max})`;
     $('#players').innerHTML = s.players.map(p => `<li class="${p.connected ? '' : 'off'}"><i class="dot" style="background:${p.color};--c:${p.color}"></i><span>${esc(p.name)}${p.name === s.host ? ' 👑' : ''}${p.wins ? ` · 🏆 ${p.wins}` : ''}</span>${p.bot && host ? `<button class="small ghost" data-bot="${esc(p.name)}" aria-label="Retirer ${esc(p.name)}">✕</button>` : ''}</li>`).join('');
     $('#spect').textContent = s.spectators.length ? `👁 ${s.spectators.join(', ')}` : '';
+    swapButton(socket, $('#spect'), s, onError);
     $('#addBot').hidden = !host; $('#rounds').disabled = !host; $('#rounds').value = s.settings.rounds;
     $('#startBtn').hidden = !host; $('#startBtn').disabled = s.players.length < 2;
     $('#roomHint').textContent = host ? (s.players.length < 2 ? 'Ajoute des robots ou invite des amis (lien ci-dessus).' : 'Tout le monde est là ? Lance la partie !') : 'Le créateur du salon lance la partie.';
