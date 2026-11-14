@@ -1,0 +1,85 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Boule de Pute</title>
+  <link rel="icon" href="favicon.svg" type="image/svg+xml">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@500;600;700&family=Nunito:wght@700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+  <script src="/socket.io/socket.io.js"></script>
+  <script src="sim.js"></script>
+  <script type="importmap">{ "imports": { "three": "/vendor/three/build/three.module.js", "three/addons/": "/vendor/three/addons/" } }</script>
+  <script type="module" src="main.js"></script>
+  <script src="/shared/presence.js" defer></script>
+</head>
+<body>
+  <canvas id="view" aria-label="Le Gymnase Cosmique"></canvas>
+  <div id="labels" aria-hidden="true"></div>
+  <div id="danger" aria-hidden="true"></div>
+
+  <!-- Accueil -->
+  <section id="home" class="screen">
+    <a class="back" href="../">← Le Cercle</a>
+    <header class="hero">
+      <h1>Boule <span>de Pute</span></h1>
+      <p class="tagline">RENVOIE-LUI DANS LA GUEULE. Une boule d'énergie à tête chercheuse fonce sur toi : renvoie-la au dernier moment, elle repart plus vite vers l'équipe d'en face. Dernière équipe debout gagne la manche.</p>
+    </header>
+    <form class="card" id="nameForm"><label>Ton pseudo <input name="pseudo" maxlength="20" required autocomplete="nickname" placeholder="Pseudo"></label></form>
+    <div class="card"><h2>Ton personnage</h2><div class="picks" id="homePicks"></div></div>
+    <div class="grid">
+      <div class="card"><h2>Tout de suite</h2><p class="hint">2 contre 2 avec des robots, sans attendre.</p><button class="primary big" id="soloBtn">💥 Jouer</button></div>
+      <form class="card" id="createForm"><h2>Créer une partie</h2>
+        <div class="chips"><label class="chip"><input type="radio" name="vis" value="public" checked> 🌍 Publique</label><label class="chip"><input type="radio" name="vis" value="private"> 🔒 Privée</label></div>
+        <button class="primary">Créer</button></form>
+      <form class="card" id="joinForm"><h2>Rejoindre</h2><input name="code" maxlength="5" required autocomplete="off" class="code-input" placeholder="ABCDE" aria-label="Code de la partie"><div class="row"><button class="primary" name="mode" value="play">Rejoindre</button><button class="ghost" name="mode" value="watch">👁</button></div></form>
+    </div>
+    <div class="card"><h2>Parties ouvertes</h2><ul id="rooms" class="list"></ul></div>
+    <div class="card rules"><h2>Comment on joue</h2>
+      <ul>
+        <li><kbd>Z</kbd><kbd>Q</kbd><kbd>S</kbd><kbd>D</kbd> (ou <kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd>) : bouger · la <b>souris</b> tourne la caméra (clique dans l'arène pour la capturer, <kbd>Échap</kbd> pour la relâcher ; <kbd>←</kbd> <kbd>→</kbd> marchent aussi) · <kbd>Espace</kbd> : sauter.</li>
+        <li><b>Clic gauche</b> (ou <kbd>F</kbd>, <kbd>E</kbd>) : impulsion de renvoi, juste devant toi et pendant un court instant. Si la boule y entre, elle repart vers l'adversaire que tu regardes, plus vite.</li>
+        <li>Renvoie-la <b>au tout dernier moment</b> (tout près de toi) : <b>renvoi parfait</b>, encore plus rapide. Trop tôt, et tu restes sans défense le temps de recharger.</li>
+        <li>Quand elle te vise : anneau rouge à tes pieds, bip qui s'accélère, bords de l'écran qui rougissent. Si elle te touche, tu es pulvérisé jusqu'à la manche suivante.</li>
+        <li>Chaque renvoi l'accélère, et elle accélère aussi toute seule : à la fin, ça va très, très vite.</li>
+      </ul>
+    </div>
+  </section>
+
+  <!-- Salon -->
+  <section id="room" class="screen" hidden>
+    <button class="back" id="leave">← Quitter la partie</button>
+    <h1 class="title">Partie <span class="code" id="roomCode"></span> <button class="ghost small" id="copyLink">🔗 Copier le lien</button></h1>
+    <div class="card"><h2>Ton personnage</h2><div class="picks" id="picks"></div></div>
+    <div class="grid two">
+      <div class="card"><h2>Joueurs <small id="count"></small></h2><ul id="players" class="list"></ul><button class="ghost" id="addBot">🤖 Ajouter un robot</button><p class="hint">Les équipes alternent dans l'ordre de la liste ; les robots complètent.</p><p class="hint" id="spect"></p></div>
+      <div class="card"><h2>Règles</h2>
+        <label>Équipes <select id="teamSel"><option value="1">1 contre 1</option><option value="2">2 contre 2</option><option value="3">3 contre 3</option><option value="4">4 contre 4</option></select></label>
+        <label>Manches <select id="rounds"><option value="3">Au meilleur des 3</option><option value="5">Au meilleur des 5</option><option value="7">Au meilleur des 7</option></select></label>
+        <label>Robots <select id="levelSel"><option value="1">🙂 Mous</option><option value="2">😤 Vifs</option><option value="3">😈 Réflexes de chat</option></select></label>
+        <p class="hint" id="roomHint"></p>
+        <button class="primary big" id="startBtn">💥 C'est parti !</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- Partie -->
+  <section id="hud" hidden>
+    <button class="ghost small quit" id="quitGame">Quitter</button>
+    <div class="sb"><span class="team l">MANDARINES <b id="sL">0</b></span><em id="need"></em><span class="team r"><b id="sR">0</b> LAGONS</span>
+      <div class="alive l" id="alive0"></div><div class="alive r" id="alive1"></div></div>
+    <div class="speed" id="speed">—</div>
+    <div class="cross"><i id="cool"></i></div>
+    <div class="warn">⚠️ ELLE ARRIVE !</div>
+    <div class="cd" id="cd" hidden></div>
+    <div class="banner" id="banner" hidden></div>
+    <div class="flash" id="flash" hidden></div>
+    <ul id="feed" class="feed"></ul>
+    <p class="toast" id="toast" hidden></p>
+  </section>
+
+  <div id="board" class="overlay" hidden><div class="card end"><h2 id="boardTitle"></h2><ol id="boardList" class="ranking"></ol><p class="hint" id="boardHint"></p><div class="row center" id="boardButtons"></div></div></div>
+</body>
+</html>
