@@ -24,6 +24,9 @@ textes, commentaires, messages de commit (`Feat : …` / `Fix : …`).
 - `lib/store.js` : stockage durable (Upstash Redis en ligne, `data/*.json` en local). `lib/activity.js` : bandeau de l'accueil.
 - `site/index.html` : accueil (tableau `GAMES`, `PSEUDO_KEYS`) ; `site/previews/<jeu>.jpg` : aperçus.
 - `jeux/7-5/server/server.js` : seul jeu qui n'utilise pas `lib/rooms.js` (plus ancien).
+- `jeux/golf/client/aventure/` : mode Aventure solo du mini-golf (la Tour), servi sur `/golf/aventure/`. Physique 3D à part
+  (`physics.js`, UMD) et niveau (`tower.js`, UMD) testés par `jeux/golf/aventure.test.js`, qui rejoue une ascension complète :
+  si la tour change, retrouver une suite de coups qui marche et mettre à jour `ROUTE`.
 
 ## Conventions
 

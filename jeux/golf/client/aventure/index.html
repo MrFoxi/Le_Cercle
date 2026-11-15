@@ -1,0 +1,80 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>La Tour · Mini-golf Aventure</title>
+  <link rel="icon" href="../favicon.svg" type="image/svg+xml">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@600;700;800&family=Nunito:wght@400;700;800;900&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+  <script type="importmap">{ "imports": { "three": "/vendor/three/build/three.module.js", "three/addons/": "/vendor/three/addons/" } }</script>
+  <script src="physics.js"></script>
+  <script src="tower.js"></script>
+  <script type="module" src="main.js"></script>
+  <script src="/shared/presence.js" defer></script>
+</head>
+<body>
+  <div id="sky"></div>
+  <canvas id="view" aria-label="La Tour, vue en 3D"></canvas>
+
+  <!-- Haut : où l'on est, outils -->
+  <div class="top">
+    <a class="pill" href="../" title="Retour au mini-golf">←</a>
+    <div class="where"><b id="biome">La Tour</b><small id="alt">0 m</small></div>
+    <div class="tools">
+      <button class="pill" id="rotL" title="Tourner la tour (Q)">⟲</button>
+      <button class="pill" id="rotR" title="Tourner la tour (E)">⟳</button>
+      <button class="pill" id="sndBtn" title="Sons">🔊</button>
+      <button class="pill" id="musBtn" title="Musique">🎵</button>
+      <button class="pill" id="helpBtn" title="Commandes">?</button>
+    </div>
+  </div>
+  <div id="meter" aria-hidden="true"><i></i><b></b></div>
+  <p id="state" aria-live="polite"></p>
+
+  <!-- Bas : club, levée, effet, puissance -->
+  <div class="bottom">
+    <div id="clubs" role="group" aria-label="Clubs"></div>
+    <div class="shot">
+      <div class="cell"><small>Club</small><b id="clubName"></b></div>
+      <div class="cell"><small>Levée</small><span class="step"><button id="loftDown" aria-label="Moins haut">−</button><b id="loft"></b><button id="loftUp" aria-label="Plus haut">+</button></span></div>
+      <div class="cell impact"><canvas id="impact" width="64" height="64" aria-label="Point d'impact sur la balle (effet)"></canvas><small id="spinTxt"></small></div>
+      <div class="cell power"><small>Puissance</small><div id="power"><i></i></div><b id="powerPct"></b></div>
+      <div class="cell"><small>Coups</small><b id="shots">0</b></div>
+    </div>
+  </div>
+
+  <div id="announce" aria-live="polite"></div>
+  <div id="toasts" aria-live="polite"></div>
+
+  <!-- Accueil -->
+  <section id="intro" class="panel">
+    <h1>La Tour</h1>
+    <p class="tag">Une tour immense, six mondes empilés, et un seul trou… tout en haut.</p>
+    <ul class="facts">
+      <li>🌿 Pars du marais, tout en bas, et grimpe à coups de club.</li>
+      <li>⟲ Fais tourner la tour par quarts de tour pour voir ses autres faces : des passages s’y cachent.</li>
+      <li>🏌️ Trouve des clubs dans la tour : chacun ouvre de nouveaux chemins.</li>
+      <li>🪂 Une chute n’est pas une défaite : tu repars d’où la balle s’arrête… sauf si elle tombe dans le vide.</li>
+    </ul>
+    <button class="primary big" id="go">Commencer l’ascension</button>
+    <p class="hint">Aucune sauvegarde : chaque partie est une ascension complète.</p>
+  </section>
+
+  <section id="help" class="panel small" hidden>
+    <h2>Commandes</h2>
+    <ul class="keys">
+      <li><b>Glisser en arrière</b> depuis n’importe où : direction et puissance, relâcher pour frapper (Maj : plus fin)</li>
+      <li><kbd>←</kbd><kbd>→</kbd> direction · <kbd>↑</kbd><kbd>↓</kbd> puissance · <kbd>Espace</kbd> viser puis frapper</li>
+      <li><kbd>W</kbd><kbd>S</kbd> levée · <kbd>I</kbd><kbd>J</kbd><kbd>K</kbd><kbd>L</kbd> ou le disque : point d’impact (effet)</li>
+      <li><kbd>Q</kbd><kbd>E</kbd> tourner la tour · <kbd>1</kbd> à <kbd>6</kbd> changer de club</li>
+      <li>Frappé bas = rétro (la balle s’arrête vite) · frappé sur le côté = la balle courbe</li>
+    </ul>
+    <button class="primary" data-close>Compris</button>
+  </section>
+
+  <section id="end" class="panel" hidden></section>
+</body>
+</html>

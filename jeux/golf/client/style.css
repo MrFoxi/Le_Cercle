@@ -80,6 +80,12 @@ input, select { width: 100%; font: 700 1rem var(--sans); padding: 12px 14px; bor
 .privacy span { display: flex; flex-direction: column; gap: 2px; }
 .privacy small { color: var(--muted); }
 .games { margin-top: 18px; }
+.adventure { display: flex; align-items: center; gap: 16px; margin-top: 18px; text-decoration: none; color: var(--ink); background: linear-gradient(120deg, rgba(255, 255, 255, .92), rgba(240, 232, 255, .92)); transition: transform .15s; }
+.adventure:hover { transform: translateY(-3px); }
+.adventure b { display: block; font: 800 1.35rem var(--round); color: var(--title); }
+.adventure small { color: var(--muted); font-weight: 700; }
+.adv-icon { font-size: 2.6rem; filter: drop-shadow(0 6px 8px rgba(60, 40, 130, .25)); }
+.adv-go { margin-left: auto; flex: none; padding: 10px 18px; border-radius: 999px; color: #fff; font-weight: 900; background: linear-gradient(180deg, #8a6dff, #7b5cff); box-shadow: 0 4px 0 #5638c8; }
 .games .hint { margin: 6px 0 14px; }
 #rooms { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
 #rooms li { display: flex; align-items: center; gap: 10px; padding: 11px 14px; border-radius: 16px; background: var(--soft); border: 2px solid var(--line); }
