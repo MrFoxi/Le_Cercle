@@ -27,6 +27,8 @@ export const MAT = {
   water: new THREE.MeshStandardMaterial({ color: '#8fe0f4', roughness: 0.08, emissive: '#4fb8d8', emissiveIntensity: 0.25, transparent: true, opacity: 0.85 }),
   glass: new THREE.MeshStandardMaterial({ color: '#e8f8ff', roughness: 0.05, transparent: true, opacity: 0.35, depthWrite: false }),
 };
+// la couleur de chaque paire de plateaux des Balances (plateau, chaîne, rail du plafond)
+export const PAIR = { 1: '#ff8f7a', 2: '#6fb4ff' };
 export const glow = (c, k = 1.6) => new THREE.MeshStandardMaterial({ color: c, emissive: c, emissiveIntensity: k, roughness: 0.4 });
 
 /* ---------- Formes de base ---------- */
@@ -44,7 +46,7 @@ export function paint(g, [a, b = a], jit = 0.05) {
   return g;
 }
 // Une pièce : tournée, posée, puis peinte
-const pc = (g, cols, x = 0, y = 0, z = 0, rx = 0, ry = 0, rz = 0, jit) => {
+export const pc = (g, cols, x = 0, y = 0, z = 0, rx = 0, ry = 0, rz = 0, jit) => {
   if (rx || ry || rz) g.applyMatrix4(new THREE.Matrix4().makeRotationFromEuler(new THREE.Euler(rx, ry, rz, 'YXZ')));
   return paint(g.translate(x, y, z), cols, jit);
 };
@@ -105,11 +107,11 @@ export function fuse(parts) {
   return mergeGeometries(gs);
 }
 export const mesh = (g, m = MAT.clay, cast = true) => { const o = new THREE.Mesh(g, m); o.castShadow = cast; o.receiveShadow = true; return o; };
-const group = (...o) => { const g = new THREE.Group(); g.add(...o); return g; };
+export const group = (...o) => { const g = new THREE.Group(); g.add(...o); return g; };
 
 /* ---------- Le vivant : arbres, buissons, fleurs, champignons, rochers ---------- */
 const LEAF = ['#a8e27c', '#3f9a4a'], BARK = ['#9a6a42', '#5a3a22'];
-const PETALS = ['#ff8fb0', '#ffd84a', '#ffffff', '#b89cff', '#ff9a5a', '#7fc8ff'];
+export const PETALS = ['#ff8fb0', '#ffd84a', '#ffffff', '#b89cff', '#ff9a5a', '#7fc8ff'];
 function treeParts(seed, { h = 3.4, leaf = LEAF, bark = BARK, blossom = null, s = 1 } = {}) {
   const r = rng(seed), K = [], lean = (r() - 0.5) * 0.8 * s, tw = (r() - 0.5) * 0.5 * s, tip = [lean, h * s, tw];
   K.push(pc(stem([[0, -0.3, 0], [lean * 0.15, h * s * 0.35, 0], [lean * 0.6, h * s * 0.72, tw * 0.5], tip], 0.3 * s, 0.13 * s), bark));
@@ -189,7 +191,7 @@ export function decorate(ctx) {
   const { L, put, live, text, fall, LIGHT, worldOf } = ctx;
   for (const dd of L.deco) {
     const p = dd.p;
-    ctx.world(worldOf(dd.t === 'upsidehouse' ? p[1] - 2 : dd.t === 'wheel' ? p[1] - 6 : dd.t === 'trebuchet' ? p[1] - 4 : p[1]));
+    ctx.world(worldOf(dd.t === 'levers' ? p[1] - 2 : dd.t === 'wheel' ? p[1] - 6 : dd.t === 'trebuchet' ? p[1] - 4 : p[1]));
     const seed = Math.round(p[0] * 31 + p[1] * 17 + p[2] * 7) + 1000;
     switch (dd.t) {
       case 'tee': {
@@ -245,11 +247,7 @@ export function decorate(ctx) {
         ]), MAT.shiny));
         put(g, p); live.deco.at(-1).face = 'n'; live.pend = g; break;
       }
-      case 'chain': {
-        const a = new THREE.Vector3(...p), b = new THREE.Vector3(...dd.to), n = Math.round(a.distanceTo(b) / 0.42), K = [], ry = Math.atan2(b.x - a.x, b.z - a.z);
-        for (let k = 0; k <= n; k++) { const q = a.clone().lerp(b, k / n), sag = Math.sin((k / n) * Math.PI) * 0.15; K.push(pc(new THREE.TorusGeometry(0.17, 0.05, 6, 12).scale(1, 1.35, 1), ['#e8c068', '#a07828'], q.x - a.x, q.y - a.y + 0.22 - sag, q.z - a.z, 0, ry + (k % 2 ? Math.PI / 2 : 0), 0)); }
-        put(mesh(fuse(K), MAT.shiny), p); break;
-      }
+      case 'levers': levers(ctx, p[1]); break;
       case 'statue': {
         // des galets en équilibre, sur un socle tourné : l'esprit des Balances
         const r = rng(seed), K = [pc(turned([[1.1, 0], [1.15, 0.15], [0.9, 0.3], [0.8, 0.9], [1.0, 1.0], [0.95, 1.1], [0, 1.1]], 24), ['#f6f2fa', '#c8bed8'])];
@@ -289,15 +287,28 @@ export function decorate(ctx) {
         const g = group(mesh(fuse(K), MAT.shiny), ...flames); put(g, p); live.glows.push(...flames); break;
       }
       case 'wheel': {
-        const K = [];
-        for (const x of [-0.7, 0.7]) {
-          K.push(pc(new THREE.TorusGeometry(5.5, 0.22, 8, 56).rotateY(Math.PI / 2), ['#a8743a', '#6a4426'], x, 0, 0));
-          K.push(pc(new THREE.TorusGeometry(3.2, 0.12, 6, 40).rotateY(Math.PI / 2), ['#a8743a', '#6a4426'], x, 0, 0));
-          for (let k = 0; k < 8; k++) { const a = (k / 8) * TAU; K.push(pc(soft(0.25, 5.4, 0.3, 0.06), ['#b07a42', '#7a4a24'], x, Math.cos(a) * 2.75, Math.sin(a) * 2.75, a, 0, 0)); }
+        // la roue tourne autour de l'axe x ; ses deux flasques sont dehors, au-delà des godets, et une broche
+        // part de la couronne intérieure vers chaque godet (même angle que dans la physique : ils tournent ensemble)
+        const K = [], xw = 2.6, R = 5.5, RO = 6.4;
+        for (const x of [-0.5, 0.5]) {
+          K.push(pc(new THREE.TorusGeometry(RO, 0.2, 8, 64).rotateY(Math.PI / 2), ['#b07a42', '#6a4426'], x, 0, 0));
+          K.push(pc(new THREE.TorusGeometry(R, 0.13, 6, 56).rotateY(Math.PI / 2), ['#a8743a', '#6a4426'], x, 0, 0));
+          for (let k = 0; k < 8; k++) { const a = (k / 8) * TAU + 0.2; K.push(pc(soft(0.22, RO, 0.3, 0.06), ['#b88048', '#7a4a24'], x, Math.cos(a) * RO / 2, Math.sin(a) * RO / 2, a, 0, 0)); }
         }
-        for (let k = 0; k < 16; k++) { const a = (k / 16) * TAU; K.push(pc(soft(1.7, 0.12, 0.6, 0.04), ['#8a5a35', '#5a3a1a'], 0, Math.cos(a) * 5.5, Math.sin(a) * 5.5, a, 0, 0)); }
+        for (let k = 0; k < 18; k++) { const a = (k / 18) * TAU; K.push(pc(soft(1.25, 0.8, 0.12, 0.04), ['#946238', '#5a3a1a'], 0, Math.cos(a) * (RO + 0.35), Math.sin(a) * (RO + 0.35), a, 0, 0)); }
+        for (let k = 0; k < 6; k++) {
+          const a = (k / 6) * TAU, y = -R * Math.cos(a), z = -R * Math.sin(a);
+          K.push(pc(stem([[-1.3, y, z], [-0.45, y, z]], 0.13, 0.13, 8, 2), ['#5a5a6a', '#3a3a48']));
+          K.push(pc(turned([[0.3, -0.06], [0.3, 0.06], [0, 0.08]], 12), ['#e8c068', '#a07828'], -0.5, y, z, 0, 0, Math.PI / 2));
+        }
         K.push(pc(turned([[0.9, -0.9], [1, -0.7], [1, 0.7], [0.9, 0.9]], 18), ['#6a4426', '#4a2a16'], 0, 0, 0, 0, 0, Math.PI / 2));
-        const g = mesh(fuse(K)); put(g, [p[0] + 1.6, p[1], p[2]]); live.wheel = g; break;
+        const g = mesh(fuse(K)); put(g, [p[0] + xw, p[1], p[2]]); live.wheel = g;
+        // l'arbre de la roue entre dans le mur, sur un palier de pierre ; une goulotte amène l'eau sur les pales
+        const A = [pc(stem([[-6.8, 0, 0], [1.2, 0, 0]], 0.32, 0.32, 10, 2), ['#5a5a6a', '#3a3a48']), pc(soft(0.7, 2, 2, 0.15), ['#b8ac98', '#8a7c68'], -6.3, -0.4, 0)];
+        A.push(pc(soft(0.8, 0.5, 7, 0.06), ['#a8743a', '#6a4426'], -2.4, 7.7, 3.2, 0, Math.PI / 2, 0), pc(soft(0.12, 2.3, 0.12, 0.03), ['#8a5a35'], -4, 6.4, 3.2), pc(soft(0.12, 2.3, 0.12, 0.03), ['#8a5a35'], -1, 6.4, 3.2));
+        put(mesh(fuse(A)), [p[0] + xw, p[1], p[2]]);
+        const water = mesh(new THREE.PlaneGeometry(6.4, 0.6).rotateX(-Math.PI / 2).translate(-2.4, 7.9, 3.2), MAT.water, false); put(water, [p[0] + xw, p[1], p[2]]);
+        break;
       }
       case 'millstone': {
         const m = mesh(fuse([pc(turned([[0, 0], [2.1, 0], [2.25, 0.15], [2.25, 0.65], [2.1, 0.8], [0.5, 0.8], [0.45, 0.7], [0, 0.7]], 32), ['#cfc4b0', '#9a8e78'], 0, 0, 0, 0, 0, 0, 0.14),
@@ -305,7 +316,7 @@ export function decorate(ctx) {
         put(m, p); live.spins.push({ obj: m, axis: 'y', speed: 0.5 }); break;
       }
       case 'waterfall': {
-        fall(p[0], p[1], p[2], dd.h, 3.5);
+        fall(p[0], p[1], p[2], dd.h, dd.w || 3.5);
         const r = rng(seed), K = [];
         for (let k = 0; k < 7; k++) K.push(pc(blob(0.5 + r() * 0.5, { seed: k, sy: 0.6, detail: 2 }), ['#ffffff', '#cfefff'], (r() - 0.5) * 1.2, 0.2, (r() - 0.5) * 3.2));
         const foam = mesh(fuse(K), MAT.cloud, false); put(foam, [p[0], p[1] - dd.h, p[2]]);
@@ -346,10 +357,8 @@ export function decorate(ctx) {
         for (let k = 0; k < 16; k++) { const a = (k / 16) * TAU + TAU / 32, l = new THREE.Mesh(new THREE.SphereGeometry(0.2, 8, 6), glow(['#ffe08a', '#ff9ac0', '#9fe8ff'][k % 3], 2)); put(l, [Math.cos(a) * 13, p[1] - 0.8, Math.sin(a) * 13]); live.glows.push(l); }
         break;
       }
-      case 'upsidehouse': {
-        const h = house(seed, ['#e0605e', '#5b7bd6', '#5aa070', '#e0a040'][Math.abs(Math.round(p[0] + p[2])) % 4]); h.rotation.x = Math.PI;
-        put(group(h), p); break;
-      }
+      case 'house': townHouse(ctx, dd); break;
+      case 'town': town(ctx); break;
       case 'wires': {
         // le crochet au plafond ; les fils suivent le plateau qui penche (mis à jour à chaque image)
         const i = L.blocks.findIndex(b => b.kin?.type === 'mobile' && Math.abs(b.c[0] - p[0]) < 0.1 && Math.abs(b.c[2] - p[2]) < 0.1);
@@ -412,19 +421,123 @@ export function decorate(ctx) {
   scatter(ctx);
 }
 
-// Une maison (qu'on suspendra la tête en bas) : murs, toit à deux pans, cheminée, fenêtres, porte
-function house(seed, roof) {
-  const r = rng(seed), w = 4 + r() * 0.8, h = 2.8 + r() * 0.6, d = 3.4, wall = ['#fff4e4', '#e8d4b8'], K = [];
-  K.push(pc(soft(w, h, d, 0.12), wall, 0, h / 2, 0));
-  const tri = new THREE.Shape(); tri.moveTo(-w / 2 - 0.4, 0); tri.lineTo(w / 2 + 0.4, 0); tri.lineTo(0, 2); tri.closePath();
-  K.push(pc(new THREE.ExtrudeGeometry(tri, { depth: d + 0.6, bevelEnabled: true, bevelSize: 0.06, bevelThickness: 0.06, bevelSegments: 1 }).translate(0, 0, -(d + 0.6) / 2), [roof, new THREE.Color(roof).multiplyScalar(0.65).getStyle()], 0, h - 0.05, 0));
-  K.push(pc(soft(0.6, 1.4, 0.6, 0.06), ['#c0705a', '#8a4a3a'], w * 0.22, h + 1.1, -0.6));
-  for (const x of [-w * 0.27, w * 0.27]) for (const z of [d / 2, -d / 2]) {
-    K.push(pc(soft(0.85, 0.95, 0.12, 0.03), ['#ffffff'], x, h * 0.62, z));
-    K.push(pc(new THREE.BoxGeometry(0.62, 0.72, 0.14), ['#4a5a98', '#2a3468'], x, h * 0.62, z * 1.01));
+// Les Balances : chaque paire de plateaux a sa couleur. Un rail au plafond porte deux poulies ; de chaque poulie, une
+// chaîne descend vers un anneau d'où quatre chaînes tiennent les coins du plateau (elles le suivent quand il bouge)
+const LINK = new THREE.TorusGeometry(0.16, 0.045, 6, 12).scale(1, 1.4, 1);
+function chainLinks(a, b, cols) {
+  const A = new THREE.Vector3(...a), B = new THREE.Vector3(...b), n = Math.max(1, Math.round(A.distanceTo(B) / 0.38)), K = [];
+  const q = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), B.clone().sub(A).normalize());
+  for (let k = 0; k <= n; k++) { const g = LINK.clone(); if (k % 2) g.rotateY(Math.PI / 2); g.applyQuaternion(q); const P = A.clone().lerp(B, k / n); K.push(paint(g.translate(P.x, P.y, P.z), cols)); }
+  return K;
+}
+function levers(ctx, ceil) {
+  const { L, put, live } = ctx, y0 = ceil - 1.1;
+  const plates = L.blocks.map((b, i) => ({ b, i })).filter(o => o.b.kin?.type === 'lever');
+  for (const id of [...new Set(plates.map(o => o.b.kin.id))]) {
+    const col = new THREE.Color(PAIR[id]), cols = [col.clone().offsetHSL(0, 0, 0.12).getStyle(), col.clone().offsetHSL(0, 0, -0.2).getStyle()];
+    const pair = plates.filter(o => o.b.kin.id === id), [a, b] = pair.map(o => o.b.c), dx = b[0] - a[0], dz = b[2] - a[2], ry = Math.atan2(-dz, dx);
+    const K = [pc(stem([[a[0], y0 + 0.6, a[2]], [b[0], y0 + 0.6, b[2]]], 0.14, 0.14, 8, 2), cols)], legs = Math.max(2, Math.round(Math.hypot(dx, dz) / 5));
+    for (let k = 0; k <= legs; k++) { const x = a[0] + (dx * k) / legs, z = a[2] + (dz * k) / legs; K.push(pc(stem([[x, y0 + 0.6, z], [x, ceil, z]], 0.06, 0.06, 5, 2), ['#c8b088', '#8a7050']), pc(turned([[0.25, 0], [0.18, 0.08], [0, 0.1]], 12), ['#c8b088'], x, ceil - 0.1, z)); }
+    for (const c of [a, b]) {
+      K.push(pc(new THREE.TorusGeometry(0.42, 0.1, 8, 24), ['#ffe8b0', '#b08a48'], c[0], y0, c[2], 0, ry, 0));
+      K.push(pc(turned([[0.16, -0.18], [0.16, 0.18]], 10), ['#5a5a6a'], c[0], y0, c[2], Math.PI / 2, ry, 0));
+      K.push(pc(stem([[c[0], y0 + 0.6, c[2]], [c[0], y0, c[2]]], 0.05, 0.05, 5, 2), cols));
+    }
+    put(mesh(fuse(K), MAT.shiny), [0, 0, 0]);
+    for (const o of pair) {
+      const B = o.b, hx = B.h[0] * 0.8, hz = B.h[2] * 0.8, top = B.h[1], up = 3;
+      const Y = [pc(new THREE.TorusGeometry(0.28, 0.07, 8, 16).rotateX(Math.PI / 2), cols, 0, top + up, 0)];
+      for (const [sx, sz] of [[1, 1], [1, -1], [-1, 1], [-1, -1]]) Y.push(...chainLinks([sx * hx, top + 0.15, sz * hz], [0, top + up - 0.25, 0], cols), pc(blob(0.2, { detail: 1, lump: 0.05 }), cols, sx * hx, top + 0.06, sz * hz));
+      const yoke = put(mesh(fuse(Y), MAT.shiny), [...B.c]);
+      const inst = new THREE.InstancedMesh(paint(LINK.clone(), cols), MAT.shiny, 48); inst.frustumCulled = false; put(inst, [0, 0, 0]);
+      const m4 = new THREE.Matrix4(), q0 = new THREE.Quaternion(), q1 = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), Math.PI / 2), one = new THREE.Vector3(1, 1, 1), v = new THREE.Vector3();
+      live.anim.push((t, dt, W) => {
+        const c = W ? W.blocks[o.i].c : B.c, yb = c[1] + top + up + 0.1, n = Math.max(0, Math.min(48, Math.floor((y0 - 0.45 - yb) / 0.38) + 1));
+        yoke.position.set(...c);
+        for (let k = 0; k < n; k++) inst.setMatrixAt(k, m4.compose(v.set(c[0], yb + k * 0.38, c[2]), k % 2 ? q1 : q0, one));
+        inst.count = n; inst.instanceMatrix.needsUpdate = true;
+      });
+    }
   }
-  K.push(pc(soft(0.8, 1.4, 0.14, 0.05), ['#8a5a35', '#5a3a1a'], 0, 0.7, d / 2 + 0.02));
-  return mesh(fuse(K));
+}
+
+// La Ville perchée : une maison est un bloc de la physique (on joue sur son toit-terrasse) ; on l'habille sans rien
+// poser sur le toit : fenêtres à volets, jardinières, porte, pierres d'angle, corniche, et son rocher volant dessous
+const SHUT = { houseA: '#5aa070', houseB: '#e0605e', houseC: '#5b7bd6', houseD: '#d0902e' };
+function townHouse(ctx, dd) {
+  const { put, live } = ctx, [x0, y0, z0] = dd.lo, [x1, y1, z1] = dd.hi, cx = (x0 + x1) / 2, cz = (z0 + z1) / 2, hx = (x1 - x0) / 2, hz = (z1 - z0) / 2, h = y1 - y0;
+  const r = rng(Math.round(cx * 13 + cz * 7 + 500)), sh = SHUT[dd.look] || '#5aa070', shD = new THREE.Color(sh).offsetHSL(0, 0, -0.15).getStyle(), K = [], G = [];
+  const rows = [y0 + h * 0.3, y0 + h * 0.74];
+  [[0, 1], [1, 0], [0, -1], [-1, 0]].forEach(([nx, nz], fi) => {
+    const along = nx ? hz : hx, ry = Math.atan2(nx, nz), n = Math.max(1, Math.floor((2 * along) / 2.3));
+    const at = (t, y, out) => (nx ? [cx + nx * (hx + out), y, cz + t] : [cx + t, y, cz + nz * (hz + out)]);
+    rows.forEach((y, ri) => {
+      for (let k = 0; k < n; k++) {
+        const t = -along + ((k + 0.5) * 2 * along) / n;
+        if (fi === 0 && ri === 0 && k === Math.floor(n / 2)) { // la porte, avec son auvent et sa lanterne
+          const d = arch(1.0, 1.9); K.push(pc(new THREE.ExtrudeGeometry(d, { depth: 0.1, bevelEnabled: true, bevelSize: 0.03, bevelThickness: 0.03, bevelSegments: 1, curveSegments: 8 }), ['#a8703e', '#6a4426'], ...at(t, y - 1.1, 0), 0, ry, 0));
+          K.push(pc(soft(1.4, 0.12, 0.5, 0.04), [sh, shD], ...at(t, y + 0.95, 0.22), 0, ry, 0), pc(blob(0.06, { detail: 1 }), ['#ffe08a'], ...at(t + 0.3, y - 0.2, 0.12)));
+          const lamp = new THREE.Mesh(new THREE.SphereGeometry(0.13, 8, 6), glow('#ffd27a', 1.8)); lamp.position.set(...at(t + 0.75, y + 0.55, 0.18)); G.push(lamp);
+          continue;
+        }
+        if (r() < 0.12) continue;
+        K.push(pc(soft(1.0, 1.25, 0.14, 0.04), ['#ffffff', '#e8e0d8'], ...at(t, y, 0.02), 0, ry, 0));
+        const pane = new THREE.Mesh(new THREE.PlaneGeometry(0.72, 0.95), winGlow); pane.position.set(...at(t, y, 0.1)); pane.rotation.y = ry; G.push(pane);
+        K.push(pc(soft(0.07, 0.95, 0.04, 0.01), ['#ffffff'], ...at(t, y, 0.11), 0, ry, 0), pc(soft(0.72, 0.06, 0.04, 0.01), ['#ffffff'], ...at(t, y + 0.05, 0.11), 0, ry, 0));
+        for (const s of [-1, 1]) K.push(pc(soft(0.4, 1.2, 0.07, 0.02), [sh, shD], ...at(t + s * 0.72, y, 0.05), 0, ry + s * 0.25, 0));
+        if (ri === 0 || r() < 0.5) {
+          K.push(pc(soft(1.1, 0.26, 0.3, 0.05), ['#b07a42', '#7a4a24'], ...at(t, y - 0.75, 0.15), 0, ry, 0));
+          for (let j = 0; j < 6; j++) { const c = PETALS[(j + fi + k) % PETALS.length]; K.push(pc(blob(0.11 + r() * 0.05, { detail: 1, seed: j }), j % 3 ? [c] : LEAF, ...at(t - 0.45 + j * 0.18, y - 0.55 + r() * 0.08, 0.2 + (r() - 0.5) * 0.12))); }
+        }
+      }
+    });
+  });
+  // pierres d'angle, corniche sous le toit
+  for (const [sx, sz] of [[1, 1], [1, -1], [-1, 1], [-1, -1]]) for (let y = y0 + 0.3; y < y1 - 0.4; y += 0.7) K.push(pc(soft(0.5, 0.42, 0.5, 0.08), ['#f4ece0', '#d8ccb8'], cx + sx * (hx - 0.12), y, cz + sz * (hz - 0.12), 0, ((y * 3) % 2) * 0.05, 0));
+  const P = (x, z) => [x, y1 - 0.22, z];
+  for (const [a2, b2] of [[[x0, z1], [x1, z1]], [[x1, z0], [x1, z1]], [[x0, z0], [x1, z0]], [[x0, z0], [x0, z1]]]) {
+    const ox = a2[0] === b2[0] ? Math.sign(a2[0] - cx) * 0.06 : 0, oz = a2[1] === b2[1] ? Math.sign(a2[1] - cz) * 0.06 : 0;
+    K.push(pc(stem([P(a2[0] + ox, a2[1] + oz), P(b2[0] + ox, b2[1] + oz)], 0.15, 0.15, 7, 2), ['#ffffff', '#e0d4c4']));
+  }
+  put(mesh(fuse(K), MAT.clay), [0, 0, 0]); Object.assign(live.deco.at(-1), { y: y1 });
+  if (G.length) { put(group(...G), [0, 0, 0]); Object.assign(live.deco.at(-1), { y: y1 }); }
+  // le rocher volant sous la maison : herbe autour du pied, racines, buissons au bord
+  const R = [pc(blob(1, { sx: hx * 1.3, sy: 3.2 + r() * 1.6, sz: hz * 1.3, top: 0, lump: 0.28, seed: Math.round(cx + cz) + 7, detail: 3 }), ['#b08a68', '#5e4a6e'], 0, -0.02, 0)];
+  R.push(pc(blob(1, { sx: hx * 1.32, sy: 0.28, sz: hz * 1.32, lump: 0.1, detail: 3, seed: 3 }), ['#9be07a', '#5aa848'], 0, 0.02, 0));
+  for (let k = 0; k < 6; k++) { const a = r() * TAU, d = 0.9; R.push(pc(stem([[Math.cos(a) * hx * d, -1, Math.sin(a) * hz * d], [Math.cos(a) * hx * d * 0.9, -3 - r() * 2, Math.sin(a) * hz * d * 0.9], [Math.cos(a) * hx * 0.7, -4.5 - r() * 2, Math.sin(a) * hz * 0.7]], 0.16, 0.03, 5, 6), ['#8a6040', '#5a3a28'])); }
+  for (let k = 0; k < 4; k++) { const a = (k / 4) * TAU + 0.6 + r() * 0.4; R.push(...bushParts(Math.round(cx * 3) + k, 0.55, LEAF, k % 2 ? PETALS[k] : null).map(g => g.translate(Math.cos(a) * hx * 1.18, 0.05, Math.sin(a) * hz * 1.18))); }
+  put(mesh(fuse(R)), [cx, y0, cz]);
+  // fumée de la cheminée (le bloc cheminée colle au flanc) : des bouffées qui montent et s'effacent
+  const ch = ctx.L.blocks.find(b => b.look === 'chimney' && Math.abs(b.c[0] - cx) < hx + 1.2 && Math.abs(b.c[2] - cz) < hz + 1.2 && Math.abs(b.c[1] + b.h[1] - y1) < 2);
+  if (ch) {
+    const top = [ch.c[0], ch.c[1] + ch.h[1], ch.c[2]], smokeMat = new THREE.MeshStandardMaterial({ color: '#ffffff', transparent: true, opacity: 0.6, roughness: 1, depthWrite: false });
+    put(mesh(fuse([pc(soft(1.05, 0.25, 1.05, 0.06), ['#d8907a', '#a8604e'], 0, 0.1, 0), pc(turned([[0.18, 0], [0.18, 0.35], [0.24, 0.4], [0, 0.4]], 10), ['#7a5a50'], 0.15, 0.2, 0.1)])), top);
+    const puffs = Array.from({ length: 5 }, (_, k) => { const m = new THREE.Mesh(blob(0.35, { detail: 1, lump: 0.3, seed: k }), smokeMat.clone()); put(m, top); return m; });
+    live.anim.push(t => puffs.forEach((m, k) => { const f = (t * 0.25 + k / 5) % 1; m.position.set(top[0] + Math.sin(f * 4 + k) * 0.3 + f * 0.8, top[1] + 0.6 + f * 3.2, top[2] + f * 0.4); m.scale.setScalar(0.5 + f * 1.4); m.material.opacity = 0.55 * (1 - f) * Math.min(1, f * 6); }));
+  }
+}
+// la ville : du linge qui sèche entre les maisons (sous les toits), un réverbère et un banc sur la placette
+function town(ctx) {
+  const { put, live } = ctx, K = [], C = [];
+  const line = (a, b, n) => {
+    K.push(pc(stem([a, [(a[0] + b[0]) / 2, Math.min(a[1], b[1]) - 0.35, (a[2] + b[2]) / 2], b], 0.02, 0.02, 3, 10), ['#f4f0e8']));
+    const r = rng(Math.round(a[0] * 5 + b[2]));
+    for (let k = 1; k <= n; k++) {
+      const s = k / (n + 1), p = [mix(a[0], b[0], s), mix(a[1], b[1], s) - Math.sin(s * Math.PI) * 0.35, mix(a[2], b[2], s)], c = PETALS[Math.floor(r() * PETALS.length)], ry = Math.atan2(b[0] - a[0], b[2] - a[2]) + Math.PI / 2;
+      const g = new THREE.PlaneGeometry(0.55 + r() * 0.3, 0.7 + r() * 0.3, 3, 3), q = g.attributes.position; for (let i = 0; i < q.count; i++) q.setZ(i, Math.sin(q.getY(i) * 3 + k) * 0.05);
+      g.computeVertexNormals(); C.push(pc(g.translate(0, -0.4, 0), [c, new THREE.Color(c).offsetHSL(0, 0, -0.15).getStyle()], ...p, 0, ry, 0));
+      K.push(pc(soft(0.05, 0.14, 0.05, 0.01), ['#c8a070'], p[0], p[1] + 0.02, p[2]));
+    }
+  };
+  line([10, 75.4, -1.95], [10.5, 75.6, 1.95], 3); line([6.0, 77.4, 7.2], [2.0, 78.4, 9.2], 4); line([4.0, 72.6, -9.2], [6.0, 73.4, -6.6], 2);
+  put(mesh(fuse(K)), [0, 0, 0]); put(mesh(fuse(C), MAT.cloth), [0, 0, 0]);
+  // réverbère et banc sur la placette, contre ses bords
+  const lampG = [pc(turned([[0.3, 0], [0.25, 0.15], [0.09, 0.3], [0.07, 3.0], [0.12, 3.1], [0, 3.15]], 14), ['#4a4560', '#2a2540']), pc(stem([[0, 3.0, 0], [0.4, 3.3, 0], [0.75, 3.15, 0]], 0.04, 0.04, 5, 6), ['#4a4560']), pc(turned([[0, 0], [0.22, 0.05], [0.18, 0.4], [0.05, 0.5], [0, 0.55]], 12), ['#3a3550'], 0.75, 2.55, 0)];
+  const bulb = new THREE.Mesh(new THREE.SphereGeometry(0.16, 10, 8), glow('#ffe08a', 2)); bulb.position.set(0.75, 2.75, 0);
+  put(group(mesh(fuse(lampG)), bulb), [-15.3, 72, -4.7], 1, -Math.PI / 4); live.glows.push(bulb);
+  const bench = [pc(soft(1.8, 0.12, 0.5, 0.04), ['#c99260', '#8a5a35'], 0, 0.5, 0), pc(soft(1.8, 0.45, 0.1, 0.04), ['#c99260', '#8a5a35'], 0, 0.8, -0.25, -0.15, 0, 0)];
+  for (const x of [-0.75, 0.75]) bench.push(pc(soft(0.12, 0.5, 0.45, 0.03), ['#3a3550'], x, 0.25, 0));
+  put(mesh(fuse(bench)), [-12, 72, -4.5], 1, Math.PI);
 }
 
 // Décor en plus, pensé monde par monde (toujours contre les murs ou dans les coins, jamais sur le chemin)
@@ -486,8 +599,6 @@ function extras(ctx) {
       live.anim.push(t => balloons.forEach((b, k) => { b.position.y = tops[k][1] + Math.sin(t * 1.3 + k) * 0.15; b.rotation.z = Math.sin(t * 0.9 + k) * 0.08; }));
     }
   });
-  // la Ville à l'envers : des arbres qui pendent du ciel
-  W(6, () => { for (const [x, z, s] of [[14, -14, 0.8], [-14.5, -2, 0.7], [5.5, 14.5, 0.75]]) { const t = tree(Math.round(x * 7 + z), { h: 3, s, blossom: '#ffd0e8' }); t.rotation.x = Math.PI; put(group(t), [x, 82.8 + 0.2, z]); } });
   // le Mobile : des étoiles et des lunes en papier, au bout de leur fil
   W(7, () => {
     for (const [x, z, len, moon] of [[13.5, 13.5, 4, 0], [-12.5, -12.5, 3, 1], [14, -12, 5, 1], [-4, 2, 3.5, 0], [-13.5, 14, 2.5, 0]]) {
@@ -536,7 +647,7 @@ function extras(ctx) {
   }
   for (let k = 0; k < (LIGHT ? 16 : 34); k++) { const c = cloud(k + 300, 3.5 + r() * 3), a = r() * TAU, rr = 30 + r() * 90; c.position.set(Math.cos(a) * rr, -32 - r() * 6, Math.sin(a) * rr); ctx.tower.add(c); }
 }
-function potted(seed, s) {
+export function potted(seed, s) {
   const K = [pc(turned([[0.45, 0], [0.55, 0.1], [0.62, 0.7], [0.7, 0.78], [0.66, 0.86], [0, 0.82]], 20), ['#f6f2fa', '#c8bed8'])];
   K.push(...bushParts(seed, 0.75, ['#8fd86a', '#3f8a3a'], seed % 2 ? '#ff8fb0' : '#ffffff').map(g => g.translate(0, 0.75, 0)));
   const m = mesh(fuse(K)); m.scale.setScalar(s); return m;
@@ -632,7 +743,7 @@ export function dress(b, [top = '#ffffff', side = '#cccccc'] = []) {
   if (b.floor) for (const [k, sg] of [[0, 1], [0, -1], [2, 1], [2, -1]]) {
     const edge = b.c[k] + sg * b.h[k];
     if (Math.abs(edge) < 15.99) continue;
-    const o = k ? 2 : 0, a0 = b.c[o] - b.h[o], a1 = b.c[o] + b.h[o], yt = b.c[1] + b.h[1] - 0.18, yb = b.c[1] - b.h[1] + 0.12;
+    const o = k ? 0 : 2, a0 = b.c[o] - b.h[o], a1 = b.c[o] + b.h[o], yt = b.c[1] + b.h[1] - 0.18, yb = b.c[1] - b.h[1] + 0.12;
     const P = (t, y, out) => (k ? [t, y, edge + sg * out] : [edge + sg * out, y, t]);
     K.push(pc(stem([P(a0, yt, 0.06), P(a1, yt, 0.06)], 0.24, 0.24, 8, 2), [light, side]), pc(stem([P(a0, yb, 0.02), P(a1, yb, 0.02)], 0.13, 0.13, 6, 2), [side, dark]));
     for (const t of [a0, a1]) K.push(pc(blob(0.3, { detail: 2, lump: 0.05 }), [light, side], ...P(t, yt, 0.06)));

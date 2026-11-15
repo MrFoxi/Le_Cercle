@@ -7,6 +7,7 @@
 /* global TourPhys, TourLevel */
 import * as THREE from 'three';
 import * as D from './decor.js';
+import { furnish } from './salles.js';
 
 const TAU = Math.PI * 2;
 const lerp = (a, b, k) => a + (b - a) * k;
@@ -19,12 +20,13 @@ const LOOK = {
   terrace: ['#86d35c', '#a8744a', 'grass'], pavilion: ['#f4eee2', '#d8cfc0', 'stone'], boardwalk: ['#e0ac72', '#a8744a', 'plank'],
   clockfloor: ['#f6ecd8', '#cfae70', 'tile'], brass: ['#e8c068', '#b8893a', 'metal'], pivot: ['#d4a840', '#a07820', 'metal'], hand: ['#2f2a48', '#221e38', 'metal'],
   hourhand: ['#6a5530', '#4a3a1a', 'metal'], lift: ['#d0d6e2', '#8a90a0', 'grid'],
-  checker: ['#f4f0ea', '#cfc8d8', 'checker'], marblewall: ['#efe9f3', '#d4ccdf', 'stone'], pit: ['#c2b9d0', '#a49ab6', 'stone'], plateA: ['#e0a65e', '#a8743a', 'metal'],
-  plateB: ['#e8b870', '#b0803e', 'metal'], column: ['#f6f2fa', '#dad2e6', 'stone'],
+  checker: ['#f4f0ea', '#cfc8d8', 'checker'], marblewall: ['#efe9f3', '#d4ccdf', 'stone'], pit: ['#c2b9d0', '#a49ab6', 'stone'], plateA: ['#f4f0ea', '#c8c0b4', 'metal'],
+  plateB: ['#f4f0ea', '#c8c0b4', 'metal'], column: ['#f6f2fa', '#dad2e6', 'stone'],
   parquet: ['#c99260', '#8a5a35', 'plank'], shelves: ['#8f5d38', '#6b4426', 'books'], book: ['#c0503e', '#f4ead6', 'cover'], bookstack: ['#d8744e', '#f2e6ca', 'books'],
   millfloor: ['#c6bba6', '#8f8270', 'stone'], millwall: ['#ae9f8a', '#8a7c68', 'stone'], dock: ['#c99260', '#8a5a35', 'plank'], bucket: ['#c99260', '#8a5a35', 'plank'], bucketlip: ['#946238', '#6b4426', 'plank'],
   plank: ['#f8dcae', '#c89a6a', 'plank'], fairwall: ['#ff9abb', '#e06a90', 'stripes'], rail: ['#ff6476', '#c83a50', 'rail'], railside: ['#ffd84a', '#e0a020', 'metal'], station: ['#fff3da', '#e8c8a0', 'stone'],
-  cobble: ['#bfb8d0', '#8a82a0', 'cobble'], foundation: ['#ddceb4', '#a8987c', 'brick'], spire: ['#7464b4', '#4a3a88', 'stone'],
+  cobble: ['#bfb8d0', '#8a82a0', 'cobble'], chimney: ['#c8806a', '#b0624e', 'brick'],
+  houseA: ['#e8a888', '#fff0dc', 'brick'], houseB: ['#e8a888', '#cfe6ff', 'brick'], houseC: ['#e8a888', '#ffd8e4', 'brick'], houseD: ['#e8a888', '#fff2b0', 'brick'],
   deck: ['#e6b886', '#a87a50', 'plank'], mobile: ['#a6e8c0', '#5aa880', 'leaf'],
   organfloor: ['#f4ead6', '#c8a870', 'tile'], organwall: ['#ecc464', '#b88a30', 'metal'], key: ['#ffffff', '#d8d8e0', 'key'], organledge: ['#f6d880', '#c89a3a', 'metal'], organbench: ['#946238', '#6b4426', 'plank'],
   trebframe: ['#b07a40', '#7a4a24', 'plank'], pocket: ['#efe6cc', '#a89878', 'net'], pocketlip: ['#946238', '#6b4426', 'plank'], counterweight: ['#6a6a7c', '#3a3a48', 'metal'],
@@ -205,13 +207,14 @@ export function createScene(canvas) {
   L.blocks.forEach((b, i) => {
     const moving = !!(b.kin || b.topple);
     const mesh = new THREE.Mesh(blockGeometry(b, moving), matFor(b).clone());
+    if (b.kin?.type === 'lever') mesh.material.color.set(D.PAIR[b.kin.id]);
     mesh.castShadow = mesh.receiveShadow = true;
     const lg = lipGeometry(b, moving), lip = lg && new THREE.Mesh(lg, lipMat);
     if (lip) lip.receiveShadow = true;
     const cg = crownGeometry(b), extra = [lip, cg && D.mesh(cg), isStatic(b) && D.dress(b, LOOK[b.look])].filter(Boolean);
     extra.forEach(o => mesh.add(o)); // enfants du bloc : ils bougent et disparaissent avec lui
     tower.add(mesh);
-    live.blocks.push({ b, i, mesh, extra, k: 1, moving, w: worldOf(b.c[1] - b.h[1]) });
+    live.blocks.push({ b, i, mesh, extra, k: 1, moving, w: b.vw ?? worldOf(b.kin?.type === 'orbit' ? b.kin.pivot[1] - 6 : b.c[1] - b.h[1]) });
     if (b.ramp) arrows(b);
   });
   // Flèches peintes sur les pentes : elles pointent vers le bas de la pente
@@ -248,7 +251,8 @@ export function createScene(canvas) {
     const x = c.getContext('2d'); x.fillStyle = color; x.font = `900 ${size}px "Baloo 2", Nunito, sans-serif`; x.textAlign = 'center'; x.textBaseline = 'middle'; x.fillText(str, 128, 64);
     const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; return t;
   };
-  D.decorate({ L, tower, put, live, text, fall, LIGHT, worldOf, world: w => (decoW = w) });
+  const dctx = { L, tower, put, live, text, fall, LIGHT, worldOf, world: w => (decoW = w) };
+  D.decorate(dctx); furnish(dctx);
   // Le trou du sommet (il tourne avec son disque), drapeau, rayon de lumière visible de loin
   const cupG = new THREE.Group();
   cupG.add(new THREE.Mesh(new THREE.CircleGeometry(0.5, 24), new THREE.MeshBasicMaterial({ color: '#10140f', polygonOffset: true, polygonOffsetFactor: -3 })));
@@ -419,7 +423,7 @@ export function createScene(canvas) {
     for (const s of live.spins) s.obj.rotation[s.axis] += dt * s.speed;
     for (const g of live.glows) (g.children.length ? g.children : [g]).forEach((c, k) => c.material && (c.material.emissiveIntensity = 0.8 + Math.sin(t * 2 + k) * 0.4));
     if (live.wheel) live.wheel.rotation.x = (TAU / 20) * W.t;
-    for (const f of live.anim) f(t, dt);
+    for (const f of live.anim) f(t, dt, W);
     for (const wr of live.wires) { // les fils du mobile : du crochet aux quatre coins du plateau qui penche
       const b = W.blocks[wr.i], e3 = new THREE.Euler(b.pitch, b.yaw, b.roll, 'YXZ'), a = wr.line.geometry.attributes.position;
       [[1, 1], [1, -1], [-1, 1], [-1, -1]].forEach(([sx, sz], k) => { const v = tmp.set(sx * b.h[0] * 0.85, b.h[1], sz * b.h[2] * 0.85).applyEuler(e3); a.setXYZ(k * 2, ...wr.hook); a.setXYZ(k * 2 + 1, b.c[0] + v.x, b.c[1] + v.y, b.c[2] + v.z); });

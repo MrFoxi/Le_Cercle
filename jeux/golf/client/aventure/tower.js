@@ -1,6 +1,6 @@
 // Mini-golf, mode Aventure : la Tour. Onze mondes empilés tous les 12 m, chacun bâti autour d'une idée :
 // le Jardin (apprendre), l'Horloge (aiguilles-ponts), les Balances (plateaux à cliquet), la Bibliothèque (livres-dominos),
-// la Roue à godets, le Grand Huit (rails), la Ville à l'envers, le Mobile, l'Orgue des vents, le Trébuchet, et le Sommet
+// la Roue à godets, le Grand Huit (rails), la Ville perchée (de toit en toit), le Mobile, l'Orgue des vents, le Trébuchet, et le Sommet
 // (un trou qui tourne). Partagé par le navigateur (window.TourLevel) et les tests (require).
 // Repère : mètres, y vers le haut ; la tour occupe x et z de -16 à 16 ; face avant = +z, droite = +x.
 // Règle de construction : aucun bloc n'en chevauche un autre (des faces confondues font scintiller l'image).
@@ -94,18 +94,18 @@
   const shafts = [[6, -14, 12, -8], [-12, 6, -6, 12], [8, 0, 14, 6], [8, 6, 14, 12]];
   slab(24, [[-16, -16, -11, -11], [8, 12, 15, 15], ...shafts], 'marble', { look: 'checker' });
   walls(24, 34.8, 'marble', {}, { look: 'marblewall' });
-  // puits sous les plateaux qui descendent (la balle ne peut pas filer sous le plancher)
+  // puits sous les plateaux qui descendent (la balle ne peut pas filer sous le plancher) ; vw : dessinés avec les Balances
   for (const [x0, z0, x1, z1] of shafts.slice(0, 2)) {
-    box(x0 - 0.3, 20.5, z0 - 0.3, x1 + 0.3, 22.8, z0, 'marble', { look: 'pit' }); box(x0 - 0.3, 20.5, z1, x1 + 0.3, 22.8, z1 + 0.3, 'marble', { look: 'pit' });
-    box(x0 - 0.3, 20.5, z0, x0, 22.8, z1, 'marble', { look: 'pit' }); box(x1, 20.5, z0, x1 + 0.3, 22.8, z1, 'marble', { look: 'pit' });
+    box(x0 - 0.3, 20.5, z0 - 0.3, x1 + 0.3, 22.8, z0, 'marble', { look: 'pit', vw: 2 }); box(x0 - 0.3, 20.5, z1, x1 + 0.3, 22.8, z1 + 0.3, 'marble', { look: 'pit', vw: 2 });
+    box(x0 - 0.3, 20.5, z0, x0, 22.8, z1, 'marble', { look: 'pit', vw: 2 }); box(x1, 20.5, z0, x1 + 0.3, 22.8, z1, 'marble', { look: 'pit', vw: 2 });
   }
   box(6.1, 22.8, -13.9, 11.9, 24, -8.1, 'metal', { look: 'plateA', kin: { type: 'lever', id: 1, role: 'A', amp: 2.5 } });
   box(8.1, 22.8, 0.1, 13.9, 24, 5.9, 'metal', { look: 'plateB', kin: { type: 'lever', id: 1, role: 'B', amp: 3 } });
   box(-11.9, 22.8, 6.1, -6.1, 24, 11.9, 'metal', { look: 'plateA', kin: { type: 'lever', id: 2, role: 'A', amp: 2.5 } });
   box(8.1, 22.8, 6.1, 13.9, 24, 11.9, 'metal', { look: 'plateB', kin: { type: 'lever', id: 2, role: 'B', amp: 6 } });
   box(8, 22.8, 12, 15, 33, 15, 'marble', { look: 'column' }); // la colonne de sortie (trappe au-dessus)
-  d('chain', [9, 24, -11], { to: [11, 24, 3] }); d('chain', [-9, 24, 9], { to: [11, 24, 9] }); d('statue', [-12, 24, -12]);
-  hint([-16, 23.5, -16], [16, 25, 16], 'Pose la balle sur un plateau de bronze : il descend, et son jumeau (relié par la chaîne) monte… puis reste bloqué en haut. Il devient une marche.');
+  d('levers', [0, 34.8, 0]); d('statue', [-12, 24, -12]);
+  hint([-16, 23.5, -16], [16, 25, 16], 'Pose la balle sur un plateau : il descend, et son jumeau de la même couleur (la chaîne passe par le plafond) monte… puis reste bloqué en haut. Il devient une marche.');
 
   /* ===== 4. La Bibliothèque engloutie (36 m) : des livres-dominos font un pont au-dessus du gouffre ===== */
   W('La Bibliothèque engloutie', 35);
@@ -143,7 +143,7 @@
     box(18.9, by - 0.3, bz + 1.1, 21.4, by + 0.7, bz + 1.4, 'wood', { look: 'bucketlip', kin });
   }
   zones.push({ t: 'water', lo: [-15, 47.6, -5], hi: [15, 48.4, -2] }); // le bief qui traverse le moulin
-  d('wheel', [20, 54.5, 0]); d('millstone', [-8, 48, 6]); d('waterfall', [22, 62, 3], { h: 14 }); d('sacks', [8, 48, 10]);
+  d('wheel', [20, 54.5, 0]); d('millstone', [-8, 48, 6]); d('waterfall', [22.6, 62.3, 3.2], { h: 14.5, w: 0.9 }); d('sacks', [8, 48, 10]);
   hint([-16, 47.5, -16], [16, 50, 16], 'La roue tourne dehors, à droite : roule dans un godet quand il passe tout en bas, il te monte. En haut, sors-en d’un petit coup.');
 
   /* ===== 6. Le Grand Huit (60 m) : des rails, des bosses, et il faut la bonne vitesse ===== */
@@ -162,16 +162,17 @@
   hint([-16, 59.5, -16], [16, 62, 16], 'Le Grand Huit : lance la balle dans les rails (fond de la salle). Trop doux, elle redescend ; assez fort, elle passe les bosses.');
   hint([-15, 65.5, -15], [-6, 70, -10], 'Plus haut ! Le Grand Lob monte presque à la verticale ; sinon, passe par la petite station.');
 
-  /* ===== 7. La Ville à l'envers (72 m) : les maisons pendent du plafond, on joue sur leurs fondations ===== */
-  W('La Ville à l’envers', 71);
+  /* ===== 7. La Ville perchée (72 m) : des maisons posées chacune sur son rocher volant, on saute de toit en toit ===== */
+  W('La Ville perchée', 71);
   slab(72, [[-15, -15, -6, -10]], 'rock', { look: 'cobble' }, [-16, -16, -4, -4]);
-  box(-2, 70, -14, 4, 74, -8, 'rock', { look: 'foundation' });
-  box(6, 72, -8, 14, 76.5, -2, 'rock', { look: 'foundation' });
-  box(6, 74.5, 2, 14, 79, 8, 'rock', { look: 'foundation' });
-  box(-6, 77, 8, 2, 81.5, 14, 'rock', { look: 'foundation' });
-  for (const [x, z, h] of [[10, 0, 5], [1, -2, 6], [-3, 4, 4], [11, 11, 4], [-12, 0, 5]]) box(x - 0.8, 82.8 - h, z - 0.8, x + 0.8, 82.8, z + 0.8, 'rock', { look: 'spire' }); // flèches qui pendent
-  d('upsidehouse', [10, 82.8, -5]); d('upsidehouse', [-8, 82.8, -10]); d('upsidehouse', [10, 82.8, 5]); d('upsidehouse', [-2, 82.8, 11]); d('upsidehouse', [-12, 82.8, 6]);
-  hint([-16, 71.5, -16], [-4, 74, -4], 'Tout est à l’envers : les toits pendent du plafond. Saute de fondation en fondation, et garde la balle basse.');
+  // chaque maison est un vrai bloc (son toit-terrasse est le chemin), avec sa cheminée collée au flanc
+  const house = (x0, y0, z0, x1, y1, z1, look, ch) => { box(x0, y0, z0, x1, y1, z1, 'rock', { look }); box(...ch, 'rock', { look: 'chimney' }); d('house', [(x0 + x1) / 2, y1, (z0 + z1) / 2], { lo: [x0, y0, z0], hi: [x1, y1, z1], look }); };
+  house(-2, 70, -14, 4, 74, -8, 'houseA', [4, 70, -12, 4.8, 75.2, -11.2]);
+  house(6, 72, -8, 14, 76.5, -2, 'houseB', [12, 72, -8.8, 12.8, 77.7, -8]);
+  house(6, 74.5, 2, 14, 79, 8, 'houseC', [5.2, 74.5, 6, 6, 80.2, 6.8]);
+  house(-6, 77, 8, 2, 81.5, 14, 'houseD', [-1, 77, 14, -0.2, 82.7, 14.8]);
+  d('town', [0, 72, 0]);
+  hint([-16, 71.5, -16], [-4, 74, -4], 'La Ville perchée : chaque maison flotte sur son rocher. Saute de toit en toit, et garde la balle basse.');
 
   /* ===== 8. Le Mobile (84 m) : des plateaux suspendus qui penchent sous ton poids ===== */
   W('Le Mobile', 83);
