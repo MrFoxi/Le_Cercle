@@ -12,7 +12,13 @@ const ROUTE = [
   ['wedge', -1.5091332640026105, 0.9, 46], ['putter', -1.6850374216136899, 0.95, 6], ['fer', 0.1261636483615839, 0.9, 40],
   ['fer', 2.2283565688095774, 0.9, 40], ['fer', 1.8801922571605272, 1, 40], ['putter', 2.3982546667513844, 0.4, 6],
   ['fer', 3.045179198633693, 0.9, 40], ['fer', -1.7560005441373145, 0.85, 40], ['wedge', -1.4965252835094611, 0.9, 64],
-  ['wedge', 1.2915568071691341, 0.85, 64], ['wedge', 0.4951857143812828, 0.85, 56], ['putter', 0.6913302493837841, 0.4, 2],
+  ['wedge', 1.2915568071691341, 0.85, 64], ['wedge', 0.9540400778518716, 0.7, 56], ['putter', 1.1725176016186125, 0.55, 6],
+  ['wedge', 1.5852773887007423, 0.7, 64], ['wedge', 0.17341480533233208, 0.75, 64], ['wedge', -0.19249386819271108, 0.75, 64],
+  ['wedge', -0.7703263224684337, 0.7, 56], ['wedge', -1.3794757403390727, 0.75, 64], ['fer', -2.7312269131905977, 0.8, 30],
+  ['wedge', -2.1101827048999198, 0.95, 64], ['wedge', 2.714839408957127, 1, 46], ['wedge', 1.326708813733322, 0.85, 64],
+  ['wedge', 1.5991112345794, 0.9, 64], ['wedge', 0.4381657758275694, 0.8, 64], ['wedge', -0.036096133660438755, 0.8, 46],
+  ['wedge', -1.0658204902272366, 0.95, 64], ['wedge', -2.270969524611795, 0.85, 46], ['wedge', 2.616482233298673, 0.85, 46],
+  ['wedge', 0.31024235870892325, 0.85, 56], ['putter', 0.7437700983640281, 0.4, 2],
 ];
 const near = (a, b) => Math.abs(a - b) < 1e-9;
 
@@ -47,7 +53,7 @@ test('tomber dans le vide fait perdre ; le trou fait gagner', () => {
   assert.strictEqual(P.simulate(w, b, { maxT: 10 }).end, 'lost');
 });
 
-test('une ascension complète est possible, du marais jusqu’au trou, en ramassant le wedge', () => {
+test('une ascension complète est possible, du marais jusqu’à la couronne (98 m), en ramassant le wedge', () => {
   const w = P.createWorld(L), b = P.newBall(L.start);
   P.simulate(w, b, { maxT: 3 });
   let end = null;
@@ -80,6 +86,13 @@ test('les mécanismes : racines qui cassent, obélisque qui bascule, dalle qui f
   assert.ok(P.simulate(w, lob, { maxT: 5 }).events.some(e => e.t === 'club' && e.club === 'lob'));
   const fau = P.newBall([-20, 44.3, -8]); fau.v = [10, 0, 0];
   assert.ok(P.simulate(w, fau, { maxT: 5 }).events.some(e => e.t === 'club' && e.club === 'faucille'));
+  // la lave de la forge recrache la balle vers le haut ; un coup courbé (Faucille) contourne la flèche jusqu'à la terrasse cachée
+  const lava = P.newBall([13.3, 71, -3.5]);
+  const lv = P.simulate(P.createWorld(L), lava, { maxT: 0.5, until: (b, ev) => ev.some(e => e.t === 'lava') });
+  assert.ok(lv.events.some(e => e.t === 'lava') && lava.v[1] > 5, 'la lave renvoie la balle en l’air');
+  const wc = P.createWorld(L); wc.clubs.add('faucille');
+  const curve = P.newBall([10.5, 66.3, 6.5]); P.launch(curve, 'faucille', -1.8, 0.7, 26, -1, 0);
+  assert.ok(P.simulate(wc, curve, { maxT: 12 }).events.some(e => e.t === 'shard' && e.id === 6), 'l’éclat caché derrière la flèche');
   // l'ascenseur : une balle posée dessus monte avec lui
   const w2 = P.createWorld(L), lift = P.newBall([8, 29.6, -20]);
   let top = 0;

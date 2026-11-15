@@ -23,6 +23,7 @@
   <div class="top">
     <a class="pill" href="../" title="Retour au mini-golf">←</a>
     <div class="where"><b id="biome">La Tour</b><small id="alt">0 m</small></div>
+    <div class="where mini"><b>⭐ <span id="shardCount">0/9</span></b><small id="modeTag"></small></div>
     <div class="tools">
       <button class="pill" id="rotL" title="Tourner la tour (Q)">⟲</button>
       <button class="pill" id="rotR" title="Tourner la tour (E)">⟳</button>
@@ -46,19 +47,22 @@
     </div>
   </div>
 
+  <div id="veil" aria-hidden="true"></div>
   <div id="announce" aria-live="polite"></div>
   <div id="toasts" aria-live="polite"></div>
 
   <!-- Accueil -->
   <section id="intro" class="panel">
     <h1>La Tour</h1>
-    <p class="tag">Une tour immense, six mondes empilés, et un seul trou… tout en haut.</p>
+    <p class="tag">Une tour de près de 100 mètres, neuf mondes empilés, et un seul trou… tout en haut.</p>
     <ul class="facts">
       <li>🌿 Pars du marais, tout en bas, et grimpe à coups de club.</li>
       <li>⟲ Fais tourner la tour par quarts de tour pour voir ses autres faces : des passages s’y cachent.</li>
       <li>🏌️ Trouve des clubs dans la tour : chacun ouvre de nouveaux chemins.</li>
+      <li>⭐ Neuf éclats d’étoile sont cachés à l’écart des chemins, un par monde.</li>
       <li>🪂 Une chute n’est pas une défaite : tu repars d’où la balle s’arrête… sauf si elle tombe dans le vide.</li>
     </ul>
+    <div id="modes" class="modes"></div>
     <button class="primary big" id="go">Commencer l’ascension</button>
     <p class="hint">Aucune sauvegarde : chaque partie est une ascension complète.</p>
   </section>

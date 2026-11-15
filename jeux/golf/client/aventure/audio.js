@@ -46,7 +46,7 @@ function bed(freq, vol, q = 0.7, wobble = 0.3) {
 const every = (ms, fn) => { const id = setInterval(() => { if (!document.hidden) fn(); }, ms); timers.push(() => clearInterval(id)); };
 const rnd = (a, b) => a + Math.random() * (b - a);
 // Les gammes de la musique : une humeur par étage
-const MUSIC = [[50, [0, 3, 7, 10]], [55, [0, 4, 7, 9]], [52, [0, 2, 7, 11]], [50, [0, 1, 5, 7]], [57, [0, 4, 7, 11]], [60, [0, 2, 4, 7, 9]]];
+const MUSIC = [[50, [0, 3, 7, 10]], [55, [0, 4, 7, 9]], [52, [0, 2, 7, 11]], [50, [0, 1, 5, 7]], [57, [0, 4, 7, 11]], [60, [0, 2, 4, 7, 9]], [45, [0, 1, 5, 6]], [62, [0, 2, 5, 7, 9]], [57, [0, 4, 7, 11, 14]]];
 const midi = n => 440 * 2 ** ((n - 69) / 12);
 
 export function setBiome(i) {
@@ -77,6 +77,18 @@ export function setBiome(i) {
       add(bed(1400, 0.06, 4, 0.25)); add(bed(320, 0.07));
       every(2500, () => { if (Math.random() < 0.3) noise(0.3, { vol: 0.05, freq: rnd(2000, 4000), q: 6, bus: ambBus }); });
       break;
+    case 6: // orgues de feu : grondement, crépitements
+      add(bed(90, 0.12, 1.2, 0.3)); add(bed(600, 0.03, 1));
+      every(700, () => { if (Math.random() < 0.6) noise(0.05, { vol: 0.05, freq: rnd(1500, 4000), q: 3, bus: ambBus }); });
+      break;
+    case 7: // cité des vents : rafales, fanions qui claquent
+      add(bed(800, 0.11, 0.7, 0.7)); add(bed(250, 0.06));
+      every(2200, () => { if (Math.random() < 0.5) noise(0.25, { vol: 0.06, freq: rnd(1500, 2500), q: 2, bus: ambBus }); });
+      break;
+    case 8: // observatoire : scintillements dans la nuit
+      add(bed(3000, 0.02, 3, 0.2));
+      every(1100, () => { if (Math.random() < 0.6) tone(midi(88 + [0, 4, 7, 11, 14][Math.floor(Math.random() * 5)]), 1.4, { vol: 0.03, bus: ambBus, echo: 0.6 }); });
+      break;
     default: // sanctuaire : carillons dans le vent
       add(bed(900, 0.04, 0.6));
       every(1600, () => { if (Math.random() < 0.6) tone(midi(84 + [0, 2, 4, 7, 9][Math.floor(Math.random() * 5)]), 1.6, { type: 'triangle', vol: 0.035, bus: ambBus, echo: 0.5 }); });
@@ -105,5 +117,7 @@ export function cue(kind) {
   if (kind === 'holed') [0, 4, 7, 12, 16, 19, 24].forEach((n, k) => tone(midi(67 + n), 0.9, { type: 'triangle', vol: 0.14, at: k * 0.13, echo: 0.5 }));
   if (kind === 'lost') { tone(330, 1.6, { type: 'triangle', vol: 0.12, glide: 70, attack: 0.05 }); noise(1.5, { vol: 0.12, freq: 600, sweep: 150 }); }
   if (kind === 'rotate') noise(0.35, { vol: 0.07, freq: 300, q: 1, sweep: 700, attack: 0.08 });
+  if (kind === 'lava') { noise(0.6, { vol: 0.3, freq: 400, q: 0.8, sweep: 1500 }); tone(120, 0.4, { type: 'sawtooth', vol: 0.06, glide: 300 }); }
+  if (kind === 'shard') [0, 7, 12, 19].forEach((n, k) => tone(midi(84 + n), 0.7, { vol: 0.08, at: k * 0.07, echo: 0.6 }));
   if (kind === 'water') noise(0.4, { vol: 0.15, freq: 900, q: 0.8, sweep: 300 });
 }

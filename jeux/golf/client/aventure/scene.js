@@ -14,12 +14,12 @@ const smooth = k => k * k * (3 - 2 * k);
 const SURF = {
   grass: ['#86d35c', '#a8744a'], moss: ['#62b35a', '#7d6a4a'], rock: ['#bdb4a6', '#8f857a'], wood: ['#c08a55', '#8a5a35'],
   sand: ['#f2d08c', '#dca86a'], mud: ['#7f6c4a', '#5e4e34'], ice: ['#d6f2ff', '#a6d8f4'], snow: ['#fbfdff', '#c9dcea'],
-  crystal: ['#c3b4ff', '#8d78e8'], shroom: ['#ff6f8f', '#fff0e0'], gold: ['#f8ead0', '#e6c890'],
+  crystal: ['#c3b4ff', '#8d78e8'], shroom: ['#ff6f8f', '#fff0e0'], gold: ['#f8ead0', '#e6c890'], ash: ['#6a5a54', '#3e3330'],
 };
 // Couleur de la roche des façades selon l'altitude : terre, mousse, améthyste, grès rouge, roche glacée, marbre
 const STRATA = [
   [-30, '#8a6f55', '#a3845f'], [9, '#6f7d58', '#869a66'], [19.5, '#6c5fae', '#8576c9'], [27, '#c8754a', '#e3a265'],
-  [40.5, '#93aac2', '#bfd2e4'], [50, '#efe4ef', '#fff8f2'],
+  [40.5, '#93aac2', '#bfd2e4'], [50, '#efe4ef', '#fff8f2'], [55.5, '#5a4640', '#7a5a4c'], [69.5, '#d6dfe9', '#f2f6fb'], [82.5, '#6a62b8', '#9a92e0'],
 ];
 function strataAt(y) {
   let i = 0;
@@ -37,7 +37,7 @@ const hash = (x, y, z) => { const s = Math.sin(x * 12.9898 + y * 78.233 + z * 37
 /* ---------- Un bloc en volume, couleurs posées sur les sommets ---------- */
 function blockGeometry(b) {
   const [w, h, d] = b.h.map(x => x * 2), big = Math.max(w, h, d) > 6;
-  const geo = big ? new THREE.BoxGeometry(w, h, d, Math.ceil(w / 2.5), Math.ceil(h / 0.33), Math.ceil(d / 2.5)) : new RoundedBoxGeometry(w, h, d, 2, Math.min(0.35, Math.min(w, h, d) * 0.22));
+  const geo = b.look === 'basalt' ? new THREE.CylinderGeometry(w * 0.6, w * 0.6, h, 6, Math.ceil(h / 0.5)) : big ? new THREE.BoxGeometry(w, h, d, Math.ceil(w / 2.5), Math.ceil(h / 0.33), Math.ceil(d / 2.5)) : new RoundedBoxGeometry(w, h, d, 2, Math.min(0.35, Math.min(w, h, d) * 0.22));
   const m = new THREE.Matrix4().makeRotationFromEuler(new THREE.Euler(b.pitch, b.yaw, b.roll, 'YXZ'));
   m.setPosition(...b.c);
   geo.applyMatrix4(m);
@@ -47,6 +47,7 @@ function blockGeometry(b) {
   for (let i = 0; i < pos.count; i++) {
     const x = pos.getX(i), y = pos.getY(i), z = pos.getZ(i), ny = nor.getY(i), n = hash(Math.round(x * 2), Math.round(y * 2), Math.round(z * 2));
     if (ny > 0.6) c.copy(cTop).offsetHSL(0, 0, (n - 0.5) * 0.06);
+    else if (b.look === 'basalt') c.set(y > b.c[1] + b.h[1] - 0.6 ? '#ff7a3a' : hash(Math.round(y * 2), 3, 1) > 0.5 ? '#4a3c38' : '#3a2e2b');
     else if (b.s === 'rock' || b.s === 'gold' || b.s === 'snow' || b.s === 'crystal') {
       const [a, bb] = strataAt(y), layer = Math.floor((y + Math.sin(x * 0.25 + z * 0.25) * 0.4) / 1.3), band = hash(layer, 1, 7);
       c.copy(a).lerp(bb, band).offsetHSL(0, 0, (n - 0.5) * 0.05);
@@ -59,6 +60,7 @@ function blockGeometry(b) {
   return geo.index ? geo.toNonIndexed() : geo;
 }
 
+export const LIGHT = (typeof matchMedia !== 'undefined' && matchMedia('(pointer: coarse)').matches) || innerWidth < 700; // téléphone : moins d'ombres et d'herbe
 export function createScene(canvas) {
   const gl = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true, powerPreference: 'high-performance' });
   gl.shadowMap.enabled = true;
@@ -77,12 +79,12 @@ export function createScene(canvas) {
   scene.add(world); world.add(tower);
   const hemi = new THREE.HemisphereLight('#eaf6ff', '#6a6a5a', 1.25);
   const sun = new THREE.DirectionalLight('#fff4e0', 2.4);
-  sun.castShadow = true; sun.shadow.mapSize.set(2048, 2048);
+  sun.castShadow = true; sun.shadow.mapSize.set(LIGHT ? 1024 : 2048, LIGHT ? 1024 : 2048);
   Object.assign(sun.shadow.camera, { left: -30, right: 30, top: 30, bottom: -30, near: 1, far: 200 });
   sun.shadow.bias = -0.0005; sun.shadow.normalBias = 0.04;
   scene.add(hemi, sun, sun.target);
 
-  const L = TourLevel, live = { solid: [], fades: [], dyn: new Map(), hidden: [], falls: [], spins: [], glows: [], pickups: [], flames: [], clouds: [] };
+  const L = TourLevel, live = { solid: [], fades: [], dyn: new Map(), hidden: [], falls: [], spins: [], glows: [], pickups: [], flames: [], clouds: [], lava: [], geysers: [], flags: [], shards: [] };
   const mats = {
     matte: new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.86 }),
     gloss: new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.22, metalness: 0.05 }),
@@ -116,7 +118,7 @@ export function createScene(canvas) {
     const b = f.b; if (!b.face) continue;
     const parts = [], y0 = b.c[1] - b.h[1], y1 = b.c[1] + b.h[1];
     for (const [ax, sgn] of [[0, 1], [0, -1], [2, 1], [2, -1]]) {
-      const len = b.h[ax === 0 ? 2 : 0] * 2, n = Math.round((len * (y1 - y0)) / 14);
+      const len = b.h[ax === 0 ? 2 : 0] * 2, n = Math.round((len * (y1 - y0)) / (LIGHT ? 28 : 14));
       for (let k = 0; k < n; k++) {
         const u = (dr() * 2 - 1) * (len / 2 - 0.6), out = b.h[ax] + 0.05;
         let y = y0 + 0.5 + dr() * (y1 - y0 - 1);
@@ -127,9 +129,12 @@ export function createScene(canvas) {
         else if (y < 32) { g = new THREE.OctahedronGeometry(0.35 + dr() * 0.35, 0); g.scale(0.7, 1.6, 0.7); g.rotateZ((dr() - 0.5) * 1.2); }
         else if (y < 42) { g = new THREE.BoxGeometry(1.2 + dr() * 1.6, 0.35, 0.25); }
         else if (y < 50) { g = new THREE.ConeGeometry(0.16, 0.8 + dr() * 1.2, 5); g.rotateX(Math.PI); y = Math.max(y, y1 - 1.6); } // stalactites sous les rebords
-        else { g = new THREE.BoxGeometry(0.3, 1.6, 0.18); }
+        else if (y < 55.5) { g = new THREE.BoxGeometry(0.3, 1.6, 0.18); }
+        else if (y < 69.5) { g = new THREE.BoxGeometry(0.22, 1.2 + dr() * 2.5, 0.12); }
+        else if (y < 82.5) { g = new THREE.BoxGeometry(1.4, 0.25, 0.3); }
+        else { g = new THREE.OctahedronGeometry(0.25, 0); }
         g.translate(px, y, pz);
-        const col = new THREE.Color(y < 10 ? '#4f7a3a' : y < 20 ? '#4f9a44' : y < 32 ? ['#b49cff', '#7fe6ff'][k % 2] : y < 42 ? '#9a5a3a' : y < 50 ? '#e8f6ff' : '#e0b860');
+        const col = new THREE.Color(y < 10 ? '#4f7a3a' : y < 20 ? '#4f9a44' : y < 32 ? ['#b49cff', '#7fe6ff'][k % 2] : y < 42 ? '#9a5a3a' : y < 50 ? '#e8f6ff' : y < 55.5 ? '#e0b860' : y < 69.5 ? '#ff7a2a' : y < 82.5 ? '#ffffff' : '#ffe9a0');
         const c = new Float32Array(g.attributes.position.count * 3); for (let i = 0; i < c.length; i += 3) c.set([col.r, col.g, col.b], i);
         g.setAttribute('color', new THREE.BufferAttribute(c, 3));
         parts.push(g.index ? g.toNonIndexed() : g);
@@ -146,7 +151,7 @@ export function createScene(canvas) {
   for (const b of L.blocks) {
     if (b.pitch || b.roll || b.move) continue;
     const top = b.c[1] + b.h[1], area = b.h[0] * b.h[2] * 4;
-    const n = Math.min(260, Math.round(area * (b.s === 'grass' ? 0.35 : b.s === 'moss' ? 0.5 : b.s === 'sand' || b.s === 'rock' ? 0.05 : 0)));
+    const n = Math.min(260, Math.round((LIGHT ? 0.4 : 1) * area * (b.s === 'grass' ? 0.35 : b.s === 'moss' ? 0.5 : b.s === 'sand' || b.s === 'rock' ? 0.05 : 0)));
     for (let k = 0; k < n; k++) {
       const x = b.c[0] + (rand() * 2 - 1) * (b.h[0] - 0.3), z = b.c[2] + (rand() * 2 - 1) * (b.h[2] - 0.3);
       if (Math.abs(x) < 15.7 && Math.abs(z) < 15.7 && top < 10 && b.look === 'plateau') continue; // pas sous la tour
@@ -230,6 +235,14 @@ export function createScene(canvas) {
       case 'lanterns': at(lanterns(p), p); break;
       case 'blossom': at(T('round', 0.14, { leaf: '#ffb3d1', leaf2: '#ffd1e3', trunk: '#7a5a45' }), p); break;
       case 'beacon': { const b = crystalCluster(true); at(b, p, 1.4); live.glows.push(b); break; }
+      case 'lavaflow': { const m = new THREE.Mesh(new THREE.PlaneGeometry(1.6, dd.h, 1, 12), glowMat('#ff6a1f', 1.3)); m.position.set(p[0], p[1] - dd.h / 2, p[2]); if (dd.face === 'x+') m.rotation.y = Math.PI / 2; tower.add(m); live.lava.push(m); break; }
+      case 'geyser': { const g = new THREE.Group(); g.add(new THREE.Mesh(new THREE.TorusGeometry(1.3, 0.35, 8, 20), P.mat('#3a2e2b'))); g.children[0].rotation.x = Math.PI / 2; const puffs = []; for (let k = 0; k < 7; k++) { const m = new THREE.Mesh(new THREE.SphereGeometry(0.9, 10, 8), new THREE.MeshStandardMaterial({ color: '#ffffff', transparent: true, opacity: 0.7, roughness: 1 })); g.add(m); puffs.push(m); } at(g, p); live.geysers.push({ puffs, zone: L.zones.find(z => z.t === 'wind' && z.period) }); break; }
+      case 'anvil': { const g = new THREE.Group(); g.add(P.box(1.4, 0.8, 0.9, '#3a3a44'), P.box(2.4, 0.5, 1, '#4a4a56', 0, 0.8, 0, 0.1), P.cone(0.5, 1, '#4a4a56', 1.5, 0.8)); g.children[2].rotation.z = -Math.PI / 2; at(P.shadows(g), p); break; }
+      case 'windflags': { for (let k = 0; k < 3; k++) { const pole = P.cyl(0.06, 0.06, 4 + k, '#e8e2d6', p[0] + k * 1.5, p[1], p[2], 6); tower.add(pole); const fg = new THREE.PlaneGeometry(1.6, 0.6, 6, 1); fg.translate(0.8, 0, 0); const f = new THREE.Mesh(fg, P.mat(['#ff6fa8', '#7fe6ff', '#ffd23f'][k], { side: THREE.DoubleSide })); f.position.set(p[0] + k * 1.5, p[1] + 3.6 + k, p[2]); tower.add(f); live.flags.push({ geo: fg, base: fg.attributes.position.array.slice() }); } break; }
+      case 'ruinarch': at(P.arch(40, 34, '#e6e0d6', '#c8d4e2'), p, 0.13, 0.2); break;
+      case 'chains': for (let k = 0; k < 3; k++) for (let j = 0; j < 8; j++) { const l = new THREE.Mesh(new THREE.TorusGeometry(0.18, 0.05, 6, 12), P.mat('#8a8a96', { metalness: 0.6, roughness: 0.3 })); l.position.set(p[0] + (k - 1) * 6, p[1] - 0.3 - j * 0.32, p[2]); l.rotation.y = j % 2 ? Math.PI / 2 : 0; tower.add(l); } break;
+      case 'observatory': { const g = P.dome(3.2, '#f2eee6', '#9fd8ff', { glass: true, inner: '#5a4fb0' }); const tel = P.cyl(0.4, 0.55, 4, '#d8d0c0'); tel.rotation.z = -0.7; tel.position.set(0.8, 2.6, 0); g.add(tel); at(g, p); break; }
+      case 'stars': { const n = 300, pos = new Float32Array(n * 3), r = P.rngOf(13); for (let k = 0; k < n; k++) { const a = r() * TAU, rad = 70 + r() * 60; pos.set([Math.cos(a) * rad, 80 + r() * 70, Math.sin(a) * rad], k * 3); } const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.BufferAttribute(pos, 3)); tower.add(new THREE.Points(g, new THREE.PointsMaterial({ color: '#ffffff', size: 2.5, sizeAttenuation: false, transparent: true, opacity: 0.85, fog: false }))); break; }
     }
   }
   // Le trou, son drapeau et un rayon de lumière qui se voit de loin
@@ -252,6 +265,19 @@ export function createScene(canvas) {
     at(g, pk.p); live.pickups.push({ pk, g, C });
   }
 
+  // Éclats d'étoile : petites étoiles dorées qui tournent
+  for (const sh of L.shards || []) {
+    const g = new THREE.Group(), m = new THREE.Mesh(new THREE.OctahedronGeometry(0.35, 0), glowMat('#ffe36a', 1.8));
+    m.scale.set(1, 1.5, 1); g.add(m);
+    const h = new THREE.Mesh(new THREE.SphereGeometry(0.7, 12, 8), new THREE.MeshBasicMaterial({ color: '#fff3a0', transparent: true, opacity: 0.25, depthWrite: false })); g.add(h);
+    at(g, sh.p); live.shards.push({ sh, g });
+  }
+  // Oiseaux qui tournent autour de la tour, papillons autour de la balle (forêt, sanctuaire)
+  const flap = (c, s) => { const g = new THREE.Group(), wg = new THREE.BufferGeometry(); wg.setAttribute('position', new THREE.Float32BufferAttribute([0, 0, 0, -s, 0, s * 0.5, -s * 0.2, 0, -s * 0.4], 3)); wg.computeVertexNormals(); const mm = new THREE.MeshBasicMaterial({ color: c, side: THREE.DoubleSide }); const l = new THREE.Mesh(wg, mm), r = new THREE.Mesh(wg, mm); r.scale.x = -1; g.add(l, r); g.userData.wings = [l, r]; return g; };
+  const birds = [], flies = [];
+  for (let k = 0; k < 9; k++) { const b = flap('#2b2552', 0.7); b.userData = { ...b.userData, a: k * 0.7, r: 26 + (k % 3) * 4, dy: (k % 4) * 1.5, s: 0.18 + (k % 3) * 0.04 }; tower.add(b); birds.push(b); }
+  for (let k = 0; k < 6; k++) { const f = flap(['#ff8fc0', '#ffe36a', '#9fd8ff'][k % 3], 0.22); f.userData = { ...f.userData, a: k, r: 1.5 + (k % 3) }; f.visible = false; tower.add(f); flies.push(f); }
+
   // Nuages à différentes hauteurs, et une mer de nuages tout en bas
   const cr = P.rngOf(77);
   for (let k = 0; k < 26; k++) {
@@ -273,6 +299,13 @@ export function createScene(canvas) {
   // Aperçu de la trajectoire et flèche de visée
   const preview = new THREE.Points(new THREE.BufferGeometry(), new THREE.PointsMaterial({ color: '#ffe14a', size: 7, sizeAttenuation: false, transparent: true, opacity: 0.95, depthTest: false }));
   preview.renderOrder = 11; tower.add(preview);
+  // Repères : sous la balle en vol (là où elle retomberait à la verticale) et point d'arrivée de l'aperçu
+  const drop = new THREE.Mesh(new THREE.RingGeometry(0.3, 0.45, 24), new THREE.MeshBasicMaterial({ color: '#ffffff', transparent: true, opacity: 0.7, depthWrite: false }));
+  drop.rotation.x = -Math.PI / 2; drop.renderOrder = 9; tower.add(drop);
+  const dropLine = new THREE.Line(new THREE.BufferGeometry(), new THREE.LineDashedMaterial({ color: '#ffffff', dashSize: 0.3, gapSize: 0.25, transparent: true, opacity: 0.6 }));
+  tower.add(dropLine);
+  const landing = new THREE.Mesh(new THREE.RingGeometry(0.55, 0.8, 32), new THREE.MeshBasicMaterial({ color: '#ffe14a', transparent: true, opacity: 0.9, depthTest: false }));
+  landing.rotation.x = -Math.PI / 2; landing.renderOrder = 12; tower.add(landing);
   const arrow = new THREE.Group();
   arrow.add(new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.06, 1, 8), new THREE.MeshBasicMaterial({ color: '#ffffff', depthTest: false })), new THREE.Mesh(new THREE.ConeGeometry(0.22, 0.5, 12), new THREE.MeshBasicMaterial({ color: '#ffffff', depthTest: false })));
   arrow.children.forEach(m => (m.renderOrder = 12));
@@ -290,12 +323,15 @@ export function createScene(canvas) {
   /* ---------- Rotation et cadrage ---------- */
   const view = { rot: 0, rotGoal: 0, follow: new THREE.Vector3(), k: 0 };
   function rotate(dir) { view.k = (view.k + dir + 4) % 4; view.rotGoal += (dir * Math.PI) / 2; }
+  // La direction « vers le fond de l'écran » une fois la rotation finie (pour pré-régler la visée)
+  function awayYaw() { const f = new THREE.Vector3(fwd.x, 0, fwd.z).normalize().applyAxisAngle(new THREE.Vector3(0, 1, 0), -view.rotGoal); return Math.atan2(f.z, f.x); }
+  let cine = 0; // 0 → 1 : la caméra recule pour montrer toute la tour (victoire)
   function resize() {
     const w = canvas.clientWidth, h = canvas.clientHeight;
     if (!w || !h) return;
-    const dpr = Math.min(devicePixelRatio || 1, 2);
+    const dpr = Math.min(devicePixelRatio || 1, LIGHT ? 1.5 : 2);
     if (canvas.width !== Math.round(w * dpr) || canvas.height !== Math.round(h * dpr)) { gl.setPixelRatio(dpr); gl.setSize(w, h, false); }
-    const a = w / h, vh = a < 0.8 ? VIEW * 1.25 : VIEW; // un peu plus de hauteur sur un téléphone en hauteur
+    const a = w / h, vh = lerp(a < 0.8 ? VIEW * 1.25 : VIEW, 135, smooth(cine)); // un peu plus de hauteur sur un téléphone en hauteur
     Object.assign(camera, { left: (-vh * a) / 2, right: (vh * a) / 2, top: vh / 2, bottom: -vh / 2 });
     camera.updateProjectionMatrix();
   }
@@ -328,6 +364,7 @@ export function createScene(canvas) {
     const bw = tmp.set(...ball.p).applyAxisAngle(new THREE.Vector3(0, 1, 0), view.rot);
     const goal = bw.clone().sub(fwd.clone().multiplyScalar(bw.dot(fwd))).negate();
     goal.y -= 3.5; // la balle un peu sous le centre : on voit ce qui est au-dessus
+    if (st.cinematic) { cine = Math.min(1, cine + dt / 3); view.rotGoal += dt * 0.25; const c = tmp.set(0, 46, 0).applyAxisAngle(new THREE.Vector3(0, 1, 0), view.rot); goal.lerp(c.clone().sub(fwd.clone().multiplyScalar(c.dot(fwd))).negate(), smooth(cine)); }
     view.follow.lerp(goal, 1 - Math.exp(-dt * 3.2));
     world.position.copy(view.follow);
     world.updateMatrixWorld();
@@ -342,20 +379,34 @@ export function createScene(canvas) {
     trail.geometry.setAttribute('position', new THREE.Float32BufferAttribute(trailPts, 3)); trail.geometry.computeBoundingSphere();
     // blocs qui cachent la balle : transparents ; balle en filigrane derrière
     const camLocal = tower.worldToLocal(ballWorld.clone().sub(fwd.clone().multiplyScalar(200)));
-    const dir = new THREE.Vector3(...ball.p).sub(camLocal).normalize(), r3 = new THREE.Ray(camLocal, dir), box3 = new THREE.Box3(), far = camLocal.distanceTo(new THREE.Vector3(...ball.p)) - 0.4;
+    const dirL = new THREE.Vector3(...ball.p).sub(camLocal).normalize(), box3 = new THREE.Box3();
+    const rays = [[0, 0, 0], [2, 0, 0], [-2, 0, 0], [0, 0, 2], [0, 0, -2], [0, 1.8, 0]].map(([dx, dy, dz]) => { const target = new THREE.Vector3(ball.p[0] + dx, ball.p[1] + dy, ball.p[2] + dz), o = target.clone().sub(dirL.clone().multiplyScalar(200)); return { r: new THREE.Ray(o, dirL), far: 199.6, main: !dx && !dy && !dz }; });
     let hidden = false;
     for (const f of live.fades) {
       let block = false;
       if (f.b) { const e = f.ext || (f.ext = aabbHalf(f.b)); box3.min.set(f.b.c[0] - e[0], f.b.c[1] - e[1], f.b.c[2] - e[2]); box3.max.set(f.b.c[0] + e[0], f.b.c[1] + e[1], f.b.c[2] + e[2]); }
       else box3.setFromCenterAndSize(f.deco.position.clone().add(new THREE.Vector3(0, f.r, 0)), new THREE.Vector3(f.r * 2, f.r * 2.4, f.r * 2));
-      const hit = r3.intersectBox(box3, new THREE.Vector3());
-      if (hit && hit.distanceTo(camLocal) < far && !(f.b && W.broken.has(L.blocks.indexOf(f.b)))) block = true;
-      if (block) hidden = true;
-      f.k += ((block ? 0.05 : 1) - f.k) * (1 - Math.exp(-dt * 8));
+      let main = false; // cache la balle elle-même (presque effacé) ou seulement ses abords (à moitié)
+      if (!(f.b && W.broken.has(L.blocks.indexOf(f.b)))) for (const ry of rays) { const hit = ry.r.intersectBox(box3, new THREE.Vector3()); if (hit && hit.distanceTo(ry.r.origin) < ry.far && !(f.b && box3.containsPoint(new THREE.Vector3(...ball.p)))) { block = true; if (ry.main) { hidden = true; main = true; } } }
+      f.k += ((main ? 0.05 : block ? 0.4 : 1) - f.k) * (1 - Math.exp(-dt * 8));
       const ms = f.mesh ? [f.mesh.material, ...(f.extra ? [f.extra.material] : [])] : []; if (f.deco) f.deco.traverse(m => m.isMesh && ms.push(m.material));
       for (const m of ms) { const tr = f.k < 0.99; if (m.transparent !== tr) { m.transparent = tr; m.needsUpdate = true; } m.opacity = f.k; m.depthWrite = f.k > 0.5; } // un matériau opaque est compilé avec alpha = 1
     }
     ghost.visible = hidden;
+    // repère sous la balle en vol
+    const gy = !st.ready && !ball.ground ? TourPhys.groundBelow(W, ball.p) : null;
+    drop.visible = dropLine.visible = gy !== null && ball.p[1] - gy > 1.2;
+    if (drop.visible) { drop.position.set(ball.p[0], gy + 0.04, ball.p[2]); dropLine.geometry.setFromPoints([new THREE.Vector3(...ball.p), new THREE.Vector3(ball.p[0], gy, ball.p[2])]); dropLine.computeLineDistances(); }
+    landing.visible = !!st.preview?.length;
+    if (landing.visible) { const e = st.preview.at(-1); landing.position.set(e[0], e[1] - TourPhys.R + 0.05, e[2]); landing.scale.setScalar(1 + Math.sin(t * 6) * 0.1); }
+    // lave, geyser, fanions, éclats, oiseaux, papillons
+    for (const m of live.lava) m.material.emissiveIntensity = 1.1 + Math.sin(t * 2 + m.position.x) * 0.35;
+    for (const g of live.geysers) { const z = g.zone, on = z && ((W.t + (z.phase || 0)) % z.period) < z.on; g.puffs.forEach((m, k) => { const u = (t * 0.8 + k / g.puffs.length) % 1; m.visible = on; m.position.set(Math.sin(k * 2) * 0.4, u * 15, Math.cos(k * 3) * 0.4); m.scale.setScalar(0.6 + u * 1.6); m.material.opacity = 0.75 * (1 - u); }); }
+    for (const fl of live.flags) { const fp2 = fl.geo.attributes.position; for (let i = 0; i < fp2.count; i++) { const x = fl.base[i * 3]; fp2.setZ(i, Math.sin(t * 6 - x * 3) * x * 0.15); } fp2.needsUpdate = true; }
+    for (const s of live.shards) { s.g.visible = !W.shards.has(s.sh.id); s.g.rotation.y = t * 2; s.g.position.y = s.sh.p[1] + Math.sin(t * 2.5 + s.sh.id) * 0.15; }
+    for (const b of birds) { const u = b.userData; u.a += dt * u.s; b.position.set(Math.cos(u.a) * u.r, ball.p[1] + 8 + u.dy + Math.sin(t + u.a * 3) * 1.5, Math.sin(u.a) * u.r); b.rotation.y = -u.a; const f = Math.sin(t * 10 + u.r) * 0.7; u.wings[0].rotation.z = f; u.wings[1].rotation.z = -f; b.visible = b.getWorldPosition(new THREE.Vector3()).sub(world.position).dot(camDir) < 10; }
+    const fliesOn = st.biome === 1 || st.biome === 5;
+    for (const f of flies) { const u = f.userData; f.visible = fliesOn; if (!fliesOn) continue; u.a += dt * (0.8 + u.r * 0.2); f.position.set(ball.p[0] + Math.cos(u.a) * u.r, ball.p[1] + 0.8 + Math.sin(t * 2 + u.r) * 0.6, ball.p[2] + Math.sin(u.a * 1.3) * u.r); f.rotation.y = -u.a; const w2 = Math.sin(t * 22 + u.r) * 1.1; u.wings[0].rotation.z = w2; u.wings[1].rotation.z = -w2; }
     // blocs dynamiques
     for (const [i, mesh] of live.dyn) {
       const b = W.blocks[i];
@@ -403,5 +454,5 @@ export function createScene(canvas) {
   }
   // Position de la balle à l'écran (pour les textes)
   function toScreen(p) { const v = tower.localToWorld(new THREE.Vector3(...p)).project(camera), r = canvas.getBoundingClientRect(); return [(v.x + 1) / 2 * r.width, (1 - v.y) / 2 * r.height]; }
-  return { live, frame, rotate, pickGround, screenAxes, burst, toScreen, get k() { return view.k; }, reset() { trailPts.length = 0; } };
+  return { live, frame, rotate, awayYaw, pickGround, screenAxes, burst, toScreen, get k() { return view.k; }, reset() { trailPts.length = 0; } };
 }

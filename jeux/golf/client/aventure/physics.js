@@ -10,7 +10,7 @@
     grass: { e: 0.3, grip: 0.6, roll: 0.22 }, moss: { e: 0.2, grip: 0.7, roll: 0.35 }, rock: { e: 0.5, grip: 0.4, roll: 0.07 },
     wood: { e: 0.4, grip: 0.45, roll: 0.09 }, sand: { e: 0.05, grip: 0.95, roll: 0.9 }, mud: { e: 0.04, grip: 0.9, roll: 0.7 },
     ice: { e: 0.3, grip: 0.03, roll: 0.012 }, snow: { e: 0.06, grip: 0.85, roll: 0.5 }, crystal: { e: 0.6, grip: 0.18, roll: 0.04 },
-    shroom: { e: 0.95, grip: 0.3, roll: 0.15 }, gold: { e: 0.3, grip: 0.55, roll: 0.13 },
+    shroom: { e: 0.95, grip: 0.3, roll: 0.15 }, gold: { e: 0.3, grip: 0.55, roll: 0.13 }, ash: { e: 0.08, grip: 0.9, roll: 0.55 }, cloud: { e: 0.15, grip: 0.7, roll: 0.3 },
   };
   // Les clubs : vitesse maximale (m/s), angle de levée par défaut et ses limites, effet rétro, force de l'effet latéral
   const CLUBS = {
@@ -46,7 +46,7 @@
   /* ---------- Le monde ---------- */
   const CELL = 6;
   function createWorld(level) {
-    const w = { level, t: 0, blocks: level.blocks.map((b, i) => ({ ...b, i, c: [...b.c], c0: [...b.c] })), broken: new Set(), toppled: new Map(), triggered: new Set(), clubs: new Set(level.startClubs), grid: new Map(), moving: [], topples: [] };
+    const w = { level, t: 0, blocks: level.blocks.map((b, i) => ({ ...b, i, c: [...b.c], c0: [...b.c] })), broken: new Set(), toppled: new Map(), triggered: new Set(), clubs: new Set(level.startClubs), shards: new Set(), grid: new Map(), moving: [], topples: [] };
     for (const b of w.blocks) { prepare(b); if (b.move) w.moving.push(b); if (b.topple) w.topples.push(b); }
     for (const b of w.blocks) if (!b.move && !b.topple) addToGrid(w, b);
     return w;
@@ -63,8 +63,8 @@
   function moveBlocks(w) {
     for (const b of w.moving) {
       const m = b.move, ph = (2 * Math.PI * w.t) / m.period + (m.phase || 0), s = Math.sin(ph), ds = (Math.cos(ph) * 2 * Math.PI) / m.period;
-      for (let i = 0; i < 3; i++) { b.c[i] = b.c0[i] + m.axis[i] * m.amp * s; }
-      b.vel = m.axis.map(a => a * m.amp * ds);
+      if (m.axis) { for (let i = 0; i < 3; i++) b.c[i] = b.c0[i] + m.axis[i] * m.amp * s; b.vel = m.axis.map(a => a * m.amp * ds); }
+      if (m.tilt) b[m.tilt] = m.angle * s; // plateau qui tangue (pitch ou roll)
       prepare(b);
     }
     // Statues qui basculent : rotation autour d'un pivot, en 1,4 s une fois touchées
@@ -104,6 +104,7 @@
   function step(w, ball) {
     const ev = [], p = ball.p, v = ball.v, om = ball.w;
     w.t += DT;
+    if (ball.burnt) ball.burnt = Math.max(0, ball.burnt - DT);
     if (w.moving.length || w.toppled.size) moveBlocks(w);
     // Air : gravité, traînée, effet Magnus (seulement en vol), eau et vent
     let ax = 0, ay = -G, az = 0;
@@ -112,6 +113,8 @@
     for (const z of w.level.zones) {
       if (!inBox(z, p)) continue;
       if (z.t === 'water') { drag += 2.6; ay += G * 0.55; }
+      // la lave recrache la balle : elle repart vers le haut et en arrière (une punition, pas une défaite)
+      if (z.t === 'lava' && !ball.burnt) { ball.burnt = 0.6; v[0] *= -0.45; v[2] *= -0.45; v[1] = 8.5; ev.push({ t: 'lava', p: [...p] }); }
       if (z.t === 'wind' && (!z.period || ((w.t + (z.phase || 0)) % z.period) < z.on)) { ax += z.f[0]; ay += z.f[1]; az += z.f[2]; }
     }
     ax -= drag * v[0]; ay -= drag * v[1]; az -= drag * v[2];
@@ -173,6 +176,7 @@
     ball.rest = ball.ground && still && rel < 0.15 ? ball.rest + DT : 0;
     ball.air = ball.ground ? 0 : ball.air + DT;
     // Clubs trouvés, trou, limite fatale
+    for (const s of w.level.shards || []) if (!w.shards.has(s.id) && Math.hypot(p[0] - s.p[0], p[1] - s.p[1], p[2] - s.p[2]) < 1.4) { w.shards.add(s.id); ev.push({ t: 'shard', id: s.id, p: [...p] }); }
     for (const c of w.level.pickups) if (!w.clubs.has(c.club) && Math.hypot(p[0] - c.p[0], p[1] - c.p[1], p[2] - c.p[2]) < 1.6) { w.clubs.add(c.club); ev.push({ t: 'club', club: c.club, p: [...p] }); }
     const cup = w.level.cup;
     if (Math.hypot(p[0] - cup[0], p[2] - cup[2]) < 0.5 && p[1] < cup[1] + R + 0.25 && p[1] > cup[1] - 1 && sp < 7) ev.push({ t: 'holed' });
@@ -196,13 +200,40 @@
   }
   // Copie du monde (pour l'aperçu de trajectoire : sans toucher au vrai)
   function clone(w) {
-    const c = { ...w, blocks: w.blocks.map(b => ({ ...b, c: [...b.c], ax: b.ax })), broken: new Set(w.broken), toppled: new Map(), triggered: new Set(w.triggered), clubs: new Set(w.clubs), moving: [] };
+    const c = { ...w, blocks: w.blocks.map(b => ({ ...b, c: [...b.c], ax: b.ax })), broken: new Set(w.broken), toppled: new Map(), triggered: new Set(w.triggered), clubs: new Set(w.clubs), shards: new Set(w.shards), moving: [] };
     c.moving = c.blocks.filter(b => b.move); c.topples = c.blocks.filter(b => b.topple);
     for (const [b, k] of w.toppled) c.toppled.set(c.blocks[b.i], k);
     return c;
   }
 
-  const api = { G, R, DT, SURF, CLUBS, ORDER, createWorld, newBall, launch, step, ready, simulate, clone, axes };
+  // Hauteur du premier sol sous un point (rayon vertical vers le bas), ou null s'il n'y a que le vide
+  function groundBelow(w, p) {
+    let best = null;
+    const test = b => {
+      if (b.off || w.broken.has(b.i) || (b.hidden && !w.triggered.has(b.hidden))) return;
+      if (p[0] < b.lo[0] || p[0] > b.hi[0] || p[2] < b.lo[2] || p[2] > b.hi[2] || b.lo[1] > p[1]) return;
+      // rayon y décroissant, dans le repère du bloc : intersection avec la boîte (méthode des plaques)
+      const A = b.ax, o = [0, 1, 2].map(i => (p[0] - b.c[0]) * A[i][0] + (p[1] - b.c[1]) * A[i][1] + (p[2] - b.c[2]) * A[i][2]), d = [0, 1, 2].map(i => -A[i][1]);
+      let t0 = 0, t1 = Infinity;
+      for (let i = 0; i < 3; i++) {
+        if (Math.abs(d[i]) < 1e-9) { if (Math.abs(o[i]) > b.h[i]) return; continue; }
+        let a = (-b.h[i] - o[i]) / d[i], c = (b.h[i] - o[i]) / d[i];
+        if (a > c) [a, c] = [c, a];
+        t0 = Math.max(t0, a); t1 = Math.min(t1, c);
+        if (t0 > t1) return;
+      }
+      const y = p[1] - t0;
+      if (best === null || y > best) best = y;
+    };
+    for (let y = Math.floor(p[1] / CELL); y >= Math.floor(w.level.fatal / CELL); y--) {
+      for (const b of w.grid.get(key(Math.floor(p[0] / CELL), y, Math.floor(p[2] / CELL))) || []) test(b);
+      if (best !== null) break;
+    }
+    for (const b of [...w.moving, ...w.topples]) test(b);
+    return best;
+  }
+
+  const api = { G, R, DT, SURF, CLUBS, ORDER, createWorld, newBall, launch, step, ready, simulate, clone, axes, groundBelow };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.TourPhys = api;
 })(this);

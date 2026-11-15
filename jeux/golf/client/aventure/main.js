@@ -10,11 +10,15 @@ const P = TourPhys, L = TourLevel;
 const $ = s => document.querySelector(s);
 const view = createScene($('#view'));
 let world = P.createWorld(L), ball = P.newBall(L.start);
-let club = 'fer', shots = 0, best = 0, startedAt = 0, over = false, playing = false, biome = -1;
+let club = 'fer', shots = 0, best = 0, startedAt = 0, over = false, playing = false, biome = -1, won = false;
+// Modes : normal ; zen (la chute dans le vide ramène à la dernière position) ; hardcore (une chute de plus de 15 m = retour en bas)
+const MODES = { normal: ['🧗 Normal', 'La règle de la Tour : seul le vide fait recommencer.'], zen: ['🌿 Zen', 'Sans chute fatale : la balle revient où elle était.'], hardcore: ['🔥 Hardcore', 'Une chute de plus de 15 m et tu repars d’en bas.'] };
+let mode = (() => { try { return localStorage.getItem('tour-mode') || 'normal'; } catch { return 'normal'; } })();
+let lastRest = { p: [...L.start], y: L.start[1] }, wasReady = false;
 const lofts = Object.fromEntries(P.ORDER.map(id => [id, P.CLUBS[id].loft]));
 const aim = { yaw: Math.atan2(19 - L.start[2], 0 - L.start[0]), power: 0.5, ix: 0, iy: 0, drag: null, keys: false };
 let preview = null, previewKey = '';
-if (location.search.includes('debug')) window.tour = { get world() { return world; }, get ball() { return ball; }, view, set: (x, y, z) => { ball = P.newBall([x, y, z]); }, give: id => world.clubs.add(id), bare: () => view.live.fades.forEach(f => { if (f.mesh) f.mesh.visible = false; if (f.extra) f.extra.visible = false; }), faded: () => view.live.fades.filter(f => f.b && f.k < 0.9).map(f => `${f.b.c.map(Math.round).join('/')}:${f.k.toFixed(2)}:${f.mesh.material.opacity.toFixed(2)}`).join(' ') };
+if (location.search.includes('debug')) window.tour = { get world() { return world; }, get ball() { return ball; }, view, set: (x, y, z) => { ball = P.newBall([x, y, z]); }, win: () => finish(true), give: id => world.clubs.add(id), bare: () => view.live.fades.forEach(f => { if (f.mesh) f.mesh.visible = false; if (f.extra) f.extra.visible = false; }), faded: () => view.live.fades.filter(f => f.b && f.k < 0.9).map(f => `${f.b.c.map(Math.round).join('/')}:${f.k.toFixed(2)}:${f.mesh.material.opacity.toFixed(2)}`).join(' ') };
 
 /* ---------- Interface ---------- */
 function toast(html, cls = '') {
@@ -62,7 +66,7 @@ imp.onpointerdown = e => { imp.setPointerCapture(e.pointerId); setImpact(e); imp
 imp.onpointerup = () => (imp.onpointermove = null);
 imp.ondblclick = () => { aim.ix = aim.iy = 0; renderShot(); };
 $('#rotL').onclick = () => turn(-1); $('#rotR').onclick = () => turn(1);
-function turn(d) { view.rotate(d); sound.cue('rotate'); }
+function turn(d) { view.rotate(d); sound.cue('rotate'); if (!aim.drag) { aim.yaw = view.awayYaw(); previewKey = ''; } }
 $('#sndBtn').onclick = () => { sound.toggle('sound'); $('#sndBtn').classList.toggle('off', !sound.settings.sound); };
 $('#musBtn').onclick = () => { sound.toggle('music'); $('#musBtn').classList.toggle('off', !sound.settings.music); };
 $('#sndBtn').classList.toggle('off', !sound.settings.sound); $('#musBtn').classList.toggle('off', !sound.settings.music);
@@ -135,20 +139,45 @@ function onEvent(ev) {
     const c = P.CLUBS[ev.club]; sound.cue('club'); setClub(ev.club);
     announce(`${c.icon} ${c.name}`, 'Nouveau club trouvé', 'gold'); toast(`<b>${c.name}</b> : ${c.desc} (touche ${P.ORDER.indexOf(ev.club) + 1})`, 'gold');
   }
+  if (ev.t === 'lava') { sound.cue('lava'); toast('🔥 La lave recrache ta balle !'); view.burst(ev.p, ['#ff7a2a', '#ffd25a', '#3a2e2b'], 22, 6); }
+  if (ev.t === 'shard') { sound.cue('shard'); view.burst(ev.p, ['#ffe36a', '#ffffff'], 24, 4); renderShards(); toast(`⭐ Éclat d’étoile trouvé (${world.shards.size} sur ${L.shards.length})`, 'gold'); }
   if (ev.t === 'holed') finish(true);
-  if (ev.t === 'lost') finish(false);
+  if (ev.t === 'lost') {
+    if (mode === 'zen') { ball = P.newBall(lastRest.p); toast('🌿 Mode zen : ta balle revient où elle était.'); sound.cue('lost'); return; }
+    finish(false);
+  }
 }
-function finish(won) {
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => `&#${c.charCodeAt(0)};`);
+const fmt = sec => `${Math.floor(sec / 60)} min ${String(sec % 60).padStart(2, '0')}`;
+function finish(isWin, why) {
   if (over) return;
-  over = true;
-  sound.cue(won ? 'holed' : 'lost');
-  const time = Math.round((performance.now() - startedAt) / 1000), mm = `${Math.floor(time / 60)} min ${String(time % 60).padStart(2, '0')}`;
+  over = true; won = isWin; document.body.classList.add('ended');
+  sound.cue(isWin ? 'holed' : 'lost');
+  const time = Math.round((performance.now() - startedAt) / 1000);
+  const stats = `<ul class="stats"><li><b>${shots}</b><small>coups</small></li><li><b>${fmt(time)}</b><small>temps</small></li><li><b>${Math.round(best)} m</b><small>plus haut</small></li><li><b>${world.clubs.size}/${P.ORDER.length}</b><small>clubs</small></li><li><b>${world.shards.size}/${L.shards.length}</b><small>éclats</small></li></ul>`;
   $('#end').hidden = false;
-  $('#end').innerHTML = won
-    ? `<h2>⛳ Dans le trou, au sommet de la Tour !</h2><p>Tu as gravi les six étages en <b>${shots}</b> coups et <b>${mm}</b>.</p><p>Clubs trouvés : <b>${world.clubs.size}</b> sur ${P.ORDER.length}.</p><div class="row"><button class="primary" id="again">Nouvelle ascension</button><a class="ghost" href="../">Retour au mini-golf</a></div>`
-    : `<h2>🌫️ La Tour t’a échappé…</h2><p>Ta balle est tombée dans le vide. Plus haut atteint : <b>${Math.round(best)} m</b>, en ${shots} coups.</p><p>Il faut repartir d’en bas.</p><div class="row"><button class="primary" id="again">Recommencer l’ascension</button><a class="ghost" href="../">Retour au mini-golf</a></div>`;
+  $('#end').innerHTML = isWin
+    ? `<h2>⛳ Au sommet de la Tour !</h2><p>Les neuf mondes sont derrière toi. Mode ${MODES[mode][0]}.</p>${stats}${mode === 'zen' ? '<p class="hint">Le mode zen ne compte pas au classement.</p>' : '<div id="board"><p class="hint">Classement mondial…</p></div>'}<div class="row"><button class="primary" id="again">Nouvelle ascension</button><a class="ghost" href="../">Retour au mini-golf</a></div>`
+    : `<h2>🌫️ La Tour t’a échappé…</h2><p>${why || 'Ta balle est tombée dans le vide.'} Il faut repartir d’en bas.</p>${stats}<div class="row"><button class="primary" id="again">Recommencer l’ascension</button><a class="ghost" href="../">Retour au mini-golf</a></div>`;
   $('#again').onclick = () => (location.search = '?go');
+  if (isWin && mode !== 'zen') board(time);
 }
+// Classement mondial : le moins de coups (puis le plus rapide), en normal et en hardcore
+async function board(seconds) {
+  let name = ''; try { name = localStorage.getItem('golf-pseudo') || ''; } catch { /* */ }
+  const box = $('#board'), key = mode === 'hardcore' ? 'hardcore' : 'normal';
+  const draw = (list, place) => { box.innerHTML = `<h3>🌍 Classement ${MODES[mode][0]}</h3>${place ? `<p class="gold">Tu es ${place}${place === 1 ? 'er' : 'e'} !</p>` : ''}<ol class="board">${list.map(e => `<li${e.name === name ? ' class="me"' : ''}><span>${esc(e.name)}</span><b>${e.shots} coups</b><small>${fmt(e.seconds)} · ⭐ ${e.shards}</small></li>`).join('') || '<li>Personne encore : sois le premier !</li>'}</ol>`; };
+  const send = async () => {
+    const out = await fetch('/api/golf/board', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ mode: key, name, shots, seconds, shards: world.shards.size }) }).then(r => r.json()).catch(() => null);
+    if (out?.board) draw(out.board, out.place); else box.innerHTML = `<p class="hint">${esc(out?.error || 'Classement indisponible.')}</p>`;
+  };
+  if (name) return send();
+  const list = await fetch(`/api/golf/board?mode=${key}`).then(r => (r.ok ? r.json() : [])).catch(() => []);
+  draw(list);
+  box.insertAdjacentHTML('beforeend', '<form class="row" id="nameForm"><input maxlength="20" placeholder="Ton pseudo" required><button class="primary">Inscrire mon score</button></form>');
+  $('#nameForm').onsubmit = e => { e.preventDefault(); name = e.target.querySelector('input').value.trim(); if (!name) return; try { localStorage.setItem('golf-pseudo', name); } catch { /* */ } send(); };
+}
+function renderShards() { $('#shardCount').textContent = `${world.shards.size}/${L.shards.length}`; }
 
 /* ---------- Boucle ---------- */
 let last = performance.now(), acc = 0, inWater = false;
@@ -162,15 +191,20 @@ function frame(now) {
   }
   const isReady = ready();
   best = Math.max(best, ball.p[1]);
+  if (isReady && !wasReady && playing && !over) {
+    if (mode === 'hardcore' && lastRest.y - ball.p[1] > 15) finish(false, `Chute de ${Math.round(lastRest.y - ball.p[1])} m : en hardcore, c’est retour en bas.`);
+    lastRest = { p: [...ball.p], y: ball.p[1] };
+  }
+  wasReady = isReady;
   const wet = L.zones.some(z => z.t === 'water' && ball.p.every((v, i) => v >= z.lo[i] && v <= z.hi[i]));
   if (wet && !inWater) sound.cue('water');
   inWater = wet;
   if (isReady && (aim.drag || aim.keys)) computePreview(); else preview = null;
-  const amb = view.frame({ ball, world, t: now / 1000, dt, ready: isReady, aim: isReady && (aim.drag || aim.keys) ? aim : null, preview });
+  const amb = view.frame({ ball, world, t: now / 1000, dt, ready: isReady && !over, aim: isReady && !over && (aim.drag || aim.keys) ? aim : null, preview, biome, cinematic: won });
   $('#sky').style.background = `linear-gradient(180deg, ${amb.sky[0]}, ${amb.sky[1]})`;
   if (amb.biome !== biome) {
     biome = amb.biome; sound.setBiome(biome);
-    if (playing) announce(L.biomes[biome].name, `Étage ${biome + 1} sur ${L.biomes.length}`);
+    if (playing && !over) { announce(L.biomes[biome].name, `Étage ${biome + 1} sur ${L.biomes.length}`); const v = $('#veil'); v.classList.remove('on'); void v.offsetWidth; v.classList.add('on'); }
     $('#biome').textContent = L.biomes[biome].name;
   }
   $('#alt').textContent = `${Math.max(0, Math.round(ball.p[1]))} m · record ${Math.max(0, Math.round(best))} m`;
@@ -182,9 +216,15 @@ function frame(now) {
 
 function start() {
   $('#intro').hidden = true; playing = true; startedAt = performance.now();
-  sound.startAudio(); renderClubs(); renderShot();
+  sound.startAudio(); renderClubs(); renderShot(); renderShards();
+  $('#modeTag').textContent = MODES[mode][0];
   biome = -1;
 }
+function renderModes() {
+  $('#modes').innerHTML = Object.entries(MODES).map(([id, [n, d]]) => `<button class="mode ${id === mode ? 'on' : ''}" data-mode="${id}"><b>${n}</b><small>${d}</small></button>`).join('');
+}
+$('#modes').onclick = e => { const b = e.target.closest('[data-mode]'); if (!b) return; mode = b.dataset.mode; try { localStorage.setItem('tour-mode', mode); } catch { /* */ } renderModes(); };
+renderModes();
 $('#go').onclick = start;
 renderClubs(); renderShot();
 if (location.search.includes('go')) start();

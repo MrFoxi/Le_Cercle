@@ -115,12 +115,46 @@
   box(-23, 40, -14, -16, 44, 4, 'snow', { look: 'ledge' });
   d('waterfall', [16.1, 40, 6], { h: 8 }); d('pine', [-13, 44, 13]); d('pine', [-6, 44, 13]); d('pine', [-13, 48, -13]); d('icespire', [-3, 48, -3]); d('icespire', [-14, 44, 5]);
 
-  /* ===== 5. Le Sanctuaire Céleste (48 m et plus) : le seul trou ===== */
+  /* ===== 5. Le Sanctuaire Céleste (48 à 56 m) : piliers et parvis du temple ===== */
   box(-14, 40, -14, -10, 51, -10, 'rock', { look: 'pillar' });
   box(-12, 40, -8, -8, 54, -3, 'rock', { look: 'pillar' });
   box(-8, 32, -8, 8, 56, 8, 'gold', { face: true, look: 'temple' });
   for (const [x, z] of [[-7, 7], [7, 7], [7, -7], [-7, -7], [0, 7], [7, 0]]) box(x - 0.7, 56, z - 0.7, x + 0.7, 59, z + 0.7, 'rock', { look: 'templecolumn' });
-  d('lanterns', [0, 56, 0]); d('blossom', [-12, 51, -12]); d('blossom', [12, 40, 12]); d('beacon', [0, 59, 0]);
+  d('lanterns', [0, 56, 0]); d('blossom', [-12, 51, -12]); d('blossom', [12, 40, 12]);
+
+  /* ===== 6. Les Orgues de Feu (56 à 70 m) : la flèche monte, des colonnes de basalte flottent devant elle ===== */
+  box(-4, 56, -4, 4, 96.5, 4, 'rock', { face: true, look: 'spire' });
+  box(-5, 52, 9, -2, 58.5, 12, 'ash', { look: 'basalt' });
+  box(0, 52, 10, 3, 61, 13, 'ash', { look: 'basalt' });
+  box(5, 52, 9, 8, 63.5, 12, 'ash', { look: 'basalt' });
+  box(9, 52, 5, 12, 66, 8, 'ash', { look: 'basalt' });
+  box(10, 52, 0, 13, 68.5, 3, 'ash', { look: 'basalt' });
+  box(-10, 52, 10, -7, 60, 13, 'ash', { look: 'basalt' }); // colonne à l'écart (un éclat d'étoile)
+  box(-3, 62.5, -10, 3, 64, -6.5, 'ash', { look: 'forge' }); // terrasse cachée derrière la flèche : un coup courbé (Faucille) la contourne
+  box(4, 68, -6, 14, 70, -1, 'ash', { look: 'forge' });
+  zones.push({ t: 'lava', lo: [12.6, 69.9, -6], hi: [14, 70.7, -1] }); // rigole de lave au bord de la forge
+  zones.push({ t: 'wind', lo: [4.5, 56, 2.4], hi: [7.5, 71.5, 4.2], f: [0.6, 15.5, -2.6], period: 7, on: 3 }); // geyser : un raccourci
+  d('lavaflow', [4.05, 92, 1], { face: 'x+', h: 34 }); d('lavaflow', [-1, 88, 4.05], { face: 'z+', h: 30 }); d('geyser', [6, 56, 3.3]); d('anvil', [8, 70, -3]);
+
+  /* ===== 7. La Cité des Vents (70 à 82 m) : pont dans le vent, ruines suspendues, plateaux qui tanguent ===== */
+  ramp(8, -11, 11, -6, 71.5, 70, 'z+', 'wood', { look: 'bridge' });
+  zones.push({ t: 'wind', lo: [7, 70, -11], hi: [12, 73, -6], f: [2.2, 0, 0] });
+  box(-12, 69.5, -16, 11, 71.5, -11, 'rock', { look: 'skyruin' });
+  box(-14, 72, -9, -10, 74, -5, 'moss', { look: 'raft', move: { tilt: 'pitch', angle: 0.08, period: 5 } });
+  box(-14, 74.5, -2, -10, 76.5, 2, 'moss', { look: 'raft', move: { tilt: 'roll', angle: 0.08, period: 6, phase: 1 } });
+  box(-14, 77, 5, -10, 79, 9, 'moss', { look: 'raft', move: { tilt: 'pitch', angle: 0.08, period: 5.5, phase: 2 } });
+  box(-8, 79.5, -9, -4, 80.5, -5, 'rock', { look: 'ledge' }); // corniche haute : le Grand Lob y monte d'un coup
+  box(-12, 80, 8, -2, 82, 14, 'rock', { look: 'skyarch' });
+  d('windflags', [6, 71.5, -14]); d('ruinarch', [-6, 71.5, -14]); d('chains', [0, 69.5, -13.5]); d('windflags', [-7, 82, 12]);
+
+  /* ===== 8. L'Observatoire Céleste (82 à 98 m) : balcons en spirale, la couronne et le seul trou ===== */
+  box(-2, 83, 6, 10, 85, 12, 'rock', { look: 'balcony' });
+  box(6, 86, -6, 12, 88, 6, 'rock', { look: 'balcony' });
+  box(-6, 89.5, -12, 8, 91.5, -6, 'rock', { look: 'balcony' });
+  box(-13, 93, -8, -7, 95, 4, 'rock', { look: 'balcony' });
+  box(10, 88.5, 9, 13, 89.5, 12, 'rock', { look: 'skyrock' }); // rocher perdu (un éclat d'étoile)
+  box(-7, 96.5, -7, 7, 98, 7, 'gold', { look: 'crown' });
+  d('observatory', [-3, 98, -3.5]); d('beacon', [4.5, 98, -4.5]); d('stars', [0, 98, 0]);
 
   // Clubs cachés dans la tour
   const pickups = [
@@ -132,7 +166,9 @@
 
   const level = {
     blocks, zones, deco, pickups,
-    start: [6, 0.3, 26], cup: [2, 56, 2], fatal: -25, top: 60, startClubs: ['putter', 'fer'],
+    // les éclats d'étoile : un par étage, à l'écart du chemin
+    shards: [[9, 0.6, 2], [-20.5, 11.8, -1.5], [14, 24, -14], [-15, 29.5, -23], [-22, 44.5, -12], [-13.5, 51.5, -13.5], [0, 64.6, -8.3], [-6, 81, -7], [11.5, 90, 10.5]].map((p, id) => ({ id, p })),
+    start: [6, 0.3, 26], cup: [1.5, 98, 2], fatal: -25, top: 100, startClubs: ['putter', 'fer'],
     // les étages : nom, hauteur de départ, ambiance (ciel haut, ciel bas, brume, lumière)
     biomes: [
       { name: 'Le Marais des Racines', y: -30, sky: ['#9fd8e8', '#e8f6e8'], fog: '#cfe8dc', sun: '#fff1d6' },
@@ -141,6 +177,9 @@
       { name: 'Le Canyon des Anciens', y: 27, sky: ['#ffb37a', '#ffe8c8'], fog: '#f6d2a8', sun: '#ffe2b8' },
       { name: 'Le Glacier', y: 40.5, sky: ['#9fd4ff', '#f2fbff'], fog: '#dbeefa', sun: '#ffffff' },
       { name: 'Le Sanctuaire Céleste', y: 50, sky: ['#ffb8d8', '#fff2c8'], fog: '#ffe0ea', sun: '#fff0dc' },
+      { name: 'Les Orgues de Feu', y: 55.5, sky: ['#ff7f5e', '#ffd2a8'], fog: '#f2b090', sun: '#ffd0a8' },
+      { name: 'La Cité des Vents', y: 69.5, sky: ['#6fc0ff', '#eaf7ff'], fog: '#d8ecfa', sun: '#ffffff' },
+      { name: 'L’Observatoire Céleste', y: 82.5, sky: ['#3a3590', '#cdb8ff'], fog: '#a89ad8', sun: '#e8e0ff' },
     ],
   };
   const api = level;
