@@ -17,9 +17,9 @@
   const CLUBS = {
     putter: { name: 'Putter', icon: '🏑', v: 9, loft: 2, min: 0, max: 6, back: 0, side: 10, desc: 'Roule au ras du sol, très précis.' },
     fer: { name: 'Fer 7', icon: '🏌️', v: 16, loft: 30, min: 18, max: 40, back: 45, side: 30, desc: 'Le club à tout faire : ni trop haut, ni trop loin.' },
-    wedge: { name: 'Wedge', icon: '⛰️', v: 13.5, loft: 56, min: 46, max: 64, back: 95, side: 25, desc: 'Monte très haut et retombe presque sur place.' },
+    wedge: { name: 'Wedge', icon: '⛰️', v: 13.5, loft: 56, min: 46, max: 64, back: 15, side: 25, desc: 'Monte très haut et retombe presque sur place.' },
     driver: { name: 'Driver', icon: '🚀', v: 27, loft: 13, min: 8, max: 20, back: 28, side: 35, desc: 'Le plus long et le plus fort.' },
-    lob: { name: 'Grand Lob', icon: '🎈', v: 12.5, loft: 74, min: 66, max: 82, back: 150, side: 15, desc: 'Presque à la verticale : cheminées et puits.' },
+    lob: { name: 'Grand Lob', icon: '🎈', v: 12.5, loft: 74, min: 66, max: 82, back: 20, side: 15, desc: 'Presque à la verticale : cheminées et puits.' },
     faucille: { name: 'Faucille', icon: '🌙', v: 17, loft: 20, min: 10, max: 32, back: 35, side: 140, desc: 'L’effet latéral est énorme : contourne les obstacles.' },
   };
   const ORDER = ['putter', 'fer', 'wedge', 'driver', 'lob', 'faucille'];
@@ -138,7 +138,7 @@
     const c = CLUBS[clubId], sp = c.v * Math.max(0.02, Math.min(1, power));
     const loft = ((loftDeg + -iy * 6) * Math.PI) / 180, d = [Math.cos(yaw), 0, Math.sin(yaw)], bv = ball.baseVel || [0, 0, 0];
     ball.v = [d[0] * Math.cos(loft) * sp + bv[0], Math.sin(loft) * sp + bv[1], d[2] * Math.cos(loft) * sp + bv[2]];
-    const back = (c.back * (0.5 + 0.5 * power) + -iy * 60) * (clubId === 'putter' ? 0.2 : 1), side = -ix * c.side * (0.4 + 0.6 * power);
+    const back = (c.back * (0.5 + 0.5 * power) + -iy * 100) * (clubId === 'putter' ? 0.2 : 1), side = -ix * c.side * (0.4 + 0.6 * power);
     ball.w = [-d[2] * back, side, d[0] * back];
     ball.rest = 0; ball.ground = null; ball.base = null;
   }

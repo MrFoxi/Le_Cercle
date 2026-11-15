@@ -93,6 +93,22 @@ $('#musBtn').onclick = () => { sound.toggle('music'); $('#musBtn').classList.tog
 $('#sndBtn').classList.toggle('off', !sound.settings.sound); $('#musBtn').classList.toggle('off', !sound.settings.music);
 $('#helpBtn').onclick = () => ($('#help').hidden = !$('#help').hidden);
 $('#help').onclick = e => { if (e.target.matches('#help, [data-close]')) $('#help').hidden = true; };
+// Administrateur (MrFoxi) : un menu pour sauter à n'importe quel étage ; la partie ne compte alors plus au classement
+let warped = false;
+fetch('/api/admin/me').then(r => r.json()).then(r => {
+  if (!r.admin) return;
+  const s = Object.assign(document.createElement('select'), { className: 'pill', id: 'warp', title: 'Administrateur : aller à un étage' });
+  s.innerHTML = `<option value="">🛗</option>${L.biomes.map((b, i) => `<option value="${i}">${i + 1}. ${b.name}</option>`).join('')}`;
+  s.onchange = () => { if (s.value !== '') warp(Number(s.value)); s.value = ''; s.blur(); };
+  $('.tools').prepend(s);
+}).catch(() => {});
+function warp(i) {
+  if (!playing || over) return;
+  const p = L.spawns[i];
+  ball = P.newBall(p); lastRest = { p: [...p], y: p[1] }; warped = true; previewKey = ''; preview = null;
+  for (const c of L.pickups) if (c.p[1] < p[1] - 1) world.clubs.add(c.club); // les clubs des étages d'en dessous
+  renderClub(); toast(`🛗 Téléporté : ${L.biomes[i].name} (partie hors classement)`);
+}
 // la jauge de hauteur : un trait par monde
 $('#ticks').innerHTML = L.worlds.slice(1).map(w => `<span style="bottom:${((w.y + 1) / L.top) * 100}%"></span>`).join('');
 
@@ -181,10 +197,10 @@ function finish(isWin, why) {
   const stats = `<ul class="stats"><li><b>${shots}</b><small>coups</small></li><li><b>${fmt(time)}</b><small>temps</small></li><li><b>${Math.round(best)} m</b><small>plus haut</small></li><li><b>${world.clubs.size}/${P.ORDER.length}</b><small>clubs</small></li><li><b>${world.shards.size}/${L.shards.length}</b><small>éclats</small></li></ul>`;
   $('#end').hidden = false;
   $('#end').innerHTML = isWin
-    ? `<h2>⛳ Au sommet de la Tour !</h2><p>Onze mondes derrière toi. Mode ${MODES[mode][0]}.</p>${stats}${mode === 'zen' ? '<p class="hint">Le mode zen ne compte pas au classement.</p>' : '<div id="board"><p class="hint">Classement mondial…</p></div>'}<div class="row"><button class="primary" id="again">Nouvelle ascension</button><a class="ghost" href="../">Retour au mini-golf</a></div>`
+    ? `<h2>⛳ Au sommet de la Tour !</h2><p>Onze mondes derrière toi. Mode ${MODES[mode][0]}.</p>${stats}${mode === 'zen' || warped ? `<p class="hint">${warped ? 'Une partie téléportée' : 'Le mode zen'} ne compte pas au classement.</p>` : '<div id="board"><p class="hint">Classement mondial…</p></div>'}<div class="row"><button class="primary" id="again">Nouvelle ascension</button><a class="ghost" href="../">Retour au mini-golf</a></div>`
     : `<h2>🌫️ La Tour t’a échappé…</h2><p>${why || 'Ta balle est tombée dans le vide.'} Il faut repartir d’en bas.</p>${stats}<div class="row"><button class="primary" id="again">Recommencer l’ascension</button><a class="ghost" href="../">Retour au mini-golf</a></div>`;
   $('#again').onclick = () => (location.search = '?go');
-  if (isWin && mode !== 'zen') board(time);
+  if (isWin && mode !== 'zen' && !warped) board(time);
 }
 // Classement mondial : le moins de coups (puis le plus rapide), en normal et en hardcore
 async function board(seconds) {

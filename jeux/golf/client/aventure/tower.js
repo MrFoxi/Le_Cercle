@@ -228,6 +228,8 @@
     ],
     shards: [[-8, 3.6, -20], [0, 12.6, 0], [-14, 24.6, 14], [12.5, 45.6, -13], [-14, 48.6, -13], [-12.5, 66.6, -12.5], [11, 76.8, -6.5], [-7, 94.1, -7], [9, 106.6, -12.5], [-14, 108.6, 14], [14, 120.6, 4]].map((p, id) => ({ id, p })),
     melody: [1, 3, 2, 4], treb: { stop: 1.13, base: 3.8, step: 0.9, acc: 20 }, // le bras s'arrête à 65° (départ à ~70°) ; seule la force 3 atteint le sommet
+    // un point d'arrivée par monde (téléport de l'administrateur), pris sur l'ascension du test
+    spawns: [[12, 0.3, 17], [9.1, 12.3, 18.5], [-2.3, 24.3, -3], [-13.8, 36.3, 13.3], [0.5, 48.3, -11], [17.1, 60.5, 0.2], [-8.7, 72.3, -7.7], [-8.3, 84.3, 12.1], [-7.6, 96.3, 0.7], [6, 108.3, -2.3], [9.1, 120.3, 1]],
     start: [12, 0.3, 17], cup: { tag: 'sommet', off: [3, 3] }, fatal: -25, top: 122, startClubs: ['putter', 'fer'],
     // les mondes : nom, hauteur où commence leur ambiance, ciel haut et bas, brume, lumière
     biomes: [

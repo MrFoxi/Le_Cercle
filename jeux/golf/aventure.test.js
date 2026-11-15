@@ -69,6 +69,14 @@ test('les mécanismes portent la balle : aiguille, cliquet, godet, mobile, orgue
   assert.ok(Math.hypot(P.cupAt(w)[0] - c0[0], P.cupAt(w)[2] - c0[2]) > 0.5, 'le trou a tourné');
 });
 
+test('le téléport de l’administrateur pose la balle dans chaque monde', () => {
+  assert.strictEqual(L.spawns.length, L.worlds.length);
+  L.spawns.forEach((p, i) => {
+    const w = P.createWorld(L), b = P.newBall(p), end = P.simulate(w, b, { maxT: 4 }).end;
+    assert.ok(end === 'rest' && Math.abs(b.p[1] - p[1]) < 1, `${L.worlds[i].name} : la balle tient (${b.p.map(x => x.toFixed(1))})`);
+  });
+});
+
 test('une ascension complète est possible, du Jardin au trou du Sommet (120 m)', () => {
   const w = P.createWorld(L), b = P.newBall(L.start);
   P.simulate(w, b, { maxT: 3 });
@@ -77,7 +85,7 @@ test('une ascension complète est possible, du Jardin au trou du Sommet (120 m)'
     if (r.name === 'vol') { end = P.simulate(w, b, { maxT: 25, every: 1e5, wait: r.idle }).end; if (end === 'holed') break; assert.ok(end === 'rest' && b.base?.look === 'summit', `le trébuchet pose la balle au sommet (${b.p.map(x => x.toFixed(1))})`); continue; }
     assert.ok(w.clubs.has(r.club), `coup ${i + 1} (${r.name}) : le club ${r.club} doit avoir été trouvé`);
     if (r.wait) idle(w, b, r.wait);
-    P.launch(b, r.club, r.yaw, r.power, r.loft, r.ix || 0, 0);
+    P.launch(b, r.club, r.yaw, r.power, r.loft, r.ix || 0, r.iy || 0);
     end = P.simulate(w, b, { maxT: 20, every: 1e5 }).end;
     if (end === 'rest' && AFTER[r.name]) end = P.simulate(w, b, { maxT: 25, every: 1e5, wait: AFTER[r.name] }).end;
     if (i < ROUTE.length - 1) assert.strictEqual(end, 'rest', `coup ${i + 1} (${r.name}) : la balle doit se poser (${b.p.map(x => x.toFixed(1))})`);
