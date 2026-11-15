@@ -19,11 +19,10 @@
   <div id="sky"></div>
   <canvas id="view" aria-label="La Tour, vue en 3D"></canvas>
 
-  <!-- Haut : où l'on est, outils -->
+  <!-- Haut : le monde, les outils -->
   <div class="top">
     <a class="pill" href="../" title="Retour au mini-golf">←</a>
-    <div class="where"><b id="biome">La Tour</b><small id="alt">0 m</small></div>
-    <div class="where mini"><b>⭐ <span id="shardCount">0/9</span></b><small id="modeTag"></small></div>
+    <div class="where"><small id="worldNo">Monde 1 sur 11</small><b id="biome">La Tour</b></div>
     <div class="tools">
       <button class="pill" id="rotL" title="Tourner la tour (Q)">⟲</button>
       <button class="pill" id="rotR" title="Tourner la tour (E)">⟳</button>
@@ -32,18 +31,33 @@
       <button class="pill" id="helpBtn" title="Commandes">?</button>
     </div>
   </div>
-  <div id="meter" aria-hidden="true"><i></i><b></b></div>
+  <div id="hint" hidden><i>📜</i><span></span></div>
+  <div id="meter" aria-hidden="true"><div id="ticks"></div><i></i><b></b></div>
   <p id="state" aria-live="polite"></p>
 
-  <!-- Bas : club, levée, effet, puissance -->
-  <div class="bottom">
-    <div id="clubs" role="group" aria-label="Clubs"></div>
-    <div class="shot">
-      <div class="cell"><small>Club</small><b id="clubName"></b></div>
-      <div class="cell"><small>Levée</small><span class="step"><button id="loftDown" aria-label="Moins haut">−</button><b id="loft"></b><button id="loftUp" aria-label="Plus haut">+</button></span></div>
-      <div class="cell impact"><canvas id="impact" width="64" height="64" aria-label="Point d'impact sur la balle (effet)"></canvas><small id="spinTxt"></small></div>
-      <div class="cell power"><small>Puissance</small><div id="power"><i></i></div><b id="powerPct"></b></div>
-      <div class="cell"><small>Coups</small><b id="shots">0</b></div>
+  <!-- Bas : le club, le cadran de frappe, les compteurs -->
+  <div class="hud">
+    <div class="clubcard">
+      <button class="nav" id="clubPrev" aria-label="Club précédent">‹</button>
+      <div class="cc-body">
+        <div class="cc-head"><i id="clubIcon"></i><b id="clubName"></b><kbd id="clubKey"></kbd></div>
+        <small id="clubDesc"></small>
+        <div class="bars"><span>Portée</span><em><i id="barDist"></i></em><span>Hauteur</span><em><i id="barHigh"></i></em></div>
+        <div class="dots" id="clubDots"></div>
+      </div>
+      <button class="nav" id="clubNext" aria-label="Club suivant">›</button>
+    </div>
+    <div class="dial">
+      <svg id="dial" viewBox="0 0 200 200" aria-hidden="true"></svg>
+      <canvas id="impact" width="120" height="120" aria-label="Point d'impact sur la balle (effet)"></canvas>
+      <button class="lbtn" id="loftDown" aria-label="Moins haut">−</button>
+      <button class="lbtn" id="loftUp" aria-label="Plus haut">+</button>
+      <small id="spinTxt"></small>
+    </div>
+    <div class="counters">
+      <div><b id="shots">0</b><small>coups</small></div>
+      <div><b id="shardCount">0/11</b><small>éclats ⭐</small></div>
+      <div><b id="clock">0:00</b><small id="modeTag"></small></div>
     </div>
   </div>
 
@@ -54,13 +68,12 @@
   <!-- Accueil -->
   <section id="intro" class="panel">
     <h1>La Tour</h1>
-    <p class="tag">Une tour de près de 100 mètres, neuf mondes empilés, et un seul trou… tout en haut.</p>
+    <p class="tag">Onze mondes empilés, 120 mètres de haut, et un seul trou… qui tourne, tout là-haut.</p>
     <ul class="facts">
-      <li>🌿 Pars du marais, tout en bas, et grimpe à coups de club.</li>
-      <li>⟲ Fais tourner la tour par quarts de tour pour voir ses autres faces : des passages s’y cachent.</li>
-      <li>🏌️ Trouve des clubs dans la tour : chacun ouvre de nouveaux chemins.</li>
-      <li>⭐ Neuf éclats d’étoile sont cachés à l’écart des chemins, un par monde.</li>
-      <li>🪂 Une chute n’est pas une défaite : tu repars d’où la balle s’arrête… sauf si elle tombe dans le vide.</li>
+      <li>🌱 Le Jardin t’apprend tout : viser, lever la balle, tourner la tour, l’effet.</li>
+      <li>⚙️ Chaque monde est une machine : horloge, balances, livres-dominos, roue à godets, grand huit, orgue, trébuchet…</li>
+      <li>⟲ Tourne la tour par quarts de tour : des chemins se cachent derrière.</li>
+      <li>⭐ Un éclat d’étoile est caché dans chaque monde.</li>
     </ul>
     <div id="modes" class="modes"></div>
     <button class="primary big" id="go">Commencer l’ascension</button>
@@ -70,11 +83,11 @@
   <section id="help" class="panel small" hidden>
     <h2>Commandes</h2>
     <ul class="keys">
-      <li><b>Glisser en arrière</b> depuis n’importe où : direction et puissance, relâcher pour frapper (Maj : plus fin)</li>
+      <li><b>Glisser en arrière</b> depuis n’importe où : direction et puissance ; relâcher pour frapper (Maj : plus fin)</li>
       <li><kbd>←</kbd><kbd>→</kbd> direction · <kbd>↑</kbd><kbd>↓</kbd> puissance · <kbd>Espace</kbd> viser puis frapper</li>
       <li><kbd>W</kbd><kbd>S</kbd> levée · <kbd>I</kbd><kbd>J</kbd><kbd>K</kbd><kbd>L</kbd> ou le disque : point d’impact (effet)</li>
-      <li><kbd>Q</kbd><kbd>E</kbd> tourner la tour · <kbd>1</kbd> à <kbd>6</kbd> changer de club</li>
-      <li>Frappé bas = rétro (la balle s’arrête vite) · frappé sur le côté = la balle courbe</li>
+      <li><kbd>Q</kbd><kbd>E</kbd> tourner la tour · <kbd>1</kbd> à <kbd>6</kbd> ou <kbd>Tab</kbd> changer de club</li>
+      <li>Points jaunes : la trajectoire jusqu’au premier rebond · flèches blanches au sol : le sens des pentes</li>
     </ul>
     <button class="primary" data-close>Compris</button>
   </section>

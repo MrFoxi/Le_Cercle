@@ -1,188 +1,242 @@
-// Mini-golf, mode Aventure : la Tour. Les blocs (collisions + dessin), les zones (eau, vent), les clubs cachés, le trou
-// tout en haut et la limite fatale. Partagé par le navigateur (window.TourLevel) et les tests (require).
-// Repère : mètres, y vers le haut, la tour occupe x et z de -16 à 16 ; face avant = +z, droite = +x, arrière = -z, gauche = -x.
+// Mini-golf, mode Aventure : la Tour. Onze mondes empilés tous les 12 m, chacun bâti autour d'une idée :
+// le Jardin (apprendre), l'Horloge (aiguilles-ponts), les Balances (plateaux à cliquet), la Bibliothèque (livres-dominos),
+// la Roue à godets, le Grand Huit (rails), la Ville à l'envers, le Mobile, l'Orgue des vents, le Trébuchet, et le Sommet
+// (un trou qui tourne). Partagé par le navigateur (window.TourLevel) et les tests (require).
+// Repère : mètres, y vers le haut ; la tour occupe x et z de -16 à 16 ; face avant = +z, droite = +x.
+// Règle de construction : aucun bloc n'en chevauche un autre (des faces confondues font scintiller l'image).
 (function (root) {
-  const blocks = [], zones = [], deco = [];
-  // Un bloc par ses deux coins ; s : surface ; o : options (face de façade, casse, bascule, mouvement, déclencheur…)
-  function box(x0, y0, z0, x1, y1, z1, s, o = {}) {
+  const blocks = [], zones = [], deco = [], hints = [], TAU = Math.PI * 2;
+  const box = (x0, y0, z0, x1, y1, z1, s, o = {}) => {
     const b = { c: [(x0 + x1) / 2, (y0 + y1) / 2, (z0 + z1) / 2], h: [Math.abs(x1 - x0) / 2, Math.abs(y1 - y0) / 2, Math.abs(z1 - z0) / 2], s, yaw: 0, pitch: 0, roll: 0, ...o };
     blocks.push(b);
     return b;
-  }
-  // Rampe : emprise [x0,x1]×[z0,z1], le dessus monte de yA à yB dans le sens dir ('x+', 'x-', 'z+', 'z-'), épaisseur th
-  function ramp(x0, z0, x1, z1, yA, yB, dir, s, o = {}, th = 1.2) {
+  };
+  // Rampe : emprise [x0,x1]×[z0,z1], le dessus va de yA (côté x0 ou z0) à yB (côté x1 ou z1) ; dir donne l'axe ('x…' ou 'z…')
+  function ramp(x0, z0, x1, z1, yA, yB, dir, s, o = {}, th = 1) {
     const alongX = dir[0] === 'x', run = alongX ? x1 - x0 : z1 - z0, rise = yB - yA, a = Math.atan2(rise, run), L = Math.hypot(run, rise);
-    const sign = dir[1] === '+' ? 1 : -1, ym = (yA + yB) / 2 - (th / 2) * Math.cos(a);
-    const b = { c: [(x0 + x1) / 2, ym, (z0 + z1) / 2], h: alongX ? [L / 2, th / 2, (z1 - z0) / 2] : [(x1 - x0) / 2, th / 2, L / 2], s, yaw: 0, pitch: alongX ? 0 : -sign * a, roll: alongX ? sign * a : 0, ramp: true, ...o };
+    const sign = 1, ym = (yA + yB) / 2 - (th / 2) * Math.cos(a);
+    const b = { c: [(x0 + x1) / 2, ym, (z0 + z1) / 2], h: alongX ? [L / 2, th / 2, (z1 - z0) / 2] : [(x1 - x0) / 2, th / 2, L / 2], s, yaw: 0, pitch: alongX ? 0 : -sign * a, roll: alongX ? sign * a : 0, ramp: dir, ...o };
     blocks.push(b);
     return b;
   }
+  // Plancher d'un monde (dessus à Y, épaisseur 1,2) percé de trappes [x0, z0, x1, z1] : découpé en rectangles sans recouvrement
+  function slab(Y, holes, s, o = {}, area = [-16, -16, 16, 16]) {
+    const xs = [...new Set([area[0], area[2], ...holes.flatMap(h => [h[0], h[2]])])].filter(x => x >= area[0] && x <= area[2]).sort((a, b) => a - b);
+    const zs = [...new Set([area[1], area[3], ...holes.flatMap(h => [h[1], h[3]])])].filter(z => z >= area[1] && z <= area[3]).sort((a, b) => a - b);
+    const inHole = (x, z) => holes.some(h => x > h[0] && x < h[2] && z > h[1] && z < h[3]);
+    for (let j = 0; j + 1 < zs.length; j++) {
+      let start = null;
+      for (let i = 0; i < xs.length; i++) {
+        const full = i + 1 < xs.length && !inHole((xs[i] + xs[i + 1]) / 2, (zs[j] + zs[j + 1]) / 2);
+        if (full && start === null) start = xs[i];
+        if (!full && start !== null) { box(start, Y - 1.2, zs[j], xs[i], Y, zs[j + 1], s, { floor: true, ...o }); start = null; }
+      }
+    }
+  }
+  // Murs d'une salle (de Y à top) avec des ouvertures : côté 's' (avant, +z), 'n' (arrière), 'e' (droite), 'w' (gauche) ;
+  // chaque ouverture [début, fin, hauteur] le long du mur
+  function walls(Y, top, s, doors = {}, o = {}) {
+    const side = (k, a0, a1, mk) => {
+      const ds = (doors[k] || []).slice().sort((a, b) => a[0] - b[0]);
+      let a = a0;
+      for (const [d0, d1, h] of ds) { if (d0 > a) mk(a, d0, Y, top); if (Y + h < top) mk(d0, d1, Y + h, top); a = d1; }
+      if (a < a1) mk(a, a1, Y, top);
+    };
+    side('s', -16, 16, (a, b, y0, y1) => box(a, y0, 15, b, y1, 16, s, { face: 's', ...o }));
+    side('n', -16, 16, (a, b, y0, y1) => box(a, y0, -16, b, y1, -15, s, { face: 'n', ...o }));
+    side('e', -15, 15, (a, b, y0, y1) => box(15, y0, a, 16, y1, b, s, { face: 'e', ...o }));
+    side('w', -15, 15, (a, b, y0, y1) => box(-16, y0, a, -15, y1, b, s, { face: 'w', ...o }));
+  }
   const d = (t, p, o = {}) => deco.push({ t, p, ...o });
+  const hint = (lo, hi, text) => hints.push({ lo, hi, text });
+  const world = [];
+  const W = (name, Y) => world.push({ name, y: Y });
 
-  /* ===== 0. Le Marais des Racines (0 à 10 m) : le plateau du départ ===== */
-  box(-30, -3, -30, 30, 0, 30, 'grass', { look: 'plateau' });
-  zones.push({ t: 'water', lo: [-29, -0.2, 18], hi: [-18, 0.5, 29] }, { t: 'water', lo: [18, -0.2, -29], hi: [29, 0.5, -16] }, { t: 'water', lo: [20, -0.2, 6], hi: [29, 0.5, 16] });
-  box(-29, -0.4, 18, -18, 0, 29, 'mud', { look: 'marsh' });
-  box(20, -0.4, 6, 29, 0, 16, 'mud', { look: 'marsh' });
-  box(18, -0.4, -29, 29, 0, -16, 'mud', { look: 'marsh' });
-  // le socle de la tour, percé d'un terrier secret (fermé par des racines qu'on peut casser)
-  box(-16, 0, -16, 7, 10, 16, 'rock', { face: true });
-  box(11, 0, -16, 16, 10, 16, 'rock', { face: true });
-  box(7, 3.2, -16, 11, 10, 16, 'rock', { face: true });
-  box(6.8, 0, 15.4, 11.2, 3.2, 16.2, 'wood', { breakAt: 4, look: 'roots' });
-  // terrasses en escalier contre la façade avant, puis le coin gauche
-  box(-6, 0, 16, 5, 2.5, 23, 'grass', { look: 'terrace' });
-  box(-15, 0, 16, -6, 5, 23, 'grass', { look: 'terrace' });
-  box(-23, 0, 8, -15, 7.5, 21, 'moss', { look: 'terrace' });
-  // le long chemin : deux rampes douces par l'arrière
-  ramp(-14, -22, 14, -17, 5, 0, 'x+', 'grass', { look: 'path' });
-  box(-28, 0, -24, -14, 5, -16, 'rock', { look: 'terrace' });
-  ramp(-28, -16, -23, 2, 5, 10, 'z+', 'grass', { look: 'path' });
-  box(-28, 0, 2, -23, 10, 8, 'grass', { look: 'terrace' });
-  d('roots', [-10, 0, 23]); d('roots', [15, 0, 17]); d('lily', [-24, 0.5, 24]); d('lily', [24, 0.5, 10]); d('reeds', [-20, 0, 27]); d('reeds', [26, 0, -20]);
-  d('tee', [6, 0, 26]);
+  /* ===== 1. Le Jardin des Premiers Pas (0 m) : on apprend, impossible de tomber ===== */
+  W('Le Jardin des Premiers Pas', -40);
+  box(-22, -2, -22, 22, 0, 22, 'grass', { look: 'lawn' });
+  box(-22, 0, 21, 22, 1.4, 22, 'moss', { look: 'hedge' });
+  box(-22, 0, -22, 22, 4.4, -21, 'moss', { look: 'hedge' });
+  box(-22, 0, -21, -21, 8.4, 21, 'moss', { look: 'hedge' });
+  box(21, 0, -21, 22, 4.4, -10, 'moss', { look: 'hedge' });
+  box(21, 0, -10, 22, 1.4, 21, 'moss', { look: 'hedge' });
+  box(-14, 0, 8, 21, 1.6, 9, 'rock', { look: 'drystone' }); // le muret : il faut lever la balle
+  ramp(-2, -10, 8, -2, 3, 0, 'z+', 'grass', { look: 'slope' });
+  box(-21, 0, -21, 21, 3, -10, 'grass', { look: 'terrace' });
+  box(-12, 3, -19, -4, 7, -13, 'rock', { look: 'pavilion' }); // le pavillon cache le chemin
+  ramp(-21, -10, -17, 4, 3, 7, 'z+', 'grass', { look: 'slope' });
+  box(-21, 0, 4, -14, 7, 21, 'grass', { look: 'terrace' });
+  ramp(-14, 17, 4, 21, 7, 12, 'x+', 'wood', { look: 'boardwalk' });
+  box(4, 10.8, 16, 10, 12, 21, 'wood', { look: 'boardwalk' });
+  d('tee', [12, 0, 17]); d('flowerbed', [16, 0, 12]); d('flowerbed', [-6, 0, 15]); d('tree', [17, 0, -5]); d('tree', [-17, 7, 14]); d('tree', [15, 3, -16]);
+  d('fountain', [-14, 0, -3]); d('stele', [9, 0, 14]); d('stele', [6, 0, 6.5]); d('stele', [4, 0, -1]); d('stele', [0, 3, -12]); d('stele', [-17, 7, 8]);
+  hint([2, 0, 10], [21, 2, 21], 'Glisse en arrière depuis n’importe où, puis relâche : la balle part à l’opposé. Plus tu tires loin, plus c’est fort.');
+  hint([-14, 0, 9.01], [21, 2, 10.5], 'Un muret ! Prends le Fer (touche 2) : il lève la balle. Les points jaunes montrent où elle va retomber.');
+  hint([-14, 0, -2], [21, 2, 8], 'Les flèches au sol indiquent les pentes : elles montrent le sens de la descente. Pour monter, frappe plus fort.');
+  hint([-21, 2.5, -21], [21, 5, -10], 'Le chemin semble s’arrêter… Tourne la tour avec Q / E (ou ⟲ ⟳) : il continue derrière le pavillon.');
+  hint([-21, 6.5, 4], [-14, 9, 21], 'Le disque en bas règle l’effet : frappée sur le côté, la balle courbe ; frappée en bas, elle s’arrête vite.');
+  hint([4, 11.5, 16], [10, 13, 21], 'Bienvenue dans la Tour. Chaque monde a son mécanisme : observe-le avant de frapper.');
 
-  /* ===== 1. La Forêt des Géants (10 à 20 m) : terrasse gauche, sous le surplomb de la tour ===== */
-  box(-8, 10, -16, 16, 20, 16, 'rock', { face: true });
-  box(-23, 0, -14, -16, 10, 8, 'grass', { look: 'terrace' });
-  box(-16, 9.6, -16, -8, 10, 16, 'grass', { look: 'floor' });
-  ramp(-15, -12, -11, 6, 15, 10, 'z+', 'wood', { look: 'trunk' }); // un arbre géant couché, en pente
-  box(-16, 10, -16, -8, 15, -12, 'rock', { look: 'ruin' });
-  box(-22, 10, -3, -19, 11.3, 0, 'shroom', { look: 'shroom' });
-  box(-12, 10, 10, -9, 11.1, 13, 'shroom', { look: 'shroom' });
-  zones.push({ t: 'water', lo: [-16, 9.6, 11], hi: [-11, 10.5, 16] });
-  d('bigtree', [-19, 10, 4]); d('bigtree', [-12, 10, 14]); d('bigtree', [-20, 10, -11]); d('fern', [-17, 10, -6]); d('fern', [-10, 10, 2]);
-  d('vines', [-8, 20, 0], { face: 'x-' }); d('fall', [-16.1, 10, 13], { h: 10 });
+  /* ===== 2. La Grande Horloge (12 m) : les aiguilles sont des ponts ===== */
+  W('La Grande Horloge', 11);
+  slab(12, [[-10, -10, 10, 10], [-16, -16, -11, -11]], 'marble', { look: 'clockfloor' });
+  walls(12, 22.8, 'metal', { s: [[4, 10, 4]] }, { look: 'brass' });
+  box(-1.5, 0, -1.5, 1.5, 12, 1.5, 'metal', { look: 'pivot' }); // l'axe de l'horloge, planté dans le jardin
+  box(-1.2, 11.4, 1.5, 1.2, 12, 10, 'moss', { look: 'hand', kin: { type: 'spin', pivot: [0, 12, 0], axis: 'y', speed: TAU / 20 } });
+  box(-0.7, 13.6, 1.5, 0.7, 14, 6.5, 'metal', { look: 'hourhand', kin: { type: 'spin', pivot: [0, 14, 0], axis: 'y', speed: TAU / 90, phase: 2 } });
+  box(-15.8, 17.2, -15.8, -11.2, 18, -11.2, 'metal', { look: 'lift', kin: { type: 'move', axis: [0, 1, 0], amp: 6, period: 12, phase: -Math.PI / 2 } });
+  d('clockface', [0, 12, 0]); d('gearwall', [0, 17, -15]); d('gearwall', [-15, 17, 2], { side: 'w' }); d('pendulum', [10, 21, -14.5]);
+  hint([-16, 11.5, 10], [16, 13, 16], 'Les aiguilles sont des ponts. Pose la balle sur la grande aiguille quand elle touche le bord : elle t’emmène de l’autre côté.');
+  hint([-16, 11.5, -16], [16, 13, -10], 'Le monte-charge (au fond à gauche) descend puis remonte : roule dessus quand il est en bas.');
 
-  /* ===== 2. Les Grottes de Cristal (20 à 32 m) : dans la tour ===== */
-  // parois (on les voit par transparence quand la balle est dedans) et plafond
-  box(-8, 20, -6, -7, 32, 10, 'crystal', { face: true, look: 'cave' });
-  box(-8, 20, -16, 0, 32, -15, 'crystal', { face: true, look: 'cave' });
-  box(8, 20, -16, 16, 32, -15, 'crystal', { face: true, look: 'cave' });
-  box(0, 20, -16, 8, 29, -15, 'crystal', { face: true, look: 'cave' });
-  box(15, 20, -15, 16, 32, 10, 'crystal', { face: true, look: 'cave' });
-  box(-8, 20, 9, 16, 32, 10, 'crystal', { face: true, look: 'cave' });
-  box(-8, 31, -16, 16, 32, 10, 'rock', { face: true, look: 'cave' });
-  // lacets intérieurs
-  ramp(-1, -15, 10, -10, 20, 23.5, 'x+', 'crystal', { look: 'cave' });
-  box(10, 20, -15, 15, 23.5, -4, 'rock', { look: 'cave' });
-  ramp(10, -4, 15, 6, 23.5, 26.5, 'z+', 'crystal', { look: 'cave' });
-  box(-2, 20, 6, 15, 26.5, 9, 'rock', { look: 'cave' });
-  box(0, 28, -15, 8, 29, -9, 'rock', { look: 'cave' }); // corniche de sortie, au-dessus du premier lacet
-  ramp(-2, -9, 3, 6, 29, 26.5, 'z+', 'crystal', { look: 'cave' }); // dernier lacet, vers la sortie
-  // salle secrète derrière une vitre de cristal
-  box(-7, 20, 2.5, -2, 24, 3, 'crystal', { breakAt: 4.5, look: 'pane' });
-  d('crystal', [3, 20, -3]); d('crystal', [12, 23.5, -12]); d('crystal', [-5, 20, -12]); d('crystal', [6, 26.5, 7.5]); d('crystal', [-4, 20, 6], { big: true });
-  d('pool', [5, 20.05, 0]);
+  /* ===== 3. Les Balances (24 m) : un plateau qui descend fait monter l'autre… et un cliquet le bloque en haut ===== */
+  W('Les Balances', 23);
+  const shafts = [[6, -14, 12, -8], [-12, 6, -6, 12], [8, 0, 14, 6], [8, 6, 14, 12]];
+  slab(24, [[-16, -16, -11, -11], [8, 12, 15, 15], ...shafts], 'marble', { look: 'checker' });
+  walls(24, 34.8, 'marble', {}, { look: 'marblewall' });
+  // puits sous les plateaux qui descendent (la balle ne peut pas filer sous le plancher)
+  for (const [x0, z0, x1, z1] of shafts.slice(0, 2)) {
+    box(x0 - 0.3, 20.5, z0 - 0.3, x1 + 0.3, 22.8, z0, 'marble', { look: 'pit' }); box(x0 - 0.3, 20.5, z1, x1 + 0.3, 22.8, z1 + 0.3, 'marble', { look: 'pit' });
+    box(x0 - 0.3, 20.5, z0, x0, 22.8, z1, 'marble', { look: 'pit' }); box(x1, 20.5, z0, x1 + 0.3, 22.8, z1, 'marble', { look: 'pit' });
+  }
+  box(6.1, 22.8, -13.9, 11.9, 24, -8.1, 'metal', { look: 'plateA', kin: { type: 'lever', id: 1, role: 'A', amp: 2.5 } });
+  box(8.1, 22.8, 0.1, 13.9, 24, 5.9, 'metal', { look: 'plateB', kin: { type: 'lever', id: 1, role: 'B', amp: 3 } });
+  box(-11.9, 22.8, 6.1, -6.1, 24, 11.9, 'metal', { look: 'plateA', kin: { type: 'lever', id: 2, role: 'A', amp: 2.5 } });
+  box(8.1, 22.8, 6.1, 13.9, 24, 11.9, 'metal', { look: 'plateB', kin: { type: 'lever', id: 2, role: 'B', amp: 6 } });
+  box(8, 22.8, 12, 15, 33, 15, 'marble', { look: 'column' }); // la colonne de sortie (trappe au-dessus)
+  d('chain', [9, 24, -11], { to: [11, 24, 3] }); d('chain', [-9, 24, 9], { to: [11, 24, 9] }); d('statue', [-12, 24, -12]);
+  hint([-16, 23.5, -16], [16, 25, 16], 'Pose la balle sur un plateau de bronze : il descend, et son jumeau (relié par la chaîne) monte… puis reste bloqué en haut. Il devient une marche.');
 
-  /* ===== 3. Le Canyon des Anciens (29 à 40 m) ===== */
-  // balcon arrière (sortie de la grotte), coupé par une faille ; un obélisque peut tomber en travers
-  box(-16, 26, -24, -6, 29, -16, 'sand', { look: 'ruinfloor' });
-  box(-3, 26, -24, 6, 29, -16, 'sand', { look: 'ruinfloor' });
-  box(-3, 29, -21, -2, 37, -20, 'rock', { look: 'obelisk', topple: { at: 3, pivot: [-3, 29, -20.5], axis: 'z', angle: Math.PI / 2 } });
-  // ascenseur des anciens (va et vient entre le balcon et le haut du canyon)
-  box(6, 31.8, -24, 10, 32.6, -16, 'rock', { look: 'lift', move: { axis: [0, 1, 0], amp: 3.6, period: 9, phase: -Math.PI / 2 } });
-  // la mesa, de l'autre côté du gouffre
-  box(16, 26, -21, 27, 32, 14, 'sand', { look: 'mesa' });
-  zones.push({ t: 'wind', lo: [16.6, 32, 8], hi: [20, 43.5, 12], f: [-2.6, 15.5, 0] });
-  // les quatre colonnes du sommet, en colimaçon
-  box(0, 32, -16, 16, 36, 0, 'sand', { face: true, look: 'canyon' });
-  box(0, 32, 0, 16, 40, 16, 'rock', { face: true, look: 'col' });
-  box(-16, 32, 0, 0, 44, 16, 'snow', { face: true, look: 'glacier' });
-  // colonne arrière gauche, creusée d'une grotte de glace (entrée par la face gauche, derrière une paroi fragile)
-  box(-16, 32, -16, 0, 44, 0, 'snow', { face: true, look: 'glacier' });
-  box(-16, 47, -16, 0, 48, 0, 'snow', { face: true, look: 'glacier' });
-  box(-16, 44, -16, -1, 47, -12, 'snow', { face: true, look: 'glacier' });
-  box(-16, 44, -4, 0, 47, 0, 'snow', { face: true, look: 'glacier' });
-  box(-1, 44, -12, 0, 47, -4, 'snow', { face: true, look: 'glacier' });
-  box(-16, 20, -16, -8, 32, -15, 'rock', { face: true });
-  box(-16, 31, -15, -8, 32, 16, 'rock', { face: true });
-  box(-8, 20, 10, 16, 32, 16, 'rock', { face: true });
-  // ruines du canyon (des colonnes qui arrêtent la balle)
-  for (const [x, z] of [[3, -13], [7, -13], [11, -13], [13, -4], [13, -9]]) box(x - 0.6, 36, z - 0.6, x + 0.6, 39.5, z + 0.6, 'rock', { look: 'column' });
-  box(2, 35.6, -9, 7, 36, -3, 'sand', { look: 'bunker' });
-  d('ruins', [-12, 29, -20]); d('ruins', [5, 29, -22]); d('statue', [-14, 29, -18]); d('arch', [8, 36, -6]); d('cactus', [24, 32, 2]); d('cactus', [19, 32, -3]); d('mesa', [23, 32, 10]);
+  /* ===== 4. La Bibliothèque engloutie (36 m) : des livres-dominos font un pont au-dessus du gouffre ===== */
+  W('La Bibliothèque engloutie', 35);
+  slab(36, [[8, 12, 15, 15], [-16, -6, 16, 4]], 'wood', { look: 'parquet' });
+  walls(36, 46.8, 'wood', {}, { look: 'shelves' });
+  box(-2, 24, -3, 2, 36, -1, 'marble', { look: 'column' }); // l'îlot au milieu du gouffre (une colonne depuis l'étage des balances)
+  box(-1.5, 36, 4, 1.5, 42, 4.2, 'wood', { look: 'book', tag: 'livre1', topple: { at: 2, pivot: [0, 36, 4], axis: 'x', angle: -Math.PI / 2, time: 1.4, next: 'livre2' } });
+  box(-1.5, 36, -3.2, 1.5, 42, -3, 'wood', { look: 'book', tag: 'livre2', topple: { at: 99, pivot: [0, 36, -3.2], axis: 'x', angle: -Math.PI / 2, time: 1.4 } });
+  // le mur de la salle de lecture, percé d'une arche basse : il faut rouler, pas voler
+  box(-15, 36, -11, -2, 46.8, -10, 'wood', { look: 'shelves' }); box(2, 36, -11, 15, 46.8, -10, 'wood', { look: 'shelves' }); box(-2, 37.4, -11, 2, 46.8, -10, 'wood', { look: 'shelves' });
+  // derrière l'arche, un palier libre ; à droite, les piles montent vers la trappe ; à gauche, des piles pour le décor
+  box(4, 36, -15, 7, 38.5, -11, 'wood', { look: 'bookstack' });
+  box(7, 36, -15, 10, 41, -11, 'wood', { look: 'bookstack' });
+  box(-10, 36, -15, -4, 38.5, -11, 'wood', { look: 'bookstack' });
+  box(-15, 36, -15, -10, 41, -11, 'wood', { look: 'bookstack' });
+  box(10, 36, -15, 15, 45, -11, 'wood', { look: 'bookstack' }); // sous la trappe vers la roue
+  d('bookpile', [-12, 36, 12]); d('bookpile', [12, 36, 8]); d('lamp', [-6, 36, 10]); d('lamp', [6, 36, -8]); d('chandelier', [0, 45, 0]);
+  hint([-16, 35.5, 4], [16, 37, 16], 'Un gouffre… Pousse le grand livre debout au bord : en tombant, il fait tomber les autres et forme un pont.');
+  hint([-16, 35.5, -16], [16, 47, -10], 'Grimpe les piles de livres jusqu’à la trappe, au fond à droite.');
 
-  /* ===== 4. Le Col des Vents et le Glacier (40 à 48 m) ===== */
-  ramp(0, 12, 14, 16, 44, 40, 'x+', 'ice', { look: 'iceramp' });
-  box(9, 39.7, 1, 12, 40, 4, 'rock', { look: 'plate', trigger: 'marches' }); // une dalle : des marches sortent du sol
-  box(2, 40, 1, 4, 42, 5, 'rock', { look: 'steps', hidden: 'marches' });
-  box(0, 40, 1, 2, 43.2, 5, 'rock', { look: 'steps', hidden: 'marches' });
-  box(-8, 43.6, 3, -1, 44, 12, 'ice', { look: 'icefield' });
-  ramp(-16, 0, -10, 12, 48, 44, 'z+', 'snow', { look: 'snowramp' }, 1.6);
-  // grotte de glace secrète, creusée dans la colonne arrière gauche (entrée par la face gauche)
-  box(-17, 44, -12, -16, 47, -4, 'ice', { look: 'pane', breakAt: 5 });
-  box(-23, 40, -14, -16, 44, 4, 'snow', { look: 'ledge' });
-  d('waterfall', [16.1, 40, 6], { h: 8 }); d('pine', [-13, 44, 13]); d('pine', [-6, 44, 13]); d('pine', [-13, 48, -13]); d('icespire', [-3, 48, -3]); d('icespire', [-14, 44, 5]);
+  /* ===== 5. La Roue à godets (48 m) : une roue géante te remonte, accrochée à la façade ===== */
+  W('La Roue à godets', 47);
+  slab(48, [[10, -15, 15, -11], [-16, -16, -10, -10]], 'rock', { look: 'millfloor' });
+  walls(48, 58.8, 'rock', { e: [[-1.5, 1.5, 3.2]] }, { look: 'millwall' });
+  ramp(12, -1.5, 15, 1.5, 48, 49.15, 'x+', 'wood', { look: 'boardwalk' });
+  box(16, 47, -1.5, 18.8, 49.15, 1.5, 'wood', { look: 'dock' }); // quai du bas, où l'on monte dans un godet
+  box(16, 58, -1.5, 18.8, 60.15, 1.5, 'wood', { look: 'dock' }); // quai du haut, devant la porte du Grand Huit
+  for (let k = 0; k < 6; k++) {
+    const a = (k / 6) * TAU, pv = [20, 54.5, 0], c = [20, 54.5 - 5.5 * Math.cos(a), -5.5 * Math.sin(a)];
+    const kin = { type: 'orbit', pivot: pv, axis: 'x', speed: TAU / 20 }, by = c[1], bz = c[2];
+    // le godet : un fond et trois rebords (ouvert côté tour)
+    box(18.9, by - 0.3, bz - 1.1, 21.1, by, bz + 1.1, 'wood', { look: 'bucket', kin });
+    box(21.1, by - 0.3, bz - 1.1, 21.4, by + 0.7, bz + 1.1, 'wood', { look: 'bucketlip', kin });
+    box(18.9, by - 0.3, bz - 1.4, 21.4, by + 0.7, bz - 1.1, 'wood', { look: 'bucketlip', kin });
+    box(18.9, by - 0.3, bz + 1.1, 21.4, by + 0.7, bz + 1.4, 'wood', { look: 'bucketlip', kin });
+  }
+  zones.push({ t: 'water', lo: [-15, 47.6, -5], hi: [15, 48.4, -2] }); // le bief qui traverse le moulin
+  d('wheel', [20, 54.5, 0]); d('millstone', [-8, 48, 6]); d('waterfall', [22, 62, 3], { h: 14 }); d('sacks', [8, 48, 10]);
+  hint([-16, 47.5, -16], [16, 50, 16], 'La roue tourne dehors, à droite : roule dans un godet quand il passe tout en bas, il te monte. En haut, sors-en d’un petit coup.');
 
-  /* ===== 5. Le Sanctuaire Céleste (48 à 56 m) : piliers et parvis du temple ===== */
-  box(-14, 40, -14, -10, 51, -10, 'rock', { look: 'pillar' });
-  box(-12, 40, -8, -8, 54, -3, 'rock', { look: 'pillar' });
-  box(-8, 32, -8, 8, 56, 8, 'gold', { face: true, look: 'temple' });
-  for (const [x, z] of [[-7, 7], [7, 7], [7, -7], [-7, -7], [0, 7], [7, 0]]) box(x - 0.7, 56, z - 0.7, x + 0.7, 59, z + 0.7, 'rock', { look: 'templecolumn' });
-  d('lanterns', [0, 56, 0]); d('blossom', [-12, 51, -12]); d('blossom', [12, 40, 12]);
+  /* ===== 6. Le Grand Huit (60 m) : des rails, des bosses, et il faut la bonne vitesse ===== */
+  W('Le Grand Huit', 59);
+  slab(60, [[-15, -15, -6, -10]], 'metal', { look: 'plank' });
+  walls(60, 70.8, 'metal', { e: [[-1.5, 1.5, 3]] }, { look: 'fairwall' });
+  const rail = (x0, x1, yA, yB) => {
+    ramp(x0, -14, x1, -11, yA, yB, 'x-', 'metal', { look: 'rail' });
+    ramp(x0, -14.3, x1, -14, yA + 0.6, yB + 0.6, 'x-', 'metal', { look: 'railside' }, 1.6);
+    ramp(x0, -11, x1, -10.7, yA + 0.6, yB + 0.6, 'x-', 'metal', { look: 'railside' }, 1.6);
+  };
+  rail(2, 12, 62.5, 60); rail(-2, 2, 61.5, 62.5); rail(-10, -2, 66, 61.5);
+  box(-15, 60, -15, -10, 66, -10, 'marble', { look: 'station' });
+  box(-10, 60, -15, -6, 69, -12, 'marble', { look: 'station' });
+  d('loop', [4, 60, 6]); d('bunting', [0, 69, -14]); d('lights', [0, 70, 0]);
+  hint([-16, 59.5, -16], [16, 62, 16], 'Le Grand Huit : lance la balle dans les rails (fond de la salle). Trop doux, elle redescend ; assez fort, elle passe les bosses.');
+  hint([-15, 65.5, -15], [-6, 70, -10], 'Plus haut ! Le Grand Lob monte presque à la verticale ; sinon, passe par la petite station.');
 
-  /* ===== 6. Les Orgues de Feu (56 à 70 m) : la flèche monte, des colonnes de basalte flottent devant elle ===== */
-  box(-4, 56, -4, 4, 96.5, 4, 'rock', { face: true, look: 'spire' });
-  box(-5, 52, 9, -2, 58.5, 12, 'ash', { look: 'basalt' });
-  box(0, 52, 10, 3, 61, 13, 'ash', { look: 'basalt' });
-  box(5, 52, 9, 8, 63.5, 12, 'ash', { look: 'basalt' });
-  box(9, 52, 5, 12, 66, 8, 'ash', { look: 'basalt' });
-  box(10, 52, 0, 13, 68.5, 3, 'ash', { look: 'basalt' });
-  box(-10, 52, 10, -7, 60, 13, 'ash', { look: 'basalt' }); // colonne à l'écart (un éclat d'étoile)
-  box(-3, 62.5, -10, 3, 64, -6.5, 'ash', { look: 'forge' }); // terrasse cachée derrière la flèche : un coup courbé (Faucille) la contourne
-  box(4, 68, -6, 14, 70, -1, 'ash', { look: 'forge' });
-  zones.push({ t: 'lava', lo: [12.6, 69.9, -6], hi: [14, 70.7, -1] }); // rigole de lave au bord de la forge
-  zones.push({ t: 'wind', lo: [4.5, 56, 2.4], hi: [7.5, 71.5, 4.2], f: [0.6, 15.5, -2.6], period: 7, on: 3 }); // geyser : un raccourci
-  d('lavaflow', [4.05, 92, 1], { face: 'x+', h: 34 }); d('lavaflow', [-1, 88, 4.05], { face: 'z+', h: 30 }); d('geyser', [6, 56, 3.3]); d('anvil', [8, 70, -3]);
+  /* ===== 7. La Ville à l'envers (72 m) : les maisons pendent du plafond, on joue sur leurs fondations ===== */
+  W('La Ville à l’envers', 71);
+  slab(72, [[-15, -15, -6, -10]], 'rock', { look: 'cobble' }, [-16, -16, -4, -4]);
+  box(-2, 70, -14, 4, 74, -8, 'rock', { look: 'foundation' });
+  box(6, 72, -8, 14, 76.5, -2, 'rock', { look: 'foundation' });
+  box(6, 74.5, 2, 14, 79, 8, 'rock', { look: 'foundation' });
+  box(-6, 77, 8, 2, 81.5, 14, 'rock', { look: 'foundation' });
+  for (const [x, z, h] of [[10, 0, 5], [1, -2, 6], [-3, 4, 4], [11, 11, 4], [-12, 0, 5]]) box(x - 0.8, 82.8 - h, z - 0.8, x + 0.8, 82.8, z + 0.8, 'rock', { look: 'spire' }); // flèches qui pendent
+  d('upsidehouse', [10, 82.8, -5]); d('upsidehouse', [-8, 82.8, -10]); d('upsidehouse', [10, 82.8, 5]); d('upsidehouse', [-2, 82.8, 11]); d('upsidehouse', [-12, 82.8, 6]);
+  hint([-16, 71.5, -16], [-4, 74, -4], 'Tout est à l’envers : les toits pendent du plafond. Saute de fondation en fondation, et garde la balle basse.');
 
-  /* ===== 7. La Cité des Vents (70 à 82 m) : pont dans le vent, ruines suspendues, plateaux qui tanguent ===== */
-  ramp(8, -11, 11, -6, 71.5, 70, 'z+', 'wood', { look: 'bridge' });
-  zones.push({ t: 'wind', lo: [7, 70, -11], hi: [12, 73, -6], f: [2.2, 0, 0] });
-  box(-12, 69.5, -16, 11, 71.5, -11, 'rock', { look: 'skyruin' });
-  box(-14, 72, -9, -10, 74, -5, 'moss', { look: 'raft', move: { tilt: 'pitch', angle: 0.08, period: 5 } });
-  box(-14, 74.5, -2, -10, 76.5, 2, 'moss', { look: 'raft', move: { tilt: 'roll', angle: 0.08, period: 6, phase: 1 } });
-  box(-14, 77, 5, -10, 79, 9, 'moss', { look: 'raft', move: { tilt: 'pitch', angle: 0.08, period: 5.5, phase: 2 } });
-  box(-8, 79.5, -9, -4, 80.5, -5, 'rock', { look: 'ledge' }); // corniche haute : le Grand Lob y monte d'un coup
-  box(-12, 80, 8, -2, 82, 14, 'rock', { look: 'skyarch' });
-  d('windflags', [6, 71.5, -14]); d('ruinarch', [-6, 71.5, -14]); d('chains', [0, 69.5, -13.5]); d('windflags', [-7, 82, 12]);
+  /* ===== 8. Le Mobile (84 m) : des plateaux suspendus qui penchent sous ton poids ===== */
+  W('Le Mobile', 83);
+  slab(84, [[-13, 5, -7, 11]], 'wood', { look: 'deck' }, [-16, 0, -2, 16]);
+  const mobile = (x, y, z, s = 2.5) => box(x - s, y - 0.6, z - s, x + s, y, z + s, 'moss', { look: 'mobile', kin: { type: 'mobile', max: 0.2 } });
+  mobile(3, 86, 6); mobile(9.5, 88.5, -1); mobile(3, 91, -8); mobile(-7, 93.5, -7);
+  d('wires', [3, 95, 6]); d('wires', [9.5, 95, -1]); d('wires', [3, 95, -8]); d('wires', [-7, 95, -7]);
+  hint([-16, 83.5, 0], [-2, 86, 16], 'Le mobile penche du côté où la balle se pose : vise bien le centre de chaque plateau.');
 
-  /* ===== 8. L'Observatoire Céleste (82 à 98 m) : balcons en spirale, la couronne et le seul trou ===== */
-  box(-2, 83, 6, 10, 85, 12, 'rock', { look: 'balcony' });
-  box(6, 86, -6, 12, 88, 6, 'rock', { look: 'balcony' });
-  box(-6, 89.5, -12, 8, 91.5, -6, 'rock', { look: 'balcony' });
-  box(-13, 93, -8, -7, 95, 4, 'rock', { look: 'balcony' });
-  box(10, 88.5, 9, 13, 89.5, 12, 'rock', { look: 'skyrock' }); // rocher perdu (un éclat d'étoile)
-  box(-7, 96.5, -7, 7, 98, 7, 'gold', { look: 'crown' });
-  d('observatory', [-3, 98, -3.5]); d('beacon', [4.5, 98, -4.5]); d('stars', [0, 98, 0]);
+  /* ===== 9. L'Orgue des vents (96 m) : chaque touche fait souffler son tuyau ===== */
+  W('L’Orgue des vents', 95);
+  slab(96, [[-12, -11, -4, -3], [6, -15, 12, -10], [-6, 8, 6, 11]], 'marble', { look: 'organfloor' });
+  walls(96, 106.8, 'gold', { s: [[-8, 8, 4]] }, { look: 'organwall' });
+  for (let k = 0; k < 4; k++) box(-6 + k * 3 + 0.05, 95.7, 8, -3 + k * 3 - 0.05, 96, 11, 'felt', { look: 'key', key: k + 1 });
+  // tuyaux : derrière chaque touche, une colonne d'air qui monte vers la tribune
+  for (let k = 0; k < 4; k++) zones.push({ t: 'wind', key: k + 1, on: 4, lo: [-6 + k * 3, 96, 2], hi: [-3 + k * 3, 102.6, 7.5], f: [0, 16, -3.2] });
+  box(-6, 96, -2, 6, 102, 2, 'gold', { look: 'organledge' }); // la tribune, où les tuyaux déposent la balle
+  box(-6, 96, -6, 6, 104.5, -2, 'gold', { look: 'organledge' });
+  box(6, 96, -15, 12, 106, -10, 'gold', { look: 'organledge', hidden: 'melodie' }); // l'escalier royal (après la mélodie)
+  box(-12, 96, 12, -2, 98.5, 15, 'marble', { look: 'organbench' });
+  d('pipes', [0, 96, 3]); d('score', [-10, 96, -14]);
+  hint([-16, 95.5, 3], [16, 98, 16], 'Chaque touche fait souffler son tuyau quatre secondes : roule sur une touche, puis dans le souffle.');
+  hint([-12, 95.5, -16], [6, 99, 3], 'La partition au mur : 1, 3, 2, 4. Joue-la sur les touches et l’orgue ouvre son escalier royal.');
 
-  // Clubs cachés dans la tour
-  const pickups = [
-    { club: 'wedge', p: [-20.5, 10.5, -10] },
-    { club: 'lob', p: [-4.5, 20.5, 6] },
-    { club: 'driver', p: [-12, 29.5, -20] },
-    { club: 'faucille', p: [-14, 44.5, -8] },
-  ];
+  /* ===== 10. Le Trébuchet (108 m) : il lance la balle vers le sommet ===== */
+  W('Le Trébuchet', 107);
+  slab(108, [[-6, -6, 2, -2]], 'wood', { look: 'deck' }); // trappe au-dessus de la tribune haute de l'orgue
+  box(-6.6, 108, -1.6, -5.4, 111.4, 1.6, 'wood', { look: 'trebframe' }); // le chevalet (le bras tourne autour de son sommet)
+  // la poche : construite dans son repère (fond, rebord du côté de la pente, deux joues) puis tournée de -45° :
+  // son fond regarde l'axe du bras, son côté ouvert est celui du lancer
+  const tk = { type: 'treb', pivot: [-6, 112, 0], axis: 'z' }, pc = [-8.8, 109.2, 0], rr = -Math.PI / 4;
+  const part = (lx, ly, lz, hx, hy, hz, s, o) => {
+    const c = [pc[0] + lx * Math.cos(rr) - ly * Math.sin(rr), pc[1] + lx * Math.sin(rr) + ly * Math.cos(rr), pc[2] + lz];
+    blocks.push({ c, h: [hx, hy, hz], s, yaw: 0, pitch: 0, roll: rr, kin: tk, ...o });
+  };
+  part(0, 0, 0, 0.8, 0.15, 0.8, 'net', { look: 'pocket', trebPocket: true });
+  part(0.95, 0.35, 0, 0.15, 0.5, 0.8, 'wood', { look: 'pocketlip', trebPocket: true });
+  part(0, 0.3, 0.95, 0.8, 0.45, 0.15, 'wood', { look: 'pocketlip', trebPocket: true });
+  part(0, 0.3, -0.95, 0.8, 0.45, 0.15, 'wood', { look: 'pocketlip', trebPocket: true });
+  box(-3.5, 108, 2.5, -1.5, 109.6, 4.5, 'metal', { look: 'counterweight', trebWeight: true });
+  d('trebuchet', [-6, 112, 0]); d('banners', [0, 108, -15]);
+  hint([-16, 107.5, -16], [16, 110, 16], 'Pose la balle dans la poche du trébuchet : il la lance vers le sommet. Mais il faut toute sa force : frappe d’abord le contrepoids (chaque coup ajoute un cran, 3 au maximum).');
+
+  /* ===== 11. Le Sommet (120 m) : le trou tourne avec son disque ===== */
+  W('Le Sommet', 119);
+  box(4, 119.2, -6, 16, 120, 6, 'gold', { look: 'summit', tag: 'sommet', show: true, kin: { type: 'spin', pivot: [10, 120, 0], axis: 'y', speed: TAU / 30 } });
+  d('beacon', [10, 120, 0]); d('stars', [0, 120, 0]);
+  hint([4, 119.5, -6], [16, 122, 6], 'Le dernier trou tourne avec le disque : vise un peu en avance.');
 
   const level = {
-    blocks, zones, deco, pickups,
-    // les éclats d'étoile : un par étage, à l'écart du chemin
-    shards: [[9, 0.6, 2], [-20.5, 11.8, -1.5], [14, 24, -14], [-15, 29.5, -23], [-22, 44.5, -12], [-13.5, 51.5, -13.5], [0, 64.6, -8.3], [-6, 81, -7], [11.5, 90, 10.5]].map((p, id) => ({ id, p })),
-    start: [6, 0.3, 26], cup: [1.5, 98, 2], fatal: -25, top: 100, startClubs: ['putter', 'fer'],
-    // les étages : nom, hauteur de départ, ambiance (ciel haut, ciel bas, brume, lumière)
-    biomes: [
-      { name: 'Le Marais des Racines', y: -30, sky: ['#9fd8e8', '#e8f6e8'], fog: '#cfe8dc', sun: '#fff1d6' },
-      { name: 'La Forêt des Géants', y: 9, sky: ['#8fd6a8', '#effbe6'], fog: '#cdeccf', sun: '#fff6d0' },
-      { name: 'Les Grottes de Cristal', y: 19.5, sky: ['#7d74d8', '#d6c8ff'], fog: '#b9b0ee', sun: '#e8e0ff' },
-      { name: 'Le Canyon des Anciens', y: 27, sky: ['#ffb37a', '#ffe8c8'], fog: '#f6d2a8', sun: '#ffe2b8' },
-      { name: 'Le Glacier', y: 40.5, sky: ['#9fd4ff', '#f2fbff'], fog: '#dbeefa', sun: '#ffffff' },
-      { name: 'Le Sanctuaire Céleste', y: 50, sky: ['#ffb8d8', '#fff2c8'], fog: '#ffe0ea', sun: '#fff0dc' },
-      { name: 'Les Orgues de Feu', y: 55.5, sky: ['#ff7f5e', '#ffd2a8'], fog: '#f2b090', sun: '#ffd0a8' },
-      { name: 'La Cité des Vents', y: 69.5, sky: ['#6fc0ff', '#eaf7ff'], fog: '#d8ecfa', sun: '#ffffff' },
-      { name: 'L’Observatoire Céleste', y: 82.5, sky: ['#3a3590', '#cdb8ff'], fog: '#a89ad8', sun: '#e8e0ff' },
+    blocks, zones, deco, hints, worlds: world,
+    pickups: [
+      { club: 'wedge', p: [6, 12.5, -13] }, { club: 'driver', p: [-13, 36.5, 13] }, { club: 'lob', p: [-13, 48.5, 12] }, { club: 'faucille', p: [12, 79.5, 6.5] },
     ],
+    shards: [[-8, 3.6, -20], [0, 12.6, 0], [-14, 24.6, 14], [12.5, 45.6, -13], [-14, 48.6, -13], [-12.5, 66.6, -12.5], [11, 76.8, -6.5], [-7, 94.1, -7], [9, 106.6, -12.5], [-14, 108.6, 14], [14, 120.6, 4]].map((p, id) => ({ id, p })),
+    melody: [1, 3, 2, 4], treb: { stop: 1.13, base: 3.8, step: 0.9, acc: 20 }, // le bras s'arrête à 65° (départ à ~70°) ; seule la force 3 atteint le sommet
+    start: [12, 0.3, 17], cup: { tag: 'sommet', off: [3, 3] }, fatal: -25, top: 122, startClubs: ['putter', 'fer'],
+    // les mondes : nom, hauteur où commence leur ambiance, ciel haut et bas, brume, lumière
+    biomes: [
+      ['#9fdcff', '#e8fbe8', '#d6f0dc', '#fff6e0'], ['#b9c8ff', '#fff3e0', '#e6e0f0', '#fff0d8'], ['#ffd6c8', '#fff8f0', '#f6e6e0', '#fff4ea'],
+      ['#7f6a9a', '#e8d8c8', '#c8b8c8', '#ffe8c8'], ['#8fd8e8', '#e8fff8', '#cdeee8', '#ffffff'], ['#ff9fc0', '#ffe8b8', '#ffd0d8', '#fff0e0'],
+      ['#6f8ad8', '#d8e0ff', '#b8c4f0', '#f0f0ff'], ['#9fe0d0', '#f8fff0', '#d8f4ea', '#ffffff'], ['#c89a6a', '#fff0c8', '#f0d8b0', '#fff2d8'],
+      ['#ff8a6a', '#ffd8a8', '#f8c0a0', '#ffe0c0'], ['#3a3590', '#cdb8ff', '#a89ad8', '#f0e8ff'],
+    ].map(([a, b, f, s], i) => ({ name: world[i].name, y: world[i].y, sky: [a, b], fog: f, sun: s })),
   };
-  const api = level;
-  if (typeof module !== 'undefined' && module.exports) module.exports = api;
-  else root.TourLevel = api;
+  if (typeof module !== 'undefined' && module.exports) module.exports = level;
+  else root.TourLevel = level;
 })(this);
