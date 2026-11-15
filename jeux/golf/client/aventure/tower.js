@@ -135,7 +135,8 @@
   box(16, 58, -1.5, 18.8, 60.15, 1.5, 'wood', { look: 'dock' }); // quai du haut, devant la porte du Grand Huit
   for (let k = 0; k < 6; k++) {
     const a = (k / 6) * TAU, pv = [20, 54.5, 0], c = [20, 54.5 - 5.5 * Math.cos(a), -5.5 * Math.sin(a)];
-    const kin = { type: 'orbit', pivot: pv, axis: 'x', speed: TAU / 20 }, by = c[1], bz = c[2];
+    // les quatre planches d'un godet sont accrochées au même point de la roue (anchor) : elles bougent d'un bloc
+    const kin = { type: 'orbit', pivot: pv, axis: 'x', speed: TAU / 20, anchor: c }, by = c[1], bz = c[2];
     // le godet : un fond et trois rebords (ouvert côté tour)
     box(18.9, by - 0.3, bz - 1.1, 21.1, by, bz + 1.1, 'wood', { look: 'bucket', kin });
     box(21.1, by - 0.3, bz - 1.1, 21.4, by + 0.7, bz + 1.1, 'wood', { look: 'bucketlip', kin });

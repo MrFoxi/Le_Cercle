@@ -89,7 +89,12 @@
       case 'move': { const s = Math.sin(ph(k.phase, k.period)); b.c = b.c0.map((c, i) => c + k.axis[i] * k.amp * s); break; }
       case 'tilt': b[k.axis] = b.o0[k.axis === 'pitch' ? 1 : 2] + k.angle * Math.sin(ph(k.phase, k.period)); break;
       case 'spin': around(k.pivot, k.axis, k.speed * t + (k.phase || 0), true); break; // tourne autour d'un pivot (aiguilles, disques)
-      case 'orbit': around(k.pivot, k.axis, k.speed * t + (k.phase || 0), false); break; // reste à plat en tournant (godets)
+      case 'orbit': { // reste à plat en tournant (godets) ; avec anchor, toutes les pièces suivent ce point ensemble
+        if (!k.anchor) { around(k.pivot, k.axis, k.speed * t + (k.phase || 0), false); break; }
+        const d = rot(k.anchor.map((v, i) => v - k.pivot[i]), k.axis, k.speed * t + (k.phase || 0));
+        b.c = b.c0.map((v, i) => v + k.pivot[i] + d[i] - k.anchor[i]); [b.yaw, b.pitch, b.roll] = b.o0;
+        break;
+      }
       case 'lever': { const h = w.levers[k.id] || 0; b.c = [b.c0[0], b.c0[1] + (k.role === 'A' ? -1 : 1) * k.amp * smooth(h), b.c0[2]]; break; }
       case 'mobile': { // penche du côté où la balle est posée, revient doucement sinon
         const on = ball && onBase(w, ball, b), lim = k.max || 0.22;
