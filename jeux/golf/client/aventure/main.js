@@ -109,6 +109,38 @@ function warp(i) {
   for (const c of L.pickups) if (c.p[1] < p[1] - 1) world.clubs.add(c.club); // les clubs des étages d'en dessous
   renderClub(); toast(`🛗 Téléporté : ${L.biomes[i].name} (partie hors classement)`);
 }
+let netJoin = () => {};
+/* ---------- La Tour en ligne : les autres grimpeurs en fantômes, le compteur, les victoires annoncées ---------- */
+const net = typeof io === 'function' ? io('/golf') : null; // sans serveur (page ouverte seule) : on grimpe seul
+let climbers = 0, sentAt = 0, sentP = '';
+function renderClimbers() {
+  const n = climbers, txt = playing && n <= 1 ? 'Tu es seul dans la Tour' : !n ? 'Personne ne grimpe en ce moment' : `${n} grimpeur${n > 1 ? 's' : ''} dans la Tour en ce moment`;
+  $('#climbers').textContent = `🧗 ${txt}`; $('#climbersIn').textContent = `🧗 ${n}`;
+}
+function renderOthers() { $('#others').innerHTML = view.ghosts.list().slice(0, 50).map(o => `<span style="bottom:${Math.max(0, Math.min(100, (o.y / L.top) * 100))}%;background:${o.c}"></span>`).join(''); }
+if (net) {
+  const join = () => {
+    if (!playing) return;
+    let name = ''; try { name = localStorage.getItem('golf-pseudo') || ''; } catch { /* stockage bloqué */ }
+    net.emit('tour:join', name, ball.p, r => { r.others.forEach(view.ghosts.add); renderOthers(); });
+  };
+  net.on('connect', () => { net.emit('tour:watch'); join(); }); // aussi après une coupure : on se réinscrit
+  net.on('tour:count', n => { climbers = n; renderClimbers(); });
+  net.on('tour:in', o => { view.ghosts.add(o); renderOthers(); });
+  net.on('tour:pos', (id, p) => view.ghosts.pos(id, p));
+  net.on('tour:out', id => { view.ghosts.out(id); renderOthers(); });
+  net.on('tour:lost', id => view.ghosts.lost(id));
+  net.on('tour:win', (name, n, m) => toast(`🏆 <b>${esc(name)}</b> a atteint le sommet en ${n} coups (${esc(m)}) !`, 'gold'));
+  netJoin = join;
+}
+// position envoyée ~5 fois par seconde quand la balle bouge, toutes les 2 s sinon (pour rester « en vie »)
+function sendPos(now) {
+  if (!net?.connected || !playing || over) return;
+  const key = ball.p.map(v => v.toFixed(2)).join();
+  if (now - sentAt < (key === sentP ? 2000 : 200)) return;
+  sentAt = now; sentP = key; net.emit('tour:pos', ball.p.map(v => Math.round(v * 100) / 100));
+  renderOthers();
+}
 // la jauge de hauteur : un trait par monde
 $('#ticks').innerHTML = L.worlds.slice(1).map(w => `<span style="bottom:${((w.y + 1) / L.top) * 100}%"></span>`).join('');
 
@@ -185,6 +217,7 @@ function onEvent(ev) {
   }
   if (ev.t === 'holed') finish(true);
   if (ev.t === 'lost') {
+    net?.emit('tour:lost');
     if (mode === 'zen') { ball = P.newBall(lastRest.p); toast('🌿 Mode zen : ta balle revient où elle était.'); sound.cue('lost'); return; }
     finish(false);
   }
@@ -192,6 +225,8 @@ function onEvent(ev) {
 function finish(isWin, why) {
   if (over) return;
   over = true; won = isWin; document.body.classList.add('ended');
+  if (isWin) net?.emit('tour:win', shots, mode, warped); else if (why) net?.emit('tour:lost'); // la chute dans le vide est déjà signalée
+  net?.emit('tour:leave');
   sound.cue(isWin ? 'holed' : 'lost');
   const time = Math.round((performance.now() - startedAt) / 1000);
   const stats = `<ul class="stats"><li><b>${shots}</b><small>coups</small></li><li><b>${fmt(time)}</b><small>temps</small></li><li><b>${Math.round(best)} m</b><small>plus haut</small></li><li><b>${world.clubs.size}/${P.ORDER.length}</b><small>clubs</small></li><li><b>${world.shards.size}/${L.shards.length}</b><small>éclats</small></li></ul>`;
@@ -236,6 +271,7 @@ function frame(now) {
     lastRest = { p: [...ball.p], y: ball.p[1] };
   }
   wasReady = isReady;
+  sendPos(now);
   if (isReady && (aim.drag || aim.keys)) computePreview(); else preview = null;
   const amb = view.frame({ ball, world, t: now / 1000, dt, ready: isReady && !over, aim: isReady && !over && (aim.drag || aim.keys) ? aim : null, preview, biome, cinematic: won });
   $('#sky').style.background = `linear-gradient(180deg, ${amb.sky[0]}, ${amb.sky[1]})`;
@@ -260,6 +296,7 @@ function start() {
   $('#intro').hidden = true; playing = true; startedAt = performance.now();
   sound.startAudio(); renderClub(); renderCounters();
   $('#modeTag').textContent = MODES[mode][0];
+  netJoin(); renderClimbers();
   biome = -1;
 }
 function renderModes() { $('#modes').innerHTML = Object.entries(MODES).map(([id, [n, d]]) => `<button class="mode ${id === mode ? 'on' : ''}" data-mode="${id}"><b>${n}</b><small>${d}</small></button>`).join(''); }

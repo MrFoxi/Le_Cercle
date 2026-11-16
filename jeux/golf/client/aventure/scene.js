@@ -316,6 +316,48 @@ export function createScene(canvas) {
     }
   }
 
+  /* ---------- Les autres grimpeurs : fantômes en direct (on les traverse, rien ne change pour la balle) ---------- */
+  const others = new Map(); // id → { g, trail, pts, goal, last, c }
+  const ghostGeo = new THREE.SphereGeometry(R * 1.4, 16, 12);
+  function label(name, c) {
+    const cv = document.createElement('canvas'); cv.width = 256; cv.height = 64;
+    const x = cv.getContext('2d'); x.font = '800 30px "Baloo 2", Nunito, sans-serif'; x.textAlign = 'center'; x.textBaseline = 'middle';
+    const w = Math.min(248, x.measureText(name).width + 28);
+    x.fillStyle = 'rgba(43,37,82,.72)'; x.beginPath(); x.roundRect(128 - w / 2, 8, w, 48, 24); x.fill();
+    x.fillStyle = c; x.fillText(name, 128, 33);
+    const t = new THREE.CanvasTexture(cv); t.colorSpace = THREE.SRGBColorSpace;
+    const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: t, depthTest: false, transparent: true })); s.scale.set(4.8, 1.2, 1); s.position.y = 1.5; s.renderOrder = 25;
+    return s;
+  }
+  const ghosts = {
+    add({ id, name, c, p }) {
+      if (others.has(id)) return;
+      const g = new THREE.Group(), ball = new THREE.Mesh(ghostGeo, new THREE.MeshBasicMaterial({ color: c, transparent: true, opacity: 0.55, depthWrite: false }));
+      g.add(ball, label(name, c)); g.position.set(...p); tower.add(g);
+      const trail = new THREE.Line(new THREE.BufferGeometry(), new THREE.LineBasicMaterial({ color: c, transparent: true, opacity: 0.5 })); trail.frustumCulled = false; tower.add(trail);
+      others.set(id, { g, trail, pts: [], goal: new THREE.Vector3(...p), last: performance.now(), c });
+    },
+    pos(id, p) { const o = others.get(id); if (o) { o.goal.set(...p); o.last = performance.now(); } },
+    out(id) { const o = others.get(id); if (!o) return; tower.remove(o.g, o.trail); o.trail.geometry.dispose(); others.delete(id); },
+    lost(id) { const o = others.get(id); if (o) burst(o.g.position.toArray(), [o.c, '#ffffff'], 16, 3); }, // un petit « pouf »
+    list: () => [...others.entries()].map(([id, o]) => ({ id, y: o.goal.y, c: o.c })),
+  };
+  function moveGhosts(dt, cw, bp) {
+    const near = [];
+    for (const [id, o] of others) {
+      if (performance.now() - o.last > 8000) { ghosts.out(id); continue; } // plus de nouvelles : parti
+      const d = o.g.position.distanceTo(o.goal);
+      if (d > 12) o.g.position.copy(o.goal); else o.g.position.lerp(o.goal, 1 - Math.exp(-dt * 8));
+      // la traînée : seulement quand il bouge vite (en vol)
+      if (d > 0.15) { o.pts.push(...o.g.position.toArray()); if (o.pts.length > 90) o.pts.splice(0, 3); } else if (o.pts.length) o.pts.splice(0, 3);
+      o.trail.geometry.setAttribute('position', new THREE.Float32BufferAttribute(o.pts, 3));
+      const w = worldOf(o.g.position.y - 0.6), show = Math.abs(w - cw) <= 1;
+      o.g.visible = o.trail.visible = false;
+      if (show) near.push([o.g.position.distanceTo(bp), o]);
+    }
+    near.sort((a, b) => a[0] - b[0]).slice(0, 20).forEach(([, o]) => (o.g.visible = o.trail.visible = true)); // les 20 plus proches
+  }
+
   /* ---------- Rotation et cadrage ---------- */
   const view = { rot: 0, rotGoal: 0, follow: new THREE.Vector3(), k: 0 };
   function rotate(dir) { view.k = (view.k + dir + 4) % 4; view.rotGoal += (dir * Math.PI) / 2; }
@@ -395,6 +437,7 @@ export function createScene(canvas) {
       if (W.broken.has(L2.i) && !L2.burst) { L2.burst = true; burst(b.c, ['#c0503e', '#f4ead6'], 20, 5); }
     }
     ghost.visible = hidden;
+    moveGhosts(dt, cw, bp);
     for (const d2 of live.deco) d2.obj.visible = st.cinematic || (d2.w === cw && !(d2.face && faces[d2.face])) || (d2.w < cw && d2.y < 12 * cw - 4); // le décor d'un mur côté caméra s'efface avec lui
     // repère sous la balle en vol, point d'arrivée
     const gy = !st.ready && !ball.ground ? TourPhys.groundBelow(W, ball.p) : null;
@@ -448,5 +491,5 @@ export function createScene(canvas) {
     return ambient;
   }
   function toScreen(p) { const v = tower.localToWorld(new THREE.Vector3(...p)).project(camera), r = canvas.getBoundingClientRect(); return [(v.x + 1) / 2 * r.width, (1 - v.y) / 2 * r.height]; }
-  return { live, frame, rotate, awayYaw, pickGround, burst, toScreen, get k() { return view.k; } };
+  return { live, frame, rotate, awayYaw, pickGround, burst, toScreen, ghosts, get k() { return view.k; } };
 }

@@ -1,6 +1,7 @@
 // Salons du Mini-golf, sur le canal Socket.io « /golf ». Les émotes passent à part, en « volatile » (rien à garder).
 const rooms = require('../../../lib/rooms');
 const { Room } = require('./game');
+const tour = require('./tour');
 
 const EMOTES = ['👏', '😂', '😱', '🔥', '😎', '🙏', '💩', '❤️'];
 
@@ -8,6 +9,7 @@ module.exports = nsp => rooms(nsp, {
   Room,
   actions: ['start', 'shoot', 'toLobby', 'configure', 'addBot', 'removeBot', 'setLook', 'bet'],
   onConnection(socket, ctx) {
+    tour(nsp, socket); // la Tour en ligne (fantômes des autres grimpeurs)
     let last = 0;
     socket.on('emote', e => {
       const { entry, me } = ctx, now = Date.now();

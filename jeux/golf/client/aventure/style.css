@@ -27,6 +27,10 @@ select.pill { appearance: none; border: 0; cursor: pointer; font: inherit; font-
 #ticks span { position: absolute; left: -4px; width: 18px; height: 2px; background: rgba(43, 37, 82, .35); border-radius: 2px; }
 #meter i, #meter b { position: absolute; left: 50%; width: 18px; height: 18px; margin: 0 0 -9px -9px; border-radius: 50%; transition: bottom .3s; }
 #meter i { background: #fff; box-shadow: 0 0 0 3px var(--pink), 0 2px 8px rgba(0, 0, 0, .25); z-index: 1; }
+/* les autres grimpeurs sur la jauge */
+#others span { position: absolute; left: 50%; width: 9px; height: 9px; margin: 0 0 -4.5px -4.5px; border-radius: 50%; box-shadow: 0 0 0 1.5px #fff; opacity: .9; transition: bottom .4s; }
+.climbers { margin: 4px 0 10px; font-weight: 800; color: var(--ink); opacity: .8; }
+#climbersIn { display: block; opacity: .8; }
 #meter b { width: 10px; height: 10px; margin: 0 0 -5px -5px; background: var(--gold); box-shadow: 0 0 6px var(--gold); }
 #state { position: fixed; left: 50%; bottom: 196px; transform: translateX(-50%); margin: 0; padding: 5px 14px; border-radius: 999px; background: rgba(43, 37, 82, .5); color: #fff; font-weight: 800; font-size: .9rem; white-space: nowrap; pointer-events: none; }
 
