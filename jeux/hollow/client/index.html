@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>The Hollow · Strate 01</title>
+  <link rel="icon" href="data:,">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,500;0,700;1,500&display=swap" rel="stylesheet">
+  <script type="importmap">{ "imports": { "three": "/vendor/three/build/three.module.js", "three/addons/": "/vendor/three/addons/" } }</script>
+  <script type="module" src="main.js"></script>
+  <style>
+    html, body { margin: 0; height: 100%; overflow: hidden; background: #ece6da; color: #1a1828; font-family: 'Cormorant Garamond', Georgia, serif; }
+    #view { position: fixed; inset: 0; width: 100%; height: 100%; display: block; }
+    /* retour au dernier appui après une chute : l'image s'efface dans le papier */
+    #veil { position: fixed; inset: 0; background: #ece6da; opacity: var(--fade, 0); pointer-events: none; }
+    #title { position: fixed; inset: 0; display: grid; place-content: center; text-align: center; gap: 10px; cursor: pointer;
+      background: radial-gradient(ellipse at center, rgba(236, 230, 218, .55), rgba(236, 230, 218, .92)); transition: opacity 1.6s ease; }
+    #title.gone { opacity: 0; pointer-events: none; }
+    #title h1 { margin: 0; font-size: clamp(3rem, 11vw, 9rem); font-weight: 700; letter-spacing: .32em; line-height: 1; padding-left: .32em; }
+    #title p { margin: 0; font-size: clamp(1.1rem, 2.6vw, 1.7rem); font-style: italic; }
+    #title small { margin-top: 26px; font-size: 1rem; letter-spacing: .2em; text-transform: uppercase; opacity: .7; }
+    #title kbd { font-family: inherit; border-bottom: 1px solid currentColor; }
+    a.back { position: fixed; left: 16px; top: 14px; color: inherit; text-decoration: none; font-size: 1.4rem; opacity: .6; }
+  </style>
+</head>
+<body>
+  <canvas id="view" aria-label="The Hollow, Strate 01 : les Jardins suspendus"></canvas>
+  <div id="veil"></div>
+  <a class="back" href="/" title="Retour au Cercle">←</a>
+  <section id="title">
+    <h1>THE HOLLOW</h1>
+    <p>Strate 01 — Les Jardins suspendus</p>
+    <small>Cliquer pour entrer · <kbd>ZQSD</kbd> marcher · <kbd>Maj</kbd> courir · <kbd>Espace</kbd> sauter · souris : regarder · <kbd>R</kbd> tout en couleur</small>
+  </section>
+</body>
+</html>
