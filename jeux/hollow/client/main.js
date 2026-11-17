@@ -7,9 +7,9 @@ import { spawn } from './terrain.js';
 
 // Qualité : le jeu est réglé pour une machine puissante ; il se replie tout seul si les images tardent.
 const PRESETS = {
-  haute: { terrain: 560, trees: 95, umbrellas: 24, rocks: 650, islands: 14, falls: 9, grass: 160000, seeders: 50, dpr: 2, shadows: true },
-  moyenne: { terrain: 400, trees: 65, umbrellas: 16, rocks: 400, islands: 10, falls: 7, grass: 70000, seeders: 30, dpr: 1.25, shadows: true },
-  basse: { terrain: 260, trees: 35, umbrellas: 10, rocks: 200, islands: 6, falls: 5, grass: 20000, seeders: 15, dpr: 1, shadows: false },
+  haute: { trees: 1500, umbrellas: 260, rocks: 5000, arches: 34, islands: 70, falls: 40, grass: 160000, grassRadius: 110, seeders: 400, dpr: 2, shadows: true },
+  moyenne: { trees: 900, umbrellas: 160, rocks: 2600, arches: 24, islands: 45, falls: 28, grass: 70000, grassRadius: 75, seeders: 200, dpr: 1.25, shadows: true },
+  basse: { trees: 450, umbrellas: 80, rocks: 1200, arches: 14, islands: 25, falls: 18, grass: 20000, grassRadius: 45, seeders: 80, dpr: 1, shadows: false },
 };
 const asked = new URLSearchParams(location.search).get('q');
 const Q = PRESETS[asked] || (matchMedia('(pointer: coarse)').matches ? PRESETS.basse : PRESETS.haute);
@@ -17,12 +17,12 @@ const Q = PRESETS[asked] || (matchMedia('(pointer: coarse)').matches ? PRESETS.b
 const canvas = document.getElementById('view');
 const renderer = new THREE.WebGLRenderer({ canvas, antialias: false, powerPreference: 'high-performance' });
 renderer.autoClear = false; renderer.setClearColor('#cdeee6');
-const camera = new THREE.PerspectiveCamera(52, 1, 0.3, 4000);
+const camera = new THREE.PerspectiveCamera(52, 1, 0.3, 12000);
 const scene = new THREE.Scene();
 const pipe = createPipeline(renderer);
 
-// la carte de ce que le voyageur a vu : 256 × 256 cases sur 840 m ; la couleur s'y répand autour de lui
-const N = 256, seen = new Uint8Array(N * N), revealTex = new THREE.DataTexture(seen, N, N, THREE.RedFormat, THREE.UnsignedByteType);
+// la carte de ce que le voyageur a vu : 1024 × 1024 cases sur 5 km (une case = 5 m) ; la couleur s'y répand autour de lui
+const N = 1024, seen = new Uint8Array(N * N), revealTex = new THREE.DataTexture(seen, N, N, THREE.RedFormat, THREE.UnsignedByteType);
 revealTex.magFilter = revealTex.minFilter = THREE.LinearFilter; revealTex.needsUpdate = true; U.uReveal.value = revealTex;
 const rect = U.uRevealRect.value;
 function reveal(x, z, R) {

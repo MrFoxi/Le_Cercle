@@ -14,7 +14,7 @@ function steepest(a, k) {
 }
 
 test('chaque terrasse se rejoint par sa rampe, et nulle part ailleurs', () => {
-  for (let k = 0; k < 6; k++) {
+  for (let k = 0; k < 12; k++) {
     assert.ok(steepest(rampAngle(k), k) < 0.75, `la rampe ${k} se descend à pied (pente ${steepest(rampAngle(k), k).toFixed(2)})`);
     assert.ok(steepest(rampAngle(k) + 1.2, k) > 1.5, `loin de la rampe ${k}, une falaise`);
   }
@@ -22,7 +22,7 @@ test('chaque terrasse se rejoint par sa rampe, et nulle part ailleurs', () => {
 
 test('le gouffre au centre, la paroi au bord, un départ sur le sol', () => {
   assert.strictEqual(terrain(0, 10).kind, 'void');
-  assert.ok(heightAt(400, 0) > heightAt(300, 0) + 40, 'la paroi monte');
+  assert.ok(heightAt(2400, 0) > heightAt(1900, 0) + 300, 'la paroi monte');
   const [x, y, z] = spawn();
   assert.strictEqual(terrain(x, z).kind, 'ground');
   assert.ok(y > STEP * 5, 'on part de haut');

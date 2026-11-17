@@ -48,28 +48,82 @@ function tube(pts, r0, r1 = r0, radial = 8, seg = 16) {
 }
 const cast = o => { o.layers.enable(1); return o; }; // ce qui porte une ombre
 
-/* ---------- Le sol ---------- */
-function ground(seg) {
-  const S = 920, g = new THREE.PlaneGeometry(S, S, seg, seg); g.rotateX(-Math.PI / 2);
-  const p = g.attributes.position, idx = g.index.array, keep = [];
-  for (let i = 0; i < p.count; i++) p.setY(i, heightAt(p.getX(i), p.getZ(i)));
-  // on retire les triangles du gouffre
-  for (let i = 0; i < idx.length; i += 3) if (p.getY(idx[i]) > -100 && p.getY(idx[i + 1]) > -100 && p.getY(idx[i + 2]) > -100) keep.push(idx[i], idx[i + 1], idx[i + 2]);
-  g.setIndex(keep); g.computeVertexNormals();
+/* ---------- Le sol : 2 km de rayon, par morceaux ---------- */
+// Morceaux de 160 m, plus ou moins fins selon leur distance au voyageur (2 m près de lui, 27 m au loin), refaits quand
+// il se déplace. Normales calculées sur le relief lui-même (les morceaux se raccordent sans couture d'ombrage) et une
+// jupe qui descend sous chaque bord cache les petits écarts entre deux finesses.
+const CHUNK = 160, SPAN = 2600;
+function chunkGeometry(cx, cz, seg) {
+  const n = seg + 1, cell = CHUNK / seg, e = Math.max(1, cell * 0.5), P = [], Nm = [], I = [];
+  const put = (x, z, dy = 0) => {
+    const h = heightAt(x, z), hx = heightAt(x + e, z) - heightAt(x - e, z), hz = heightAt(x, z + e) - heightAt(x, z - e);
+    const v = new THREE.Vector3(-hx, 2 * e, -hz).normalize();
+    P.push(x, Math.max(h, -420) + dy, z); Nm.push(v.x, v.y, v.z);
+    return h;
+  };
+  const hs = [];
+  for (let j = 0; j < n; j++) for (let i = 0; i < n; i++) hs.push(put(cx - CHUNK / 2 + i * cell, cz - CHUNK / 2 + j * cell));
+  const ok = k => hs[k] > -100;
+  for (let j = 0; j < seg; j++) for (let i = 0; i < seg; i++) {
+    const a = j * n + i, b = a + 1, c = a + n, d = c + 1;
+    if (ok(a) && ok(b) && ok(c) && ok(d)) I.push(a, c, b, b, c, d);
+  }
+  // la jupe : chaque bord est doublé 30 m plus bas
+  const edge = [[...Array(n).keys()].map(i => i), [...Array(n).keys()].map(i => (n - 1) * n + i), [...Array(n).keys()].map(j => j * n), [...Array(n).keys()].map(j => j * n + n - 1)];
+  for (const [ei, list] of edge.entries()) {
+    const base = P.length / 3;
+    for (const k of list) { P.push(P[k * 3], P[k * 3 + 1] - 30, P[k * 3 + 2]); Nm.push(Nm[k * 3], Nm[k * 3 + 1], Nm[k * 3 + 2]); }
+    for (let t = 0; t + 1 < list.length; t++) {
+      if (!ok(list[t]) || !ok(list[t + 1])) continue;
+      const a = list[t], b = list[t + 1], c = base + t, d = base + t + 1;
+      if (ei % 2) I.push(a, b, c, b, d, c); else I.push(a, c, b, b, c, d);
+    }
+  }
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.Float32BufferAttribute(P, 3)); g.setAttribute('normal', new THREE.Float32BufferAttribute(Nm, 3)); g.setIndex(I);
+  g.computeBoundingSphere();
   return g;
+}
+function createGround(scene) {
+  const mat = ink({ kind: 'terrain', vertexColors: false, side: THREE.DoubleSide }), chunks = [];
+  for (let z = -SPAN; z < SPAN; z += CHUNK) for (let x = -SPAN; x < SPAN; x += CHUNK) {
+    const cx = x + CHUNK / 2, cz = z + CHUNK / 2, far = Math.hypot(cx, cz);
+    if (far + CHUNK * 0.71 < R_ABYSS - 40) continue; // tout entier dans le gouffre
+    const m = cast(new THREE.Mesh(new THREE.BufferGeometry(), mat)); scene.add(m);
+    chunks.push({ cx, cz, seg: 0, m });
+  }
+  const want = d => (d < 260 ? 80 : d < 650 ? 40 : d < 1400 ? 16 : 6);
+  // update : refait au plus « budget » morceaux par appel (pas d'à-coup quand on marche)
+  return function update(p, budget = 3) {
+    const todo = chunks.map(c => [Math.hypot(c.cx - p.x, c.cz - p.z), c]).filter(([d, c]) => want(d) !== c.seg).sort((a, b) => a[0] - b[0]);
+    for (const [d, c] of todo.slice(0, budget)) { c.m.geometry.dispose(); c.seg = want(d); c.m.geometry = chunkGeometry(c.cx, c.cz, c.seg); }
+    return todo.length;
+  };
 }
 // la lèvre du gouffre : une falaise qui plonge dans la brume
 function abyssWall() {
-  const n = 160, P = [], I = [];
+  const n = 480, P = [], I = [];
   for (let i = 0; i <= n; i++) {
     const a = (i / n) * TAU;
-    let r = R_ABYSS - 1; while (r < R_ABYSS + 20 && terrain(Math.cos(a) * r, Math.sin(a) * r).kind === 'void') r += 0.5;
+    let r = R_ABYSS - 45; while (r < R_ABYSS + 45 && terrain(Math.cos(a) * r, Math.sin(a) * r).kind === 'void') r += 1;
     const x = Math.cos(a) * r, z = Math.sin(a) * r, h = heightAt(x, z);
-    for (const [k, dy] of [[0, 0], [1, -40], [0.96, -120], [0.9, -260]]) { const w = (noise(i * 0.3, dy) - 0.5) * 6; P.push(x * (k || 1) + Math.cos(a) * w, h + dy, z * (k || 1) + Math.sin(a) * w); }
+    for (const [k, dy] of [[1, 0], [0.99, -120], [0.96, -380], [0.9, -800]]) { const w = (noise(i * 0.3, dy) - 0.5) * 20; P.push(x * k + Math.cos(a) * w, h + dy, z * k + Math.sin(a) * w); }
   }
   for (let i = 0; i < n; i++) for (let j = 0; j < 3; j++) { const a = i * 4 + j, b = (i + 1) * 4 + j; I.push(a, b, a + 1, b, b + 1, a + 1); }
   const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(P, 3)); g.setIndex(I); g.computeVertexNormals();
   return paint(g, '#a8aeb8', '#5a6478', 0.1);
+}
+// les instances d'un même modèle, rangées par secteurs de 400 m : la carte graphique ne dessine que les secteurs dans le champ
+function sectors(scene, geo, mat, items, place, shadow = true) {
+  const by = new Map();
+  for (const it of items) { const k = `${Math.floor(it[0] / 400)},${Math.floor(it[2] / 400)}`; if (!by.has(k)) by.set(k, []); by.get(k).push(it); }
+  const out = [], m4 = new THREE.Matrix4();
+  for (const list of by.values()) {
+    const im = new THREE.InstancedMesh(geo, mat, list.length);
+    list.forEach((it, i) => im.setMatrixAt(i, place(it, m4)));
+    im.computeBoundingSphere(); scene.add(shadow ? cast(im) : im); out.push(im);
+  }
+  return out;
 }
 
 /* ---------- Les êtres et les choses ---------- */
@@ -96,8 +150,8 @@ function tree(seed, giant = false) {
 }
 // une ombrelle de verre : tige, pétales translucides, cœur qui luit
 const PETAL = ['#ffd6e8', '#d8f6ff', '#fff2c0', '#e8dcff', '#c8ffe8'];
-function umbrella(seed) {
-  const r = rng(seed), H = 9 + r() * 16, bend = (r() - 0.5) * 5, R = 4 + H * 0.28, col = PETAL[seed % PETAL.length];
+function umbrella(seed, giant = false) {
+  const r = rng(seed), H = (9 + r() * 16) * (giant ? 3.5 : 1), bend = (r() - 0.5) * 5, R = 4 + H * 0.28, col = PETAL[seed % PETAL.length];
   const stem = paint(tube([[0, -0.5, 0], [bend * 0.3, H * 0.4, 0], [bend, H * 0.85, bend * 0.2], [bend, H, 0]], 0.5 + H * 0.02, 0.3, 8, 18), '#8fd6a0', '#3f8a5a');
   const P = [];
   for (let k = 0; k < 6; k++) {
@@ -127,143 +181,160 @@ function gardener() {
 
 /* ---------- La strate ---------- */
 export function buildJardins(scene, Q) {
-  const live = { anim: [], colliders: [], seeders: [], islands: [] };
-  const r = rng(2026);
+  const live = { colliders: [], islands: [] };
+  const r = rng(2026), up = new THREE.Vector3(0, 1, 0), q = new THREE.Quaternion(), s3 = new THREE.Vector3(), p3 = new THREE.Vector3();
+  const [sx0, , sz0] = spawn(), clear = (x, z, d) => (x - sx0) ** 2 + (z - sz0) ** 2 > d * d; // le départ reste dégagé : on y voit loin
+  // un point au hasard sur le sol (pas dans une rampe, pas trop en pente)
+  const spot = (minD = 4, maxSlope = 1.2) => {
+    for (let n = 0; n < 60; n++) {
+      const a = r() * TAU, d = Math.sqrt(R_ABYSS ** 2 + r() * (R_WALL ** 2 - R_ABYSS ** 2)), x = Math.cos(a) * d, z = Math.sin(a) * d, t = terrain(x, z);
+      if (t.kind !== 'ground' || t.ramp > 0.2 || !clear(x, z, minD)) continue;
+      if (Math.abs(heightAt(x + 2, z) - t.h) + Math.abs(heightAt(x, z + 2) - t.h) > maxSlope) continue;
+      return [x, t.h, z, a];
+    }
+    return null;
+  };
   // le ciel du puits
-  const sky = new THREE.Mesh(new THREE.SphereGeometry(1800, 32, 16), skyMaterial()); sky.renderOrder = -1; scene.add(sky); live.sky = sky;
+  const sky = new THREE.Mesh(new THREE.SphereGeometry(8000, 32, 16), skyMaterial()); sky.renderOrder = -1; scene.add(sky); live.sky = sky;
   // le sol, la lèvre du gouffre
-  scene.add(cast(new THREE.Mesh(ground(Q.terrain), ink({ kind: 'terrain', vertexColors: false }))));
+  live.ground = createGround(scene);
   scene.add(cast(new THREE.Mesh(abyssWall(), ink({ line: 1 }))));
-  // l'anneau du puits : la voûte de roche autour de l'ouverture, très haut
+  // l'anneau du puits : la voûte de roche autour de l'ouverture, très haut au-dessus de la paroi
   {
-    const g = new THREE.TorusGeometry(330, 70, 18, 120); g.rotateX(Math.PI / 2); g.scale(1.25, 0.6, 1.25);
+    const g = new THREE.TorusGeometry(2250, 420, 20, 220); g.rotateX(Math.PI / 2); g.scale(1, 0.55, 1);
     const p = g.attributes.position;
-    for (let i = 0; i < p.count; i++) { const x = p.getX(i), y = p.getY(i), z = p.getZ(i), n = fbm(x * 0.01 + 4, z * 0.01 + y * 0.02); p.setXYZ(i, x * (1 + (n - 0.5) * 0.12), y + (n - 0.5) * 40, z * (1 + (n - 0.5) * 0.12)); }
-    g.computeVertexNormals(); g.translate(0, 330, 0);
+    for (let i = 0; i < p.count; i++) { const x = p.getX(i), y = p.getY(i), z = p.getZ(i), n = fbm(x * 0.002 + 4, z * 0.002 + y * 0.004); p.setXYZ(i, x * (1 + (n - 0.5) * 0.1), y + (n - 0.5) * 220, z * (1 + (n - 0.5) * 0.1)); }
+    g.computeVertexNormals(); g.translate(0, 1250, 0);
     scene.add(new THREE.Mesh(paint(g, '#8a9aa8', '#3a4458', 0.15), ink({ line: 0.9 })));
   }
-  // arbres : quelques modèles, beaucoup d'exemplaires, tous penchés vers le puits
-  const kinds = Array.from({ length: 7 }, (_, k) => tree(k * 31 + 7, k >= 5)), spots = kinds.map(() => []);
-  const [sx0, , sz0] = spawn(), clear = (x, z, d) => (x - sx0) ** 2 + (z - sz0) ** 2 > d * d; // le départ reste dégagé : on y voit loin
-  for (let tries = 0; tries < 4000 && spots.flat().length < Q.trees; tries++) {
-    const a = r() * TAU, d = R_ABYSS + 8 + r() * (R_WALL - R_ABYSS - 12), x = Math.cos(a) * d, z = Math.sin(a) * d, t = terrain(x, z);
-    if (t.kind !== 'ground' || t.ramp > 0.2 || !clear(x, z, 30)) continue;
-    const slope = Math.abs(heightAt(x + 2, z) - t.h) + Math.abs(heightAt(x, z + 2) - t.h);
-    if (slope > 1.2) continue;
-    spots[spots.flat().length % 4 === 3 ? 5 + (tries % 2) : tries % 5].push([x, t.h, z, a + Math.PI, 0.7 + r() * 0.6]);
+  // arbres : sept modèles (deux géants), tous penchés vers le puits
+  {
+    const kinds = Array.from({ length: 7 }, (_, k) => tree(k * 31 + 7, k >= 5)), lists = kinds.map(() => []), mat = ink({ line: 0.85, wind: 0.004 });
+    for (let k = 0; k < Q.trees; k++) {
+      const s = spot(40); if (!s) continue;
+      const [x, h, z, a] = s, kind = k % 4 === 3 ? 5 + (k % 2) : k % 5, sc = 0.7 + r() * 0.7;
+      lists[kind].push([x, h, z, a + Math.PI, sc]); live.colliders.push([x, z, (kind >= 5 ? 3 : 1.4) * sc]);
+    }
+    kinds.forEach((g, k) => sectors(scene, g, mat, lists[k], ([x, y, z, ry, sc], m4) => m4.compose(p3.set(x, y, z), q.setFromAxisAngle(up, -ry), s3.setScalar(sc))));
   }
-  const m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), s3 = new THREE.Vector3(), p3 = new THREE.Vector3();
-  kinds.forEach((g, k) => {
-    if (!spots[k].length) return;
-    const im = new THREE.InstancedMesh(g, ink({ line: 0.85, wind: 0.004 }), spots[k].length);
-    spots[k].forEach(([x, y, z, ry, s], i) => { q.setFromAxisAngle(new THREE.Vector3(0, 1, 0), -ry); im.setMatrixAt(i, m4.compose(p3.set(x, y, z), q, s3.setScalar(s))); live.colliders.push([x, z, 1.4 * s]); });
-    scene.add(cast(im));
-  });
-  // ombrelles de verre, et la tache de couleur que leur lumière pose au sol
-  for (let k = 0; k < Q.umbrellas; k++) {
-    let x, z, t;
-    for (let n = 0; n < 50; n++) { const a = r() * TAU, d = R_ABYSS + 10 + r() * 240; x = Math.cos(a) * d; z = Math.sin(a) * d; t = terrain(x, z); if (t.kind === 'ground' && t.ramp < 0.2 && clear(x, z, 20)) break; }
-    const u = umbrella(k * 13 + 5), g = new THREE.Group();
-    g.add(cast(new THREE.Mesh(u.stem, ink({ line: 0.8, wind: 0.002 }))));
-    g.add(cast(new THREE.Mesh(u.petals, ink({ line: 0.55, trans: 0.9, side: THREE.DoubleSide, wind: 0.003 }))));
-    g.add(new THREE.Mesh(u.heart, ink({ line: 0.4, glow: 0.6 })));
-    const ry = r() * TAU; g.position.set(x, t.h, z); g.rotation.y = ry; scene.add(g);
-    live.colliders.push([x, z, 0.8]);
-    const patch = new THREE.Mesh(new THREE.CircleGeometry(u.R * 1.3, 32).rotateX(-Math.PI / 2), glowy({ color: u.col, alpha: 0.32, add: true }));
-    const off = new THREE.Vector3(u.top[0], 0, u.top[2]).applyAxisAngle(new THREE.Vector3(0, 1, 0), ry).addScaledVector(U.uSunDir.value, -u.top[1] / U.uSunDir.value.y).setY(0);
-    patch.position.set(x + off.x, heightAt(x + off.x, z + off.z) + 0.15, z + off.z); scene.add(patch);
+  // ombrelles de verre (une sur cinq est immense), et la tache de couleur que leur lumière pose au sol
+  {
+    const kinds = Array.from({ length: 10 }, (_, k) => umbrella(k * 13 + 5, k >= 8)), stem = ink({ line: 0.8, wind: 0.002 }), petal = ink({ line: 0.55, trans: 0.9, side: THREE.DoubleSide, wind: 0.002 }), heart = ink({ line: 0.4, glow: 0.6 });
+    const lists = kinds.map(() => []), patches = new Map();
+    for (let k = 0; k < Q.umbrellas; k++) {
+      const s = spot(30); if (!s) continue;
+      const kind = k % 5 === 4 ? 8 + (k % 2) : k % 8, ry = r() * TAU, u = kinds[kind];
+      lists[kind].push([s[0], s[1], s[2], ry]); live.colliders.push([s[0], s[2], kind >= 8 ? 2 : 0.8]);
+      const off = new THREE.Vector3(u.top[0], 0, u.top[2]).applyAxisAngle(up, ry).addScaledVector(U.uSunDir.value, -u.top[1] / U.uSunDir.value.y);
+      const px = s[0] + off.x, pz = s[2] + off.z;
+      if (!patches.has(u.col)) patches.set(u.col, []);
+      patches.get(u.col).push([px, heightAt(px, pz) + 0.2, pz, u.R * 1.3]);
+    }
+    const place = ([x, y, z, ry], m4) => m4.compose(p3.set(x, y, z), q.setFromAxisAngle(up, ry), s3.setScalar(1));
+    kinds.forEach((u, k) => { sectors(scene, u.stem, stem, lists[k], place); sectors(scene, u.petals, petal, lists[k], place); sectors(scene, u.heart, heart, lists[k], place, false); });
+    const disc = new THREE.CircleGeometry(1, 32).rotateX(-Math.PI / 2);
+    for (const [col, list] of patches) sectors(scene, disc, glowy({ color: col, alpha: 0.32, add: true }), list, ([x, y, z, s], m4) => m4.compose(p3.set(x, y, z), q.identity(), s3.set(s, 1, s)), false);
   }
-  // rochers et blocs au pied des falaises
+  // rochers et blocs
   {
     const g = paint(lump(1, { lumpy: 0.35, detail: 2, seed: 4 }), '#c8ccd0', '#6a7280', 0.12), list = [];
-    for (let tries = 0; tries < 3000 && list.length < Q.rocks; tries++) {
-      const a = r() * TAU, d = R_ABYSS + 4 + r() * (R_WALL - R_ABYSS), x = Math.cos(a) * d, z = Math.sin(a) * d, t = terrain(x, z);
-      if (t.kind !== 'void' && clear(x, z, 16)) list.push([x, t.h, z, 0.6 + r() * r() * 5]);
-    }
-    const im = new THREE.InstancedMesh(g, ink({ line: 1 }), list.length);
-    list.forEach(([x, y, z, s], i) => { q.setFromEuler(new THREE.Euler(r(), r() * TAU, r())); im.setMatrixAt(i, m4.compose(p3.set(x, y + s * 0.2, z), q, s3.set(s, s * 0.7, s))); if (s > 1.5) live.colliders.push([x, z, s * 0.8]); });
-    scene.add(cast(im));
+    for (let k = 0; k < Q.rocks; k++) { const s = spot(16, 9); if (s) { const sc = 0.6 + r() * r() * (k % 9 ? 5 : 18); list.push([s[0], s[1], s[2], sc, r() * TAU]); if (sc > 1.5) live.colliders.push([s[0], s[2], sc * 0.8]); } }
+    sectors(scene, g, ink({ line: 1 }), list, ([x, y, z, sc, a], m4) => m4.compose(p3.set(x, y + sc * 0.2, z), q.setFromEuler(new THREE.Euler(a * 0.3, a, a * 0.2)), s3.set(sc, sc * 0.7, sc)));
   }
-  // arches de roche jetées au-dessus des terrasses
-  for (let k = 0; k < 5; k++) {
-    const a = rampAngle(k) + 1.1 + r(), d0 = R_ABYSS + TERRACE * (k + 0.5), d1 = d0 + TERRACE * 1.6, a1 = a + 0.25;
+  // arches de roche jetées par-dessus les falaises, d'une terrasse à l'autre
+  for (let k = 0; k < Q.arches; k++) {
+    const lvl = k % 12, a = rampAngle(lvl) + 0.4 + r() * 5, d0 = R_ABYSS + TERRACE * (lvl + 0.55), d1 = d0 + TERRACE * (1.2 + r() * 0.8), a1 = a + (r() - 0.5) * 0.08;
     const A = [Math.cos(a) * d0, 0, Math.sin(a) * d0], B = [Math.cos(a1) * d1, 0, Math.sin(a1) * d1];
-    A[1] = heightAt(A[0], A[2]) - 2; B[1] = heightAt(B[0], B[2]) - 2;
-    const top = Math.max(A[1], B[1]) + 26 + r() * 20, pts = [];
-    for (let i = 0; i <= 12; i++) { const t = i / 12; pts.push([A[0] + (B[0] - A[0]) * t, A[1] + (B[1] - A[1]) * t + Math.sin(t * Math.PI) * (top - Math.max(A[1], B[1])), A[2] + (B[2] - A[2]) * t]); }
-    const g = tube(pts, 6, 4.5, 12, 48), p = g.attributes.position;
-    for (let i = 0; i < p.count; i++) { const n = fbm(p.getX(i) * 0.08, p.getZ(i) * 0.08 + p.getY(i) * 0.08) - 0.5; p.setXYZ(i, p.getX(i) + n * 3, p.getY(i) + n * 3, p.getZ(i) + n * 3); }
+    A[1] = heightAt(A[0], A[2]) - 4; B[1] = heightAt(B[0], B[2]) - 4;
+    if (A[1] < -100 || B[1] < -100) continue;
+    const rise = 50 + r() * 90, thick = 8 + r() * 10, pts = [];
+    for (let i = 0; i <= 14; i++) { const t = i / 14; pts.push([A[0] + (B[0] - A[0]) * t, A[1] + (B[1] - A[1]) * t + Math.sin(t * Math.PI) * rise, A[2] + (B[2] - A[2]) * t]); }
+    const g = tube(pts, thick, thick * 0.7, 14, 56), p = g.attributes.position;
+    for (let i = 0; i < p.count; i++) { const n = fbm(p.getX(i) * 0.04, p.getZ(i) * 0.04 + p.getY(i) * 0.04) - 0.5; p.setXYZ(i, p.getX(i) + n * thick * 0.6, p.getY(i) + n * thick * 0.5, p.getZ(i) + n * thick * 0.6); }
     g.computeVertexNormals();
     scene.add(cast(new THREE.Mesh(paint(g, '#b8c0c4', '#6a7484', 0.14), ink({ line: 1 }))));
-    // de la mousse et des lianes qui pendent de l'arche
     const V = [];
-    for (let i = 2; i < 11; i++) { const c = pts[i]; if (r() < 0.6) V.push(paint(tube([[c[0], c[1] - 4, c[2]], [c[0] + 0.5, c[1] - 9 - r() * 6, c[2]], [c[0], c[1] - 14 - r() * 12, c[2] + 0.5]], 0.25, 0.08, 5, 8), '#7fc89a', '#3f8a5a')); }
-    if (V.length) scene.add(new THREE.Mesh(merge(V), ink({ line: 0.5, wind: 0.02 })));
+    for (let i = 2; i < 13; i++) { const c = pts[i]; if (r() < 0.7) V.push(paint(tube([[c[0], c[1] - thick * 0.6, c[2]], [c[0] + 1, c[1] - thick - 10 - r() * 15, c[2]], [c[0], c[1] - thick - 25 - r() * 30, c[2] + 1]], 0.6, 0.15, 5, 8), '#7fc89a', '#3f8a5a')); }
+    if (V.length) scene.add(new THREE.Mesh(merge(V), ink({ line: 0.5, wind: 0.01 })));
   }
-  // îles suspendues au-dessus du gouffre et dans le puits, chacune avec ses racines et son arbre
+  // îles suspendues : au-dessus du gouffre, et partout dans le puits, très haut, chacune avec ses racines et son arbre
   for (let k = 0; k < Q.islands; k++) {
-    const a = r() * TAU, d = k < 4 ? 20 + r() * 40 : 140 + r() * 160, y = k < 4 ? 20 + r() * 50 : 110 + r() * 150, s = 4 + r() * 8;
+    const over = k < 8, a = r() * TAU, d = over ? 60 + r() * (R_ABYSS - 120) : R_ABYSS + r() * (R_WALL - R_ABYSS - 100);
+    const s = (over ? 18 : 10) + r() * (over ? 30 : 26), y = over ? 120 + r() * 300 : heightAt(Math.cos(a) * d, Math.sin(a) * d) + 120 + r() * 600;
     const K = [paint(lump(1, { sx: s, sy: s * 1.6, sz: s, top: 0.05, lumpy: 0.3, seed: k + 50, detail: 3 }), '#a8b0b8', '#4a5468', 0.12)];
-    K.push(paint(lump(1, { sx: s * 1.05, sy: 0.6, sz: s * 1.05, lumpy: 0.15, seed: k + 90, detail: 3 }), '#7fd090', '#4a9a5a'));
-    for (let i = 0; i < 6; i++) { const b = r() * TAU, rr = s * 0.6 * r(); K.push(paint(tube([[Math.cos(b) * rr, -s * 0.8, Math.sin(b) * rr], [Math.cos(b) * rr * 1.2, -s * 1.6 - r() * 6, Math.sin(b) * rr * 1.2], [Math.cos(b) * rr * 0.8, -s * 2.4 - r() * 14, Math.sin(b) * rr * 0.8]], 0.4, 0.06, 5, 10), '#8a7a6a', '#5a4a42')); }
-    K.push(tree(k * 7 + 3).scale(0.35, 0.35, 0.35).translate(0, 0.3, 0));
+    K.push(paint(lump(1, { sx: s * 1.05, sy: s * 0.08, sz: s * 1.05, lumpy: 0.15, seed: k + 90, detail: 3 }), '#7fd090', '#4a9a5a'));
+    for (let i = 0; i < 8; i++) { const b = r() * TAU, rr = s * 0.6 * r(); K.push(paint(tube([[Math.cos(b) * rr, -s * 0.8, Math.sin(b) * rr], [Math.cos(b) * rr * 1.2, -s * 1.7 - r() * s, Math.sin(b) * rr * 1.2], [Math.cos(b) * rr * 0.8, -s * 2.6 - r() * s * 2, Math.sin(b) * rr * 0.8]], s * 0.05, s * 0.01, 5, 10), '#8a7a6a', '#5a4a42')); }
+    K.push(tree(k * 7 + 3).scale(s / 22, s / 22, s / 22).translate(0, 0.3, 0));
     const isl = cast(new THREE.Mesh(merge(K), ink({ line: 0.9 })));
     isl.position.set(Math.cos(a) * d, y, Math.sin(a) * d); isl.rotation.y = r() * TAU; scene.add(isl);
     live.islands.push([isl, y, r() * TAU]);
   }
-  // cascades : elles sortent de la paroi et tombent sur les terrasses ; brume au pied
+  // cascades : elles sortent haut dans la paroi et tombent sur la terrasse du bord ; brume au pied
   for (let k = 0; k < Q.falls; k++) {
-    const a = (k / Q.falls) * TAU + r() * 0.4, r0 = R_WALL + 2, x = Math.cos(a) * r0, z = Math.sin(a) * r0, y0 = heightAt(Math.cos(a) * (R_WALL - 6), Math.sin(a) * (R_WALL - 6));
-    const top = y0 + 60 + r() * 60, w = 5 + r() * 9, g = new THREE.PlaneGeometry(w, top - y0, 1, 1);
+    const a = (k / Q.falls) * TAU + r() * 0.1, r0 = R_WALL + 14, x = Math.cos(a) * r0, z = Math.sin(a) * r0, y0 = heightAt(Math.cos(a) * (R_WALL - 20), Math.sin(a) * (R_WALL - 20));
+    const top = y0 + 200 + r() * 350, w = 18 + r() * 40, g = new THREE.PlaneGeometry(w, top - y0, 1, 1);
     g.translate(0, (top + y0) / 2, 0);
     const m = new THREE.Mesh(g, ink({ kind: 'water', line: 0.35, side: THREE.DoubleSide, vertexColors: false })); m.position.set(x, 0, z); m.rotation.y = -a + Math.PI / 2; scene.add(m);
-    for (let i = 0; i < 4; i++) { const mist = new THREE.Mesh(new THREE.PlaneGeometry(w * 3, w * 2), glowy({ color: '#ffffff', alpha: 0.5 })); mist.position.set(Math.cos(a) * (r0 - 4 - i * 2), y0 + 2 + i * 2.5, Math.sin(a) * (r0 - 4 - i * 2)); mist.rotation.y = -a + Math.PI / 2 + (i - 1.5) * 0.4; scene.add(mist); }
+    for (let i = 0; i < 4; i++) { const mist = new THREE.Mesh(new THREE.PlaneGeometry(w * 3, w * 2), glowy({ color: '#ffffff', alpha: 0.5 })); mist.position.set(Math.cos(a) * (r0 - 14 - i * 8), y0 + 6 + i * 9, Math.sin(a) * (r0 - 14 - i * 8)); mist.rotation.y = -a + Math.PI / 2 + (i - 1.5) * 0.4; scene.add(mist); }
   }
-  // l'herbe : des touffes, chacune faite de brins instanciés (le vent les fait onduler)
+  // l'herbe : seulement autour du voyageur (une grille de cases de 12 m, chacune toujours la même), et elle le suit
   {
     const P = [], C = [], tip = new THREE.Color('#d8f8b0'), root = new THREE.Color('#2f7a4a');
     for (let s = 0; s <= 4; s++) { const t = s / 4, w = 0.07 * (1 - t); P.push(-w, t, t * t * 0.25, w, t, t * t * 0.25); const c = root.clone().lerp(tip, t); C.push(c.r, c.g, c.b, c.r, c.g, c.b); }
     const I = []; for (let s = 0; s < 4; s++) I.push(s * 2, s * 2 + 1, s * 2 + 2, s * 2 + 1, s * 2 + 3, s * 2 + 2);
     const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(P, 3)); g.setAttribute('color', new THREE.Float32BufferAttribute(C, 3)); g.setIndex(I); g.computeVertexNormals();
     g.setAttribute('uv', new THREE.BufferAttribute(new Float32Array(10 * 2), 2));
-    const im = new THREE.InstancedMesh(g, ink({ line: 0.12, wind: 0.22, side: THREE.DoubleSide }), Q.grass), tint = new THREE.Color();
-    let n = 0;
-    while (n < Q.grass) {
-      const a = r() * TAU, d = R_ABYSS + 3 + r() * (R_WALL - R_ABYSS), cx = Math.cos(a) * d, cz = Math.sin(a) * d, t = terrain(cx, cz);
-      if (t.kind !== 'ground' || Math.abs(heightAt(cx + 1, cz) - t.h) > 0.5) continue;
-      const big = 0.7 + r() * 1.1, hue = r();
-      for (let k = 0; k < 40 && n < Q.grass; k++, n++) {
-        const x = cx + (r() - 0.5) * 3, z = cz + (r() - 0.5) * 3, h = (0.5 + r() * 0.9) * big;
-        q.setFromEuler(new THREE.Euler((r() - 0.5) * 0.4, r() * TAU, (r() - 0.5) * 0.4));
-        im.setMatrixAt(n, m4.compose(p3.set(x, heightAt(x, z) - 0.05, z), q, s3.set(1 + r(), h, 1)));
-        im.setColorAt(n, tint.setHSL(0.36 + hue * 0.1, 0.38, 0.3 + r() * 0.12).multiplyScalar(1.7));
+    const im = new THREE.InstancedMesh(g, ink({ line: 0.12, wind: 0.22, side: THREE.DoubleSide }), Q.grass), tint = new THREE.Color(), m4 = new THREE.Matrix4();
+    im.frustumCulled = false; scene.add(im); live.grass = im;
+    const CELL = 12, RAD = Math.ceil(Q.grassRadius / CELL); let last = '';
+    live.updateGrass = p => {
+      const ci = Math.floor(p.x / CELL), cj = Math.floor(p.z / CELL), key = ci + ',' + cj;
+      if (key === last) return; last = key;
+      let n = 0;
+      for (let j = cj - RAD; j <= cj + RAD; j++) for (let i = ci - RAD; i <= ci + RAD; i++) {
+        if ((i - ci) ** 2 + (j - cj) ** 2 > RAD * RAD) continue;
+        const rc = rng(i * 73856093 ^ j * 19349663), tufts = 1 + Math.floor(rc() * 4);
+        for (let t = 0; t < tufts; t++) {
+          const cx = (i + rc()) * CELL, cz = (j + rc()) * CELL, tt = terrain(cx, cz), big = 0.7 + rc() * 1.2, hue = rc();
+          if (tt.kind !== 'ground' || Math.abs(heightAt(cx + 1, cz) - tt.h) > 0.6) continue;
+          for (let k = 0; k < 34 && n < im.instanceMatrix.count; k++, n++) {
+            const x = cx + (rc() - 0.5) * 3.4, z = cz + (rc() - 0.5) * 3.4;
+            q.setFromEuler(new THREE.Euler((rc() - 0.5) * 0.4, rc() * TAU, (rc() - 0.5) * 0.4));
+            im.setMatrixAt(n, m4.compose(p3.set(x, heightAt(x, z) - 0.05, z), q, s3.set(1 + rc(), (0.5 + rc() * 0.9) * big, 1)));
+            im.setColorAt(n, tint.setHSL(0.36 + hue * 0.1, 0.38, 0.3 + rc() * 0.12).multiplyScalar(1.7));
+          }
+        }
       }
-    }
-    scene.add(im); live.grass = im;
+      im.count = n; im.instanceMatrix.needsUpdate = true; if (im.instanceColor) im.instanceColor.needsUpdate = true;
+    };
   }
   // les Semeurs : ils dérivent lentement d'une terrasse à l'autre, sans se soucier du joueur
+  const seeds = [];
   {
-    const g = seeder(), mat = ink({ line: 0.4, trans: 0.6, glow: 0.25, wind: 0.08 });
-    for (let k = 0; k < Q.seeders; k++) {
-      const m = new THREE.Mesh(g, mat), a = r() * TAU, d = R_ABYSS + 20 + r() * 230;
-      m.scale.setScalar(0.8 + r() * 1.4); scene.add(m);
-      live.seeders.push({ m, a, d, h: 3 + r() * 10, sp: (r() - 0.5) * 0.02, ph: r() * TAU });
-    }
+    const im = new THREE.InstancedMesh(seeder(), ink({ line: 0.4, trans: 0.6, glow: 0.25, wind: 0.08 }), Q.seeders);
+    im.frustumCulled = false; scene.add(im); live.seedMesh = im;
+    for (let k = 0; k < Q.seeders; k++) seeds.push({ a: r() * TAU, d: R_ABYSS + 30 + r() * (R_WALL - R_ABYSS - 60), h: 3 + r() * 14, sp: (r() - 0.5) * 0.004, ph: r() * TAU, s: 0.8 + r() * 1.6 });
   }
-  // le Jardinier, sur la crête, face au puits
+  // le Jardinier, debout sur la crête de la paroi, face au puits : 250 m de haut
   {
-    const a = Math.PI * 0.85, d = R_WALL + 34, x = Math.cos(a) * d, z = Math.sin(a) * d, m = new THREE.Mesh(gardener(), ink({ line: 0.7 }));
-    m.position.set(x, heightAt(x, z) - 4, z); m.rotation.y = -a - Math.PI / 2; scene.add(m); live.gardener = m;
+    const a = Math.PI * 0.85, d = R_WALL + 260, x = Math.cos(a) * d, z = Math.sin(a) * d, m = new THREE.Mesh(gardener(), ink({ line: 0.7 }));
+    m.scale.setScalar(4); m.position.set(x, heightAt(x, z) - 20, z); m.rotation.y = -a - Math.PI / 2; scene.add(m); live.gardener = m;
   }
   // animer : îles qui flottent, Semeurs qui dérivent, le Jardinier qui tourne la tête vers le joueur (lentement)
+  const m4 = new THREE.Matrix4();
   live.update = (t, hero) => {
-    for (const [isl, y, ph] of live.islands) { isl.position.y = y + Math.sin(t * 0.25 + ph) * 1.6; isl.rotation.z = Math.sin(t * 0.2 + ph) * 0.02; }
-    for (const s of live.seeders) {
-      s.a += s.sp * 0.016; const x = Math.cos(s.a) * s.d + Math.sin(t * 0.3 + s.ph) * 6, z = Math.sin(s.a) * s.d + Math.cos(t * 0.27 + s.ph) * 6;
-      s.m.position.set(x, Math.max(heightAt(x, z), -20) + s.h + Math.sin(t * 0.9 + s.ph) * 0.8, z); s.m.rotation.y = t * 0.2 + s.ph;
-    }
+    for (const [isl, y, ph] of live.islands) { isl.position.y = y + Math.sin(t * 0.2 + ph) * 4; isl.rotation.z = Math.sin(t * 0.15 + ph) * 0.015; }
+    seeds.forEach((s, i) => {
+      const a = s.a + t * s.sp, x = Math.cos(a) * s.d + Math.sin(t * 0.3 + s.ph) * 8, z = Math.sin(a) * s.d + Math.cos(t * 0.27 + s.ph) * 8;
+      live.seedMesh.setMatrixAt(i, m4.compose(p3.set(x, Math.max(heightAt(x, z), -60) + s.h + Math.sin(t * 0.9 + s.ph) * 0.8, z), q.setFromAxisAngle(up, t * 0.2 + s.ph), s3.setScalar(s.s)));
+    });
+    live.seedMesh.instanceMatrix.needsUpdate = true;
     const g = live.gardener, want = Math.atan2(hero.x - g.position.x, hero.z - g.position.z);
     g.rotation.y += Math.atan2(Math.sin(want - g.rotation.y), Math.cos(want - g.rotation.y)) * 0.002;
+    live.ground(hero);
+    live.updateGrass(hero);
   };
+  live.ground({ x: sx0, z: sz0 }, 1e6); // tout le sol, avant la première image
+  live.updateGrass({ x: sx0, z: sz0 });
   return live;
 }

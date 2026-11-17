@@ -14,8 +14,8 @@ export const U = {
   uTime: { value: 0 }, uBoil: { value: 0 },
   uSunDir: { value: new THREE.Vector3(0.3, 1, 0.2).normalize() },
   uSunCol: { value: new THREE.Color('#fff4dc') }, uShadowCol: { value: new THREE.Color('#4f6fa8') },
-  uFogCol: { value: new THREE.Color('#cdeee6') }, uFogDensity: { value: 0.0042 },
-  uReveal: { value: null }, uRevealRect: { value: new THREE.Vector4(-420, -420, 840, 840) }, uRevealAll: { value: 0 },
+  uFogCol: { value: new THREE.Color('#cdeee6') }, uFogDensity: { value: 0.00085 },
+  uReveal: { value: null }, uRevealRect: { value: new THREE.Vector4(-2500, -2500, 5000, 5000) }, uRevealAll: { value: 0 },
   uShadowMap: { value: null }, uShadowMatrix: { value: new THREE.Matrix4() }, uShadowOn: { value: 0 },
 };
 
@@ -124,7 +124,7 @@ void main() {
   col = mix(col, base * (1. + uGlow), step(.01, uGlow)); // ce qui luit ne prend pas l'ombre
   // perspective aérienne : par lavis (paliers), et une brume plus épaisse vers le gouffre
   float fog = 1. - exp(-vDepth * uFogDensity);
-  fog = max(fog, smoothstep(5., -60., vW.y) * .85);
+  fog = max(fog, smoothstep(5., -260., vW.y) * .9); // le gouffre se noie dans la brume
   fog = floor(fog * 7. + vnoise(vW.xz * .05) * .6) / 7.;
   col = mix(col, uFogCol, clamp(fog, 0., 1.));
   // la révélation : esquisse au crayon tant qu'on n'y est pas allé, la couleur s'y répand comme une aquarelle

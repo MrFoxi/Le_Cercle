@@ -43,7 +43,7 @@ export function createHero(scene, camera, dom, colliders, start) {
   });
   dom.addEventListener('mousedown', e => (drag = [e.clientX, e.clientY]));
   addEventListener('mouseup', () => (drag = null));
-  dom.addEventListener('wheel', e => { cam.dist = Math.max(4, Math.min(60, cam.dist * (1 + Math.sign(e.deltaY) * 0.1))); e.preventDefault(); }, { passive: false });
+  dom.addEventListener('wheel', e => { cam.dist = Math.max(4, Math.min(160, cam.dist * (1 + Math.sign(e.deltaY) * 0.1))); e.preventDefault(); }, { passive: false });
 
   const has = (...c) => c.some(k => keys.has(k));
   // la hauteur où l'on peut poser le pied (le gouffre n'en a pas)
