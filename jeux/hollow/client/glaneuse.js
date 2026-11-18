@@ -41,8 +41,9 @@ export function createStory(scene, { terrain, exitAt, start, ui }) {
   const ai = as - 0.055;
   let re = rs; while (re > rs - 200 && Math.abs(ground(...at(ai, re)) - sy) < 9) re -= 1; // on part du rayon du départ et l'on rentre jusqu'au bord de la terrasse
   const E = at(ai, re + 3), Ey = ground(...E);
-  const I = { R: 26, y: Ey + 0.4 }; [I.x, I.z] = at(ai, re - 62 - I.R);
-  const B = { a: E, b: at(ai, re - 60), ya: Ey, yb: I.y, w: 3.6 };
+  // l'île est grande, l'arbre-mère immense (TREE : son échelle) ; la passerelle mord de 4 m dans l'île (pas de trou)
+  const I = { R: 42, y: Ey + 0.4 }, TREE = 1.3, K2 = TREE / 0.55; [I.x, I.z] = at(ai, re - 62 - I.R);
+  const B = { a: E, b: at(ai, re - 66), ya: Ey, yb: I.y, w: 3.6 };
   const deckAt = (x, z) => {
     const dx = B.b[0] - B.a[0], dz = B.b[1] - B.a[1], L2 = dx * dx + dz * dz, t = ((x - B.a[0]) * dx + (z - B.a[1]) * dz) / L2;
     if (t < -0.02 || t > 1.02) return null;
@@ -58,11 +59,11 @@ export function createStory(scene, { terrain, exitAt, start, ui }) {
     paint(lump(1, { sx: I.R * 1.03, sy: 0.6, sz: I.R * 1.03, lumpy: 0.1, seed: 8, detail: 3 }).translate(0, -0.25, 0), '#7fd090', '#4a9a5a'),
     ...Array.from({ length: 10 }, (_, k) => { const b = r() * TAU, rr = I.R * 0.7 * r(); return paint(tube([[Math.cos(b) * rr, -I.R * 0.9, Math.sin(b) * rr], [Math.cos(b) * rr * 1.2, -I.R * 2 - r() * 20, Math.sin(b) * rr * 1.2], [Math.cos(b) * rr * 0.8, -I.R * 3 - r() * 40, Math.sin(b) * rr * 0.8]], 1.2, 0.2, 6, 10), '#8a7a6a', '#5a4a42'); })]);
   const island = cast(new THREE.Mesh(isl, ink({ line: 0.9 }))); island.position.set(I.x, I.y, I.z); scene.add(island);
-  const mother = cast(new THREE.Mesh(tree(77, true), ink({ line: 0.85, wind: 0.002 }))); mother.scale.setScalar(0.55); mother.position.set(I.x, I.y, I.z); mother.rotation.y = -ai; scene.add(mother);
+  const mother = cast(new THREE.Mesh(tree(77, true), ink({ line: 0.85, wind: 0.002 }))); mother.scale.setScalar(TREE); mother.position.set(I.x, I.y, I.z); mother.rotation.y = -ai; scene.add(mother);
   const bloomMat = ink({ line: 0.3, glow: st.open ? 1.4 : 0.2, color: '#ffd860', vertexColors: false });
   const bloom = new THREE.Mesh(merge(Array.from({ length: 60 }, (_, k) => { const a = r() * TAU, e = r() * 1.2; return lump(0.9 + r(), { detail: 1, seed: k }).translate(Math.cos(a) * Math.cos(e) * 18, 30 + Math.sin(e) * 14 + r() * 8, Math.sin(a) * Math.cos(e) * 18); })), bloomMat);
-  bloom.position.copy(mother.position); scene.add(bloom);
-  const nest = [0, 1, 2].map(k => new THREE.Vector3(I.x + Math.cos(k * 2.1) * 9, I.y + 24 + k * 3, I.z + Math.sin(k * 2.1) * 9));
+  bloom.position.copy(mother.position); bloom.scale.setScalar(K2); scene.add(bloom);
+  const nest = [0, 1, 2].map(k => new THREE.Vector3(I.x + Math.cos(k * 2.1) * 9 * K2, I.y + (24 + k * 3) * K2, I.z + Math.sin(k * 2.1) * 9 * K2));
   // la passerelle : au crayon tant qu'elle n'est pas encrée (et on passe au travers), puis la couleur s'y répand
   const n = 30, dx = B.b[0] - B.a[0], dz = B.b[1] - B.a[1], L = Math.hypot(dx, dz), px = -dz / L, pz = dx / L;
   const P = (t, side, dy = 0) => [B.a[0] + dx * t + px * side, B.ya + (B.yb - B.ya) * t - Math.sin(t * Math.PI) * 1.2 + dy, B.a[1] + dz * t + pz * side];
@@ -129,7 +130,7 @@ export function createStory(scene, { terrain, exitAt, start, ui }) {
   /* --- le terrain de la strate, avec l'île, la passerelle encrée et le treillis --- */
   function terrainX(x, z) {
     const t = terrain(x, z);
-    if (Math.hypot(x - I.x, z - I.z) < I.R * 0.97 && I.y > t.h) return { h: I.y, kind: 'ground' };
+    if (Math.hypot(x - I.x, z - I.z) < I.R && I.y > t.h) return { h: I.y, kind: 'ground' };
     if (st.bridge) { const h = deckAt(x, z); if (h !== null && h > t.h - 0.3) return { h, kind: 'bridge' }; }
     if (!st.open && t.kind === 'void' && Math.hypot(x, z) < R_ABYSS + 70) return { h: netY, kind: 'ground' };
     return t;
@@ -146,8 +147,8 @@ export function createStory(scene, { terrain, exitAt, start, ui }) {
     return c.sort((a, b) => a[2] - b[2])[0] || null;
   }
   return {
-    debug: { gl, stone, I, seeds, blooms, st }, // pour les essais (?debug)
-    colliders: [[I.x, I.z, 4.5], [gl.position.x, gl.position.z, 0.6], [stone.position.x, stone.position.z, 1.1]], // le tronc de l'arbre-mère, la Glaneuse, la borne
+    debug: { gl, stone, I, B, seeds, blooms, st }, // pour les essais (?debug)
+    colliders: [[I.x, I.z, 6], [gl.position.x, gl.position.z, 0.6], [stone.position.x, stone.position.z, 1.1]], // le tronc de l'arbre-mère, la Glaneuse, la borne
     terrain: terrainX,
     exitAt: (x, z) => st.open && exitAt(x, z),
     interact(p) {
@@ -186,7 +187,7 @@ export function createStory(scene, { terrain, exitAt, start, ui }) {
         s.m.position.lerp(goal, 1 - Math.exp(-dt * (s.follow ? 3 : 1.5))); s.m.rotation.y = t * 0.6 + s.k;
       }
       // les trois sont rentrés : l'arbre fleurit, le treillis se retire, la descente est ouverte
-      if (st.delivered.length === 3 && !st.open) { st.open = true; persist(); ui?.say('L’arbre-mère fleurit…', mother.position.clone().add(new THREE.Vector3(0, 30, 0)), 4); setTimeout(() => ui?.page('L’arbre-mère'), 1500); setTimeout(() => ui?.page('La descente s’ouvre'), 6500); }
+      if (st.delivered.length === 3 && !st.open) { st.open = true; persist(); ui?.say('L’arbre-mère fleurit…', mother.position.clone().add(new THREE.Vector3(0, 30 * K2, 0)), 4); setTimeout(() => ui?.page('L’arbre-mère'), 1500); setTimeout(() => ui?.page('La descente s’ouvre'), 6500); }
       if (st.open && opening < 1) { opening = Math.min(1, opening + dt / 5); bloomMat.uniforms.uGlow.value = 0.2 + opening * 1.2; net.position.y = -opening * 60; net.scale.setScalar(Math.max(0.01, 1 - opening * 0.6)); if (opening >= 1) net.visible = false; }
       // l'objectif et la balise
       { const [txt, at] = goal(p); ui?.goal(txt, at); mark.set(st.open ? null : gl.position, 2.3); mark.update(t, p); }
