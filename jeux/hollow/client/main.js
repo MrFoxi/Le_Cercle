@@ -1,7 +1,8 @@
 // THE HOLLOW — la boucle : le rendu « encre vivante », les strates (une à la fois en mémoire), le voyageur, la chute
 // d'une strate à l'autre, et la carte de ce qu'il a vu. La strate atteinte la plus profonde est retenue.
 import * as THREE from 'three';
-import { U, createPipeline, setLook } from './ink.js';
+import { U, createPipeline, setLook, ink } from './ink.js';
+import { paint, lump } from './modelage.js';
 import { createHero } from './hero.js';
 import { createFall } from './chute.js';
 
@@ -69,10 +70,35 @@ function descend() {
     scene.remove(hero.rig.g);
     let built = null;
     // à la fin de la chute (ou dès que la strate est prête, si elle a tardé), on pose le voyageur à son départ
-    fall.start(from, mod.LOOK, next.n, hero, () => built.then(() => { setLook(world.look); hero.enter(scene, world); falling = false; }));
+    fall.start(from, mod.LOOK, next.n, hero, () => built.then(() => { setLook(world.look); hero.enter(scene, world, true); falling = false; }));
     // la strate suivante se construit pendant la chute
     built = new Promise(res => setTimeout(() => enter(next.n, false).then(res), 300));
   });
+}
+// l'impact de l'arrivée : deux ondes d'encre qui courent sur le sol, et des bouffées de la couleur de la brume qui s'écartent
+const fx = [];
+hero.onLand = p => {
+  const col = '#' + U.uFogCol.value.clone().lerp(new THREE.Color('#ffffff'), 0.5).getHexString();
+  for (const [k, delay] of [[0, 0], [1, 0.18]]) {
+    const ring = new THREE.Mesh(paint(new THREE.TorusGeometry(1, 0.07 - k * 0.03, 6, 64).rotateX(Math.PI / 2), '#2a2838'), ink({ line: 1 }));
+    ring.position.set(p.x, p.y + 0.15, p.z); ring.visible = false; scene.add(ring);
+    fx.push({ m: ring, t: -delay, life: 1.1, step(m, k2) { m.visible = true; m.scale.setScalar(1 + k2 * (16 - k * 5)); m.scale.y = 1; } });
+  }
+  for (let i = 0; i < 18; i++) {
+    const a = (i / 18) * Math.PI * 2 + Math.random() * 0.3, puff = new THREE.Mesh(paint(lump(0.9 + Math.random() * 0.8, { detail: 2, lumpy: 0.3, seed: i }), '#ffffff', col), ink({ line: 0.5, glow: 0.35 }));
+    puff.position.copy(p); scene.add(puff);
+    const sp = 6 + Math.random() * 6, upv = 1.5 + Math.random() * 2.5;
+    fx.push({ m: puff, t: 0, life: 1.4, step(m, k2) { m.position.set(p.x + Math.cos(a) * sp * Math.sqrt(k2) * 1.6, p.y + 0.4 + upv * Math.sin(k2 * Math.PI) , p.z + Math.sin(a) * sp * Math.sqrt(k2) * 1.6); m.scale.setScalar(Math.max(0.01, 1 - k2) * (0.6 + k2)); } });
+  }
+};
+function stepFX(dt) {
+  for (let i = fx.length - 1; i >= 0; i--) {
+    const f = fx[i]; f.t += dt;
+    if (f.t < 0) continue;
+    const k = f.t / f.life;
+    if (k >= 1) { scene.remove(f.m); f.m.geometry.dispose(); f.m.material.dispose(); fx.splice(i, 1); continue; }
+    f.step(f.m, k);
+  }
 }
 function toast(msg) { const t = document.getElementById('toast'); t.textContent = msg; t.classList.remove('on'); void t.offsetWidth; t.classList.add('on'); }
 
@@ -94,7 +120,7 @@ addEventListener('keydown', e => {
 });
 // R : tout montrer en couleur (pour comparer avec l'esquisse)
 addEventListener('keydown', e => { if (e.code === 'KeyR' && !fall.active) U.uRevealAll.value = U.uRevealAll.value ? 0 : 1; });
-if (params.has('debug')) window.hollow = { hero, U, reveal, camera, enter, descend, get world() { return world; }, set: (x, z) => { hero.state.p.set(x, 2000, z); hero.state.v.set(0, 0, 0); } };
+if (params.has('debug')) window.hollow = { hero, U, reveal, camera, enter, descend, arrive: () => hero.enter(scene, world, true), get world() { return world; }, set: (x, z) => { hero.state.p.set(x, 2000, z); hero.state.v.set(0, 0, 0); } };
 
 // l'écran-titre : commencer en haut, ou reprendre à la strate la plus profonde atteinte
 const title = document.getElementById('title'), deep = Math.min(saved(), STRATES.filter(s => s.load).length);
@@ -111,7 +137,7 @@ function frame(now) {
   U.uTime.value = t; U.uBoil.value = t * 8; // le trait se redessine 8 fois par seconde
   if (fall.active) { fall.update(dt); if (fall.active) pipe.render(fall.scene, camera, new THREE.Vector3(), false); return; }
   if (falling) return;
-  hero.update(dt);
+  hero.update(dt); stepFX(dt);
   if (hero.state.exit) { descend(); return; }
   world.update(t, hero.state.p);
   world.sky.position.copy(camera.position);

@@ -55,15 +55,52 @@ export function createHero(camera, dom) {
   const floorAt = (x, z) => { const t = world.terrain(x, z); return t.kind === 'void' ? -1e9 : t.h; };
   const blocked = (x, z) => world.colliders.some(([cx, cz, r]) => (x - cx) ** 2 + (z - cz) ** 2 < (r + 0.3) ** 2);
 
-  // entrer dans une strate : posé à son départ, la caméra regardant où elle le dit
-  function enter(scene, w) {
+  // entrer dans une strate : posé à son départ, la caméra regardant où elle le dit. arrive : il tombe du ciel de la
+  // strate (après la chute), freine en ouvrant son manteau, se pose genou à terre et se relève (onLand : l'impact)
+  const hero = { onLand: null };
+  function enter(scene, w, arrive = false) {
     world = w; scene.add(g);
     st.p.set(...w.start); st.safe.copy(st.p); st.v.set(0, 0, 0); st.ground = true; st.exit = false;
     cam.yaw = w.camYaw; cam.look.set(w.start[0], w.start[1] + 1.6, w.start[2]);
     pose();
+    st.arrive = arrive ? { phase: 'air', t: 0, shake: 0 } : null;
+    if (arrive) { st.p.y += 90; st.v.y = -40; st.ground = false; }
+  }
+  const ease = k => k * k * (3 - 2 * k), clamp01 = k => Math.max(0, Math.min(1, k));
+  function arriveUpdate(dt) {
+    const A = st.arrive, h = floorAt(st.p.x, st.p.z), above = st.p.y - h;
+    A.t += dt;
+    if (A.phase === 'air') {
+      // il tombe vite, puis le manteau s'ouvre en corolle et le freine
+      const open = clamp01((45 - above) / 25);
+      st.v.y += ((-40 + open * 30) - st.v.y) * Math.min(1, dt * (1 + open * 3));
+      st.p.y += st.v.y * dt;
+      g.position.copy(st.p); g.rotation.set(0, g.rotation.y + dt * (2.5 - open * 2), 0);
+      torso.rotation.x = -0.25 * open; torso.scale.set(1 + open * 0.45 + Math.sin(A.t * 20) * 0.04 * open, 1 - open * 0.08, 1 + open * 0.45);
+      AL.rotation.set(0, 0, -0.4 - open * 1.5 + Math.sin(A.t * 11) * 0.12); AR.rotation.set(0, 0, 0.4 + open * 1.5 - Math.sin(A.t * 11) * 0.12);
+      L.rotation.set(0.3 * open + Math.sin(A.t * 8) * 0.3 * (1 - open), 0, -0.15); R.rotation.set(-0.2 * open - Math.sin(A.t * 8) * 0.3 * (1 - open), 0, 0.15);
+      if (st.p.y <= h) { st.p.y = h; st.v.set(0, 0, 0); A.phase = 'land'; A.t = 0; A.shake = 1; hero.onLand?.(st.p.clone()); }
+    } else {
+      // l'impact : il s'écrase en boule, genou à terre, puis se relève lentement
+      const hit = Math.exp(-A.t * 9), up = ease(clamp01((A.t - 0.7) / 0.9));
+      g.position.copy(st.p); g.rotation.x = 0; g.rotation.z = 0;
+      torso.position.y = -0.38 * (1 - up) - hit * 0.12; torso.rotation.x = 0.45 * (1 - up);
+      torso.scale.set(1 + hit * 0.35 + (1 - up) * 0.08, 1 - hit * 0.3, 1 + hit * 0.35 + (1 - up) * 0.08);
+      L.rotation.set(-1.3 * (1 - up), 0, 0); R.rotation.set(1.1 * (1 - up), 0, 0); L.position.y = R.position.y = 0.46 - 0.3 * (1 - up);
+      AL.rotation.set(0.6 * (1 - up), 0, -0.12 - 1.2 * hit - 0.5 * (1 - up)); AR.rotation.set(-0.9 * (1 - up), 0, 0.12 + 1.2 * hit + 0.3 * (1 - up));
+      if (A.t > 1.8) { st.arrive = null; st.safe.copy(st.p); st.ground = true; pose(); L.position.y = R.position.y = 0.46; }
+    }
+    // la caméra : d'en dessous pendant la descente (le ciel derrière lui), puis tout près au ras du sol ; elle tremble à l'impact
+    A.shake *= Math.exp(-dt * 4);
+    const air = A.phase === 'air', a = cam.yaw + (air ? A.t * 0.5 : 0.5 + A.t * 0.15), d = air ? 11 : 7 + ease(clamp01(A.t / 1.8)) * 7;
+    const look = new THREE.Vector3(st.p.x, st.p.y + (air ? 0.8 : 0.9), st.p.z);
+    camera.position.set(look.x + Math.sin(a) * d, look.y + (air ? -6 : 1.2 + A.t * 0.9), look.z + Math.cos(a) * d);
+    camera.position.y = Math.max(camera.position.y, floorAt(camera.position.x, camera.position.z) + (air ? 3 : 0.8)); // pas au ras du sol : le sol vu de trop près se raye
+    camera.position.x += (Math.random() - 0.5) * A.shake * 0.8; camera.position.y += (Math.random() - 0.5) * A.shake * 0.8;
+    camera.lookAt(look); cam.look.copy(look).setY(st.p.y + 1.6);
   }
   // remettre la silhouette debout (après la chute)
-  function pose() { for (const o of [g, torso, L, R, AL, AR]) o.rotation.set(0, 0, 0); AL.rotation.z = -0.12; AR.rotation.z = 0.12; torso.position.set(0, 0, 0); torso.scale.set(1, 1, 1); g.scale.set(1, 1, 1); }
+  function pose() { for (const o of [g, torso, L, R, AL, AR]) o.rotation.set(0, 0, 0); L.position.y = R.position.y = 0.46; AL.rotation.z = -0.12; AR.rotation.z = 0.12; torso.position.set(0, 0, 0); torso.scale.set(1, 1, 1); g.scale.set(1, 1, 1); }
 
   // le vol libre : on va où regarde la caméra (Espace monte, Ctrl ou C descend, Maj : très vite)
   function flyUpdate(dt) {
@@ -78,6 +115,7 @@ export function createHero(camera, dom) {
     st.ground = false; st.exit = false;
   }
   function update(dt) {
+    if (st.arrive) return arriveUpdate(dt);
     if (st.fly) { flyUpdate(dt); return follow(dt); }
     // déplacement relatif à la caméra
     const f = (has('KeyW', 'KeyZ', 'ArrowUp') ? 1 : 0) - (has('KeyS', 'ArrowDown') ? 1 : 0), s = (has('KeyD', 'ArrowRight') ? 1 : 0) - (has('KeyA', 'KeyQ', 'ArrowLeft') ? 1 : 0);
@@ -128,5 +166,5 @@ export function createHero(camera, dom) {
     camera.position.set(cx, cy, cz); camera.lookAt(cam.look.x, cam.look.y + 1.2, cam.look.z);
   }
   function setFly(on) { st.fly = on; st.v.set(0, 0, 0); if (!on) pose(); }
-  return { update, enter, pose, setFly, rig, state: st, cam };
+  return Object.assign(hero, { update, enter, pose, setFly, rig, state: st, cam });
 }
