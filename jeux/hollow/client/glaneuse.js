@@ -137,7 +137,7 @@ export function createStory(scene, { terrain, exitAt, start, ui }) {
   }
 
   /* --- ce qui se passe --- */
-  let near = null, fadeB = st.bridge ? 0 : 1, inkDelay = 0, opening = st.open ? 1 : 0, last = 0, began = performance.now() / 1000;
+  let hum = 6, near = null, fadeB = st.bridge ? 0 : 1, inkDelay = 0, opening = st.open ? 1 : 0, last = 0, began = performance.now() / 1000;
   ui?.ink(st.ink, INK_MAX);
   function nearest(p) {
     const c = [];
@@ -168,12 +168,13 @@ export function createStory(scene, { terrain, exitAt, start, ui }) {
       const dt = Math.min(0.1, last ? t - last : 0.016); last = t;
       // la première rencontre : elle parle d'elle-même quand on approche
       if (!st.met && p.distanceTo(gl.position) < 9) { st.met = true; persist(); talk(LINES.first); setTimeout(() => ui?.page('La Glaneuse'), 1200); }
-      if (queue.length) { qT -= dt; if (qT <= 0) { ui?.say(queue.shift(), glHead(), 4.6); qT = 4.4; } }
+      if (queue.length) { qT -= dt; if (qT <= 0) { ui?.say(queue.shift(), glHead(), 4.6); ui?.sons?.play('v-gl'); qT = 4.4; } }
+      else if ((hum -= dt) <= 0 && p.distanceTo(gl.position) < 30) { hum = 26; ui?.sons?.play('j-hum', 0.5); } // elle fredonne le thème
       // elle se tourne vers le voyageur ; elle s'efface un peu plus si l'on tarde (et beaucoup quand tout est fini)
       gl.rotation.y += Math.atan2(Math.sin(Math.atan2(p.x - gl.position.x, p.z - gl.position.z) - gl.rotation.y), Math.cos(Math.atan2(p.x - gl.position.x, p.z - gl.position.z) - gl.rotation.y)) * 0.05;
       glMat.uniforms.uFade.value = st.open ? 0.85 : 0.45 + Math.min(0.35, (t - began) / 2400);
       // le pollen : passer sous une ombrelle remplit l'encrier
-      for (const b of blooms) if (!st.pollen.includes(b.k) && st.ink < INK_MAX && Math.hypot(p.x - b.x, p.z - b.z) < 7) { st.pollen.push(b.k); st.ink++; persist(); ui?.ink(st.ink, INK_MAX); b.heart.uniforms.uGlow.value = 0.1; b.pillar.visible = false; ui?.say('+1 goutte d’encre', b.top, 1.6); }
+      for (const b of blooms) if (!st.pollen.includes(b.k) && st.ink < INK_MAX && Math.hypot(p.x - b.x, p.z - b.z) < 7) { st.pollen.push(b.k); st.ink++; persist(); ui?.ink(st.ink, INK_MAX); b.heart.uniforms.uGlow.value = 0.1; b.pillar.visible = false; ui?.say('+1 goutte d’encre', b.top, 1.6); ui?.sons?.play('j-pollen'); }
       // la passerelle encrée : la couleur s'y répand
       if (st.bridge && fadeB > 0 && (inkDelay += dt) > 0.9) { fadeB = Math.max(0, fadeB - dt * 0.5); bridgeMat.uniforms.uFade.value = fadeB; }
       // les Semeurs : ils flottent chez eux, suivent le voyageur, ou rentrent au nid de l'arbre-mère
@@ -187,7 +188,7 @@ export function createStory(scene, { terrain, exitAt, start, ui }) {
         s.m.position.lerp(goal, 1 - Math.exp(-dt * (s.follow ? 3 : 1.5))); s.m.rotation.y = t * 0.6 + s.k;
       }
       // les trois sont rentrés : l'arbre fleurit, le treillis se retire, la descente est ouverte
-      if (st.delivered.length === 3 && !st.open) { st.open = true; persist(); ui?.say('L’arbre-mère fleurit…', mother.position.clone().add(new THREE.Vector3(0, 30 * K2, 0)), 4); setTimeout(() => ui?.page('L’arbre-mère'), 1500); setTimeout(() => ui?.page('La descente s’ouvre'), 6500); }
+      if (st.delivered.length === 3 && !st.open) { st.open = true; persist(); ui?.sons?.play('n-j-t1'); ui?.say('L’arbre-mère fleurit…', mother.position.clone().add(new THREE.Vector3(0, 30 * K2, 0)), 4); setTimeout(() => ui?.page('L’arbre-mère'), 1500); setTimeout(() => ui?.page('La descente s’ouvre'), 6500); }
       if (st.open && opening < 1) { opening = Math.min(1, opening + dt / 5); bloomMat.uniforms.uGlow.value = 0.2 + opening * 1.2; net.position.y = -opening * 60; net.scale.setScalar(Math.max(0.01, 1 - opening * 0.6)); if (opening >= 1) net.visible = false; }
       // l'objectif et la balise
       { const [txt, at] = goal(p); ui?.goal(txt, at); mark.set(st.open ? null : gl.position, 2.3); mark.update(t, p); }

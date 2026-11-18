@@ -107,32 +107,32 @@ export function createStory(scene, { islands, bridges, exit, hole, horns, topAt,
       if (!near) return;
       const [, what] = near;
       if (what === 'p') { talk(st.done ? LINES.done : !st.own ? LINES.first.slice(2) : LINES.lamps(3 - st.lamps.length)); return; }
-      if (what === 'own') { if (!spend(LAMP_COST, own.top)) return; st.own = true; persist(); light(own, true); setTimeout(() => talk(LINES.own), 1500); setTimeout(() => ui?.page('La lanterne du Passeur'), 2200); return 'encre'; }
+      if (what === 'own') { if (!spend(LAMP_COST, own.top)) return; st.own = true; persist(); light(own, true); ui?.sons?.play('b-lamp'); setTimeout(() => talk(LINES.own), 1500); setTimeout(() => ui?.page('La lanterne du Passeur'), 2200); return 'encre'; }
       if (what.B && what.m) { if (!spend(BRIDGE_COST, what.m.position.clone().add(new THREE.Vector3(0, 2, 0)))) return; what.B.inked = true; what.m.visible = false; st.bridges.push(what.i); persist(); what.fading = 1; return 'encre'; }
       if (what.flameMat) {
         if (!spend(LAMP_COST, what.top)) return;
-        st.lamps.push(what.k); persist(); light(what, true); ui?.say(`${st.lamps.length} sur 3`, what.top, 2.5);
+        st.lamps.push(what.k); persist(); light(what, true); ui?.sons?.play('b-lamp'); ui?.say(`${st.lamps.length} sur 3`, what.top, 2.5);
         if (st.lamps.length === 1) setTimeout(() => ui?.page('Une Lanterne perdue'), 2000);
         return 'encre';
       }
     },
     update(t, p) {
       const dt = Math.min(0.1, last ? t - last : 0.016); last = t;
-      if (!st.met && p.distanceTo(passeur.position) < 10) { st.met = true; persist(); talk(LINES.first); setTimeout(() => ui?.page('Le Passeur'), 1200); }
-      if (queue.length) { qT -= dt; if (qT <= 0) { ui?.say(queue.shift(), head(), 4.8); qT = 4.6; } }
+      if (!st.met && p.distanceTo(passeur.position) < 10) { st.met = true; persist(); talk(LINES.first); ui?.sons?.play('b-horn', 0.6); setTimeout(() => ui?.page('Le Passeur'), 1200); }
+      if (queue.length) { qT -= dt; if (qT <= 0) { ui?.say(queue.shift(), head(), 4.8); ui?.sons?.play('v-pa'); qT = 4.6; } }
       // il tourne la tête vers le bruit des pas ; il devient brume avec le temps (et presque tout à la fin)
       const want = Math.atan2(p.x - passeur.position.x, p.z - passeur.position.z);
       passeur.rotation.y += Math.atan2(Math.sin(want - passeur.rotation.y), Math.cos(want - passeur.rotation.y)) * 0.03;
       pMat.uniforms.uFade.value = st.done ? 0.85 : 0.3 + Math.min(0.4, (t - began) / 3000);
       wisps.forEach((w, k) => { const f = (t * 0.15 + k / 5) % 1; w.position.copy(passeur.position).add(new THREE.Vector3(Math.sin(k * 2 + t * 0.3) * 0.4, 0.4 + f * 2.6, Math.cos(k * 2 + t * 0.3) * 0.4)); w.lookAt(p.x, w.position.y, p.z); w.material.uniforms.uAlpha.value = 0.45 * (1 - f); });
       // l'encre rouge : passer tout près d'une grande trompette
-      if (st.ink < INK_MAX) horns.forEach((h, i) => { if (h[3] > 4 && !st.tapped.includes(i) && Math.hypot(p.x - h[0], p.z - h[2]) < 1.6 + h[3] * 0.12 && Math.abs(p.y - (h[1] - h[3])) < 4 && st.ink < INK_MAX) { st.tapped.push(i); st.ink++; persist(); ui?.ink(st.ink, INK_MAX); ui?.say('+1 goutte d’encre rouge', new THREE.Vector3(h[0], h[1] + 1, h[2]), 1.6); } });
+      if (st.ink < INK_MAX) horns.forEach((h, i) => { if (h[3] > 4 && !st.tapped.includes(i) && Math.hypot(p.x - h[0], p.z - h[2]) < 1.6 + h[3] * 0.12 && Math.abs(p.y - (h[1] - h[3])) < 4 && st.ink < INK_MAX) { ui?.sons?.play('g-ink'); st.tapped.push(i); st.ink++; persist(); ui?.ink(st.ink, INK_MAX); ui?.say('+1 goutte d’encre rouge', new THREE.Vector3(h[0], h[1] + 1, h[2]), 1.6); } });
       // un pont encré : la couleur s'y répand après le trait de pinceau
       for (const M of marks) if (M.fading !== undefined && M.fading > 0) { M.fading -= dt * 0.5; M.B.mat.uniforms.uFade.value = Math.max(0, Math.min(1, M.fading + 0.45)); if (M.fading <= -0.45) { M.fading = undefined; if (st.bridges.length === 1) ui?.page('Un pont dessiné'); } }
       // les Lanternes allumées vacillent
       for (const L of [own, ...lamps]) if (L.flameMat.uniforms.uGlow.value > 1) L.flameMat.uniforms.uGlow.value = 2 + Math.sin(t * 9 + L.g.position.x) * 0.3;
       // les trois brûlent : le Puits s'ouvre
-      if (st.lamps.length === 3 && !st.done) { st.done = true; exit.open = true; persist(); talk(LINES.done); setTimeout(() => ui?.page('Le Puits s’ouvre'), 4000); }
+      if (st.lamps.length === 3 && !st.done) { st.done = true; exit.open = true; persist(); talk(LINES.done); ui?.sons?.play('b-three'); setTimeout(() => ui?.sons?.play('b-well'), 6500); setTimeout(() => ui?.page('Le Puits s’ouvre'), 4000); }
       if (st.done && opening < 1) { opening = Math.min(1, opening + dt / 4); lid.children.forEach((m, k) => (m.material.uniforms.uAlpha.value = (0.75 - k * 0.12) * (1 - opening))); lid.position.y = exit.y - opening * 20; if (opening >= 1) lid.visible = false; }
       { const [txt, at] = goal(p); ui?.goal(txt, at); mark.set(st.done ? null : passeur.position, 2.6); mark.update(t, p); }
       near = nearest(p); ui?.prompt(near ? near[0] : null);

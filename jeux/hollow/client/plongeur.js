@@ -92,6 +92,7 @@ export function createStory(scene, { floorAt, PL, windows, bells, fosse, lidY, g
     after: ['Elles brûlent. Je n’ai plus besoin de remonter.'],
   };
   let queue = [], qT = 0, last = 0, near = null, air = st.windows.length ? AIR_LONG : AIR0, spawnAt = new THREE.Vector3(...start), opened = gates.fosse ? 1 : 0;
+  let sigh = 4, gasp = false;
   const prev = new THREE.Vector3(...start), maxAir = () => (st.windows.length ? AIR_LONG : AIR0);
   // les répliques s'ajoutent à la suite : des fenêtres arrivées pendant qu'on était loin ne s'effacent pas l'une l'autre
   const talk = (lines, pages = {}) => { if (!queue.length) qT = 0; queue.push(...lines.map((l, k) => [l, pages[k]])); };
@@ -127,6 +128,7 @@ export function createStory(scene, { floorAt, PL, windows, bells, fosse, lidY, g
       if (what === 'diver') { if (!queue.length) talk(st.windows.length >= 3 ? LINES.after : LINES.hint); return; }
       // la fenêtre : le pinceau la détoure, elle se décroche, puis remonte seule jusqu'au Plongeur
       what.fly = { t: -1.6, from: what.g.position.clone(), to: slots[st.windows.length + wins.filter(w => w.fly && w !== what).length].p, ry: slots[st.windows.length + wins.filter(w => w.fly && w !== what).length].ry };
+      ui?.sons?.play('a-win');
       ui?.say('Elle se décroche… et remonte vers le Plongeur.', what.g.position.clone().add(new THREE.Vector3(0, 2.5, 0)), 4);
       setTimeout(() => ui?.page('Une fenêtre allumée'), 1800);
       return 'encre';
@@ -136,7 +138,7 @@ export function createStory(scene, { floorAt, PL, windows, bells, fosse, lidY, g
       const v = p.distanceTo(prev) / Math.max(dt, 1e-3); prev.copy(p);
       if (!st.met && p.distanceTo(diver.position) < 20) { st.met = true; persist(); talk(LINES.first, { 1: 'Le Plongeur' }); }
       // ses répliques attendent qu'on soit près de lui
-      if (queue.length && p.distanceTo(diver.position) < 40) { qT -= dt; if (qT <= 0) { const [l, page] = queue.shift(); ui?.say(l, head(), 5); qT = 4.8; if (page) setTimeout(() => ui?.page(page), 1200); } }
+      if (queue.length && p.distanceTo(diver.position) < 40) { qT -= dt; if (qT <= 0) { const [l, page] = queue.shift(); ui?.say(l, head(), 5); ui?.sons?.play('v-pl'); qT = 4.8; if (page) setTimeout(() => ui?.page(page), 1200); } }
       diver.rotation.x = Math.sin(t * 0.5) * 0.03; ports.material.uniforms.uGlow.value = 1.6 + Math.sin(t * 0.8) * 0.4;
       // les fenêtres : le halo regarde le voyageur ; une fenêtre décrochée remonte en spirale jusqu'à son cadre
       for (const w of wins) {
@@ -151,14 +153,15 @@ export function createStory(scene, { floorAt, PL, windows, bells, fosse, lidY, g
       // le souffle : il s'use dans le noir (plus vite en nageant vite), revient en haut et aux cloches ouvertes
       const max = maxAir();
       if (p.y > dark) air = Math.min(max, air + dt * 12);
-      else air -= dt * (v > 8 ? 1.6 : 1);
+      else { air -= dt * (v > 8 ? 1.6 : 1); if ((sigh -= dt) <= 0) { sigh = 9; ui?.sons?.play('n-a-r2', 0.5); } }
+      if (air < max * 0.25 && !gasp) { gasp = true; ui?.sons?.play('a-low'); } else if (air > max * 0.5) gasp = false; // le souffle manque
       for (const b of B) {
         const c = (Math.sin(t * 1.05 + b.ph) + 1) / 2, open = c > 0.5;
         b.open += ((open ? 1 : 0) - b.open) * Math.min(1, dt * 3);
         b.m.scale.set(0.75 + b.open * 0.35, 1.15 - b.open * 0.3, 0.75 + b.open * 0.35);
         if (open && !b.bub.visible) { b.bub.visible = true; b.by = 0; }
         if (b.bub.visible) { b.by += dt * 3; b.bub.position.copy(b.p).add(new THREE.Vector3(Math.sin(t * 3 + b.ph) * 0.4, 4.6 + b.by, 0)); b.bub.scale.setScalar(1 + b.by * 0.04); if (b.by > 14) b.bub.visible = false; }
-        if (b.open > 0.6 && p.distanceTo(b.c) < 7 && air < max - 0.5) { air = max; spawnAt.copy(b.p).add(new THREE.Vector3(0, 3.5, 0)); ui?.say('Une bulle d’air. Le souffle revient.', b.p.clone().add(new THREE.Vector3(0, 4, 0)), 2); }
+        if (b.open > 0.6 && p.distanceTo(b.c) < 7 && air < max - 0.5) { ui?.sons?.play('a-bell'); air = max; spawnAt.copy(b.p).add(new THREE.Vector3(0, 3.5, 0)); ui?.say('Une bulle d’air. Le souffle revient.', b.p.clone().add(new THREE.Vector3(0, 4, 0)), 2); }
       }
       if (air <= 0 && hero) { // plus de souffle : le noir, puis on se réveille à la dernière cloche
         hero.state.p.copy(spawnAt); hero.state.v.set(0, 0, 0); hero.state.fade = 1; air = max; prev.copy(spawnAt);
@@ -166,7 +169,7 @@ export function createStory(scene, { floorAt, PL, windows, bells, fosse, lidY, g
       }
       ui?.air(p.y > dark && air >= max - 0.01 ? null : Math.max(0, air / max));
       // le Long : le voir de près, c'est une page
-      if (!st.long && long.some(q => q && q.distanceTo(p) < 160)) { st.long = true; persist(); ui?.page('Le Long'); }
+      if (!st.long && long.some(q => q && q.distanceTo(p) < 160)) { st.long = true; persist(); ui?.page('Le Long'); ui?.sons?.play('a-long'); }
       // la Fosse s'ouvre : le treillis s'enfonce
       if (gates.fosse && opened < 1) { opened = Math.min(1, opened + dt / 5); lid.position.y = -opened * 30; if (opened >= 1) lid.visible = false; }
       { const [txt, at] = goal(p); ui?.goal(txt, at); mark.set(st.windows.length >= 3 ? null : diver.position, 2.6); mark.update(t, p); }

@@ -6,6 +6,7 @@ import { paint, lump } from './modelage.js';
 import { createHero } from './hero.js';
 import { createFall } from './chute.js';
 import { createUI, save as store } from './ui.js';
+import { sons } from './sons.js';
 
 // les strates, de haut en bas ; celles qui n'ont pas encore de module arrivent plus tard
 const STRATES = [
@@ -33,6 +34,10 @@ renderer.autoClear = false;
 const camera = new THREE.PerspectiveCamera(52, 1, 0.3, 12000);
 const pipe = createPipeline(renderer);
 const hero = createHero(camera, canvas), fall = createFall(camera), ui = createUI(camera, canvas);
+ui.sons = sons; // les histoires jouent leurs sons par ui.sons
+for (const ev of ['pointerdown', 'keydown']) addEventListener(ev, () => sons.unlock());
+hero.onStep = () => { const p = hero.state.p; sons.step(cur.n, world.terrain(p.x, p.z, p.y + 1).kind === 'bridge'); };
+hero.onJump = () => sons.jump(); hero.onTouch = () => sons.touch(); hero.onSwim = () => sons.swim(); hero.onClimb = () => sons.climb();
 
 // la carte de ce que le voyageur a vu : 1024 × 1024 cases sur 5 km (une case = 5 m) ; remise à blanc à chaque strate
 const N = 1024, seen = new Uint8Array(N * N), revealTex = new THREE.DataTexture(seen, N, N, THREE.RedFormat, THREE.UnsignedByteType);
@@ -58,7 +63,7 @@ async function enter(n, place = true) {
   scene = new THREE.Scene(); cur = S;
   ui.clear(); world = mod.create(scene, Q, { ui, hero });
   seen.fill(0); revealTex.needsUpdate = true; reveal(world.start[0], world.start[2], 70);
-  if (place) { setLook(world.look); hero.enter(scene, world); showEnd(); }
+  if (place) { setLook(world.look); hero.enter(scene, world); showEnd(); world.silent ? sons.silence() : sons.ambience(n); }
   column = motes = null; if (ending()) celebrate(n); // la fin choisie se voit partout (sinon, rien)
   if (world.hint) setTimeout(() => toast(world.hint), 4000); // ce qui change dans cette strate (la nage, par exemple)
   save(n);
@@ -105,13 +110,13 @@ function descend() {
 // aller vers une autre strate : en tombant (up = false), ou en remontant par la colonne de lumière (up = true)
 function travel(next, up) {
   if (!next?.load) { toast(`Strate ${String(cur.n + 1).padStart(2, '0')} — ${next?.name ?? '?'} : elle se dessine encore…`); hero.state.p.copy(hero.state.safe); hero.state.v.set(0, 0, 0); hero.state.exit = false; hero.state.fade = 1; return; }
-  falling = true;
+  falling = true; sons.silence(); sons.play('n-g-f1', up ? 0.5 : 1);
   const from = world.look;
   next.load().then(mod => {
     scene.remove(hero.rig.g);
     let built = null;
     // à la fin de la chute (ou dès que la strate est prête, si elle a tardé), on pose le voyageur à son départ
-    fall.start(from, mod.LOOK, next.n, hero, () => built.then(() => { setLook(world.look); hero.enter(scene, world, !up); showEnd(); falling = false; }), up);
+    fall.start(from, mod.LOOK, next.n, hero, () => built.then(() => { setLook(world.look); hero.enter(scene, world, !up); showEnd(); world.silent ? sons.silence() : sons.ambience(next.n); falling = false; }), up);
     // la strate suivante se construit pendant la chute
     built = new Promise(res => setTimeout(() => enter(next.n, false).then(res), 300));
   });
@@ -119,6 +124,7 @@ function travel(next, up) {
 // l'impact de l'arrivée : deux ondes d'encre qui courent sur le sol, et des bouffées de la couleur de la brume qui s'écartent
 const fx = [];
 hero.onLand = p => {
+  sons.play('g-land');
   const col = '#' + U.uFogCol.value.clone().lerp(new THREE.Color('#ffffff'), 0.5).getHexString();
   for (const [k, delay] of [[0, 0], [1, 0.18]]) {
     const ring = new THREE.Mesh(paint(new THREE.TorusGeometry(1, 0.07 - k * 0.03, 6, 64).rotateX(Math.PI / 2), '#2a2838'), ink({ line: 1 }));
@@ -172,11 +178,12 @@ addEventListener('keydown', e => {
   toast(hero.state.fly ? 'Vol libre · Espace monte, Ctrl descend, Maj très vite' : 'Vol libre coupé');
 });
 // E : agir (parler, encrer, emmener) ; ce que la strate propose dépend de ce qui est tout près
-addEventListener('keydown', e => { if (e.code === 'KeyE' && !fall.active && !falling && world?.interact?.(hero.state.p) === 'encre') hero.play('ink'); });
+addEventListener('keydown', e => { if (e.code === 'KeyE' && !fall.active && !falling && world?.interact?.(hero.state.p) === 'encre') { hero.play('ink'); sons.play('g-brush'); } });
 // R : tout montrer en couleur (pour comparer avec l'esquisse)
 addEventListener('keydown', e => { if (e.code === 'KeyR' && !fall.active) U.uRevealAll.value = U.uRevealAll.value ? 0 : 1; });
 // le menu (bouton en haut à gauche, ou M) : reprendre, recommencer à zéro (le carnet gardé, ou tout effacé)
-const menu = document.getElementById('menu');
+const menu = document.getElementById('menu'), menuVol = document.getElementById('menu-vol');
+menuVol.value = sons.volume; menuVol.oninput = () => { sons.volume = +menuVol.value; };
 const toggleMenu = on => { menu.hidden = !(on ?? menu.hidden); if (!menu.hidden) document.exitPointerLock?.(); };
 document.getElementById('menu-btn').onclick = e => { e.stopPropagation(); toggleMenu(); };
 addEventListener('keydown', e => { if (e.code === 'KeyM') toggleMenu(); });
@@ -194,7 +201,7 @@ const first = Math.min(+params.get('strate') || 1, STRATES.filter(s => s.load).l
 if (deep > 1) { const b = document.getElementById('resume'); b.hidden = false; b.textContent = `Reprendre : Strate ${String(deep).padStart(2, '0')} — ${STRATES[deep - 1].name}`; b.onclick = e => { e.stopPropagation(); title.classList.add('gone'); enter(deep); }; }
 // une partie existe : on peut aussi tout recommencer, dès l'écran-titre
 if (deep > 1 || ending()) { const b = document.getElementById('fresh'); b.hidden = false; b.onclick = e => { e.stopPropagation(); if (confirm('Recommencer le voyage à zéro ? Les histoires et les fins seront oubliées ; le carnet est gardé.')) { store.reset(false); location.href = location.pathname; } }; }
-title.addEventListener('click', () => { title.classList.add('gone'); canvas.requestPointerLock?.(); });
+title.addEventListener('click', () => { title.classList.add('gone'); canvas.requestPointerLock?.(); setTimeout(() => sons.play('theme', 0.8), 300); });
 await enter(first);
 
 let last = performance.now(), slow = 0, frames = 0;

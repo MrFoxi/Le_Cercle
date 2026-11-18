@@ -114,7 +114,7 @@ export function createStory(scene, { floorAt, caps, exit, roots, gates, sleeper,
       }
       if (what === 'wake') {
         if (st.ink < WAKE_COST) { ui?.say('Il manque de l’encre qui luit…', sleeper.position.clone().add(new THREE.Vector3(0, -150, 0)), 2.5); return; }
-        st.ink -= WAKE_COST; ui?.ink(st.ink, INK_MAX); st.choice = 'eveil'; persist(); talk(LINES.eveil);
+        st.ink -= WAKE_COST; ui?.ink(st.ink, INK_MAX); st.choice = 'eveil'; persist(); talk(LINES.eveil); ui?.sons?.play('f-wake2');
         setTimeout(() => ui?.page('L’Endormi se lève'), 6000);
         return 'encre';
       }
@@ -122,14 +122,14 @@ export function createStory(scene, { floorAt, caps, exit, roots, gates, sleeper,
     update(t, p) {
       const dt = Math.min(0.1, last ? t - last : 0.016); last = t;
       if (!st.met && p.distanceTo(girl.position) < 14) { st.met = true; persist(); talk(LINES.first); setTimeout(() => ui?.page('La Veilleuse'), 1500); }
-      if (queue.length) { qT -= dt; if (qT <= 0) { ui?.say(queue.shift(), head(), 4.8); qT = 4.6; sing = 8; } } // le chant attend que la dernière réplique soit lue
+      if (queue.length) { qT -= dt; if (qT <= 0) { ui?.say(queue.shift(), head(), 4.8); ui?.sons?.play('v-ve'); qT = 4.6; sing = 8; } } // le chant attend que la dernière réplique soit lue
       // son chant : des notes qui montent vers l'Endormi (tant qu'il dort), et quelques mots quand on est près
       const singing = st.choice !== 'eveil';
       notes.forEach((m, k) => { const f = (t * 0.18 + k / 6) % 1; m.visible = singing; m.position.lerpVectors(head(), sleeper.position.clone().add(new THREE.Vector3(0, -170, 0)), f).add(new THREE.Vector3(Math.sin(t * 2 + k) * 2, Math.sin(f * Math.PI) * 12, Math.cos(t * 1.7 + k) * 2)); m.scale.setScalar(1 + f * 2); });
-      sing -= dt; if (singing && st.met && !queue.length && sing <= 0 && p.distanceTo(girl.position) < 40) { ui?.say('♪ dors, dors, le grand, la lumière veille… ♪', head(), 3.5); sing = 9; }
+      sing -= dt; if (singing && st.met && !queue.length && sing <= 0 && p.distanceTo(girl.position) < 40) { ui?.say('♪ dors, dors, le grand, la lumière veille… ♪', head(), 3.5); ui?.sons?.play('f-song', 0.7); sing = 9; }
       hands.material.uniforms.uGlow.value = singing ? 1.6 + Math.sin(t * 3) * 0.5 : 0.1;
       // l'encre qui luit : passer dans une grappe de spores
-      for (const c of clusters) if (c.m.visible && st.ink < INK_MAX && p.distanceTo(c.m.position) < 3) { c.m.visible = false; st.spores.push(c.i); st.ink++; persist(); ui?.ink(st.ink, INK_MAX); ui?.say('+1 goutte d’encre qui luit', c.m.position.clone().add(new THREE.Vector3(0, 1.5, 0)), 1.6); }
+      for (const c of clusters) if (c.m.visible && st.ink < INK_MAX && p.distanceTo(c.m.position) < 3) { ui?.sons?.play('f-spore'); c.m.visible = false; st.spores.push(c.i); st.ink++; persist(); ui?.ink(st.ink, INK_MAX); ui?.say('+1 goutte d’encre qui luit', c.m.position.clone().add(new THREE.Vector3(0, 1.5, 0)), 1.6); }
       for (const c of clusters) if (c.m.visible) c.m.rotation.y = t * 0.4 + c.i;
       // l'éveil : l'Endormi se lève lentement, l'œil s'ouvre, le treillis se retire ; la Veilleuse s'efface
       if (st.choice === 'eveil' && wake < 1) {

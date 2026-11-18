@@ -262,6 +262,7 @@ export function create(scene, Q, ctx = {}) {
     flowers.forEach((o, i) => {
       const near = Math.hypot(o.x - hero.x, o.z - hero.z) < 5 && Math.abs(o.y - hero.y) < 4, want = near ? 0.25 : 1;
       if (Math.abs(o.k - want) < 0.005) return;
+      if (near && o.k > 0.95) ctx.ui?.sons?.play('t-mouth', 0.5); // la bouche-fleur claque
       o.k += (want - o.k) * (near ? 0.25 : 0.01); dirty = true;
       flowM.setMatrixAt(i, m4.compose(p3.set(o.x, o.y, o.z), q.setFromAxisAngle(up, o.ry), s3.set(o.s * (0.4 + o.k * 0.6), o.s * (0.7 + o.k * 0.3), o.s * (0.4 + o.k * 0.6))));
     });
@@ -290,7 +291,7 @@ export function create(scene, Q, ctx = {}) {
   const throat = abyss(scene, { x: VALVE.x, z: VALVE.z, R: VALVE.R + 2, floorAt, depth: 110, wall: ['#e8705a', '#3a0a08'], mist: '#ff9a7a' });
   const pop = createPopulation(scene, { people: [{ kind: 'auditeur', home: [start[0] - D.x * 40 + 8, start[2] - D.y * 40], wander: 0, lines: ['C’est tiède… je reste encore un peu.', 'Tu entends ? Il bat. Il bat pour nous.'] }], ground: floorAt, ui: ctx.ui, seed: 51 });
   return Object.assign(live, {
-    look: LOOK, terrain, start, climbs: CLIMBS,
+    look: LOOK, terrain, start, climbs: CLIMBS, silent: story.debug.st.choice === 'taire', // le Battement réduit au silence : plus d'ambiance
     camYaw: Math.atan2(D.x, D.y), // la caméra derrière lui, il regarde vers l'Hôte
     hint: 'Les parois vivantes (veinées de rouge) s’escaladent : avance contre elles · Z/S monter, descendre · Q/D faire le tour · Espace se lâcher',
     exitAt, killY: safe => Math.min(safe.y - 40, -40), maxFall: 30, interact: story.interact, story, leave: story.leave,

@@ -185,6 +185,7 @@ export function create(scene, Q, ctx = {}) {
     pages.instanceMatrix.needsUpdate = true;
   };
   const voidFx = abyss(scene, { x: 0, z: 0, R: R0 * 1.03, floorAt, depth: 420, wall: ['#3a3a7a', '#05060e'], mist: '#3a6a9a' }); // le vide du centre : la paroi taillée s'enfonce, une brume cyan
+  let glyphAt = 0;
   const start = spawn();
   // l'histoire : les nœuds à réveiller, l'Archiviste, le dessin inachevé, la fin
   const story = createStory(scene, { nodes: NODES, nodeMeshes: nodes, rings, awake, plat: PLAT, ramps: RAMPS, start, ui: ctx.ui, hero: ctx.hero }), base = live.update;
@@ -195,6 +196,10 @@ export function create(scene, Q, ctx = {}) {
     // une fois la fin choisie, le vide du centre ramène tout en haut (next : la strate où l'on tombe)
     exitAt: (x, z) => story.finished && polyD(x, z, rotOf(3)) < R0 && Math.hypot(x, z) > PLAT.R, next: () => 1, exitDrop: 12,
     killY: safe => safe.y - 50, maxFall: 15, interact: story.interact, story, leave: story.leave,
-    update(t, p) { base(t, p); story.update(t, p); voidFx.update(t); },
+    update(t, p) {
+      base(t, p); story.update(t, p); voidFx.update(t);
+      // les inscriptions grésillent quand on longe un mur
+      if (t > glyphAt && [0, 1, 2].some(k => Math.abs(polyD(p.x, p.z, rotOf(k + 1)) - (R0 + (3 - k) * W)) < 10)) { glyphAt = t + 6; ctx.ui?.sons?.play('c-glyph', 0.6); }
+    },
   });
 }

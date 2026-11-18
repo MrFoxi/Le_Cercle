@@ -91,7 +91,7 @@ export function createStory(scene, { nodes, nodeMeshes, rings, awake, plat, ramp
       if (!near) return;
       const [, what] = near;
       if (typeof what === 'number') { // un nœud : le pinceau le réveille, l'anneau se met à tourner, l'escalier paraît
-        const k = what; setTimeout(() => { st.awake[k] = awake[k] = true; persist(); }, 1600);
+        const k = what; setTimeout(() => { st.awake[k] = awake[k] = true; persist(); ui?.sons?.ring(k); setTimeout(() => ui?.sons?.play('c-stair'), 1800); }, 1600);
         ui?.say(k < 3 ? 'L’anneau s’éveille. Un escalier se dessine.' : 'Le dernier anneau s’éveille. Un pont se dessine vers le centre.', new THREE.Vector3(nodes[k][0], nodes[k][1] + 5, nodes[k][2]), 4);
         if (k === 0) setTimeout(() => ui?.page('Les anneaux attendaient'), 3500);
         return 'encre';
@@ -99,13 +99,13 @@ export function createStory(scene, { nodes, nodeMeshes, rings, awake, plat, ramp
       if (what === 'arch') { if (!queue.length) talk(st.choice ? [st.choice === 'achever' ? 'Monte. Les Jardins t’attendent.' : '…'] : LINES.first().slice(-3)); return; }
       st.choice = what; persist(); save.keep('hollow-fin', what);
       talk(LINES[what], { 1: what === 'achever' ? 'Le Jardinier' : 'La page déchirée' });
-      end = { kind: what, t: 0 };
+      end = { kind: what, t: 0 }; ui?.sons?.hush(3); ui?.sons?.play(what === 'achever' ? 'fin-a' : 'fin-d');
       return what === 'achever' ? 'encre' : undefined; // achever, c'est un dernier trait de pinceau
     },
     update(t, p) {
       const dt = Math.min(0.05, last ? t - last : 0.016); last = t;
       if (!st.met && p.distanceTo(arch.position) < 18) { st.met = true; persist(); const L = LINES.first(); talk(L, { 0: 'L’Archiviste', [L.indexOf('Et le tien. Il est inachevé.')]: 'Ton dessin inachevé' }); }
-      if (queue.length && p.distanceTo(arch.position) < 40) { qT -= dt; if (qT <= 0) { const [l, pg] = queue.shift(); ui?.say(l, head(), 5); qT = 4.8; if (pg) setTimeout(() => ui?.page(pg), 1500); } }
+      if (queue.length && p.distanceTo(arch.position) < 40) { qT -= dt; if (qT <= 0) { const [l, pg] = queue.shift(); ui?.say(l, head(), 5); ui?.sons?.play('v-ar'); qT = 4.8; if (pg) setTimeout(() => ui?.page(pg), 1500); } }
       // les pupitres ne s'offrent qu'une fois qu'il a tout dit
       if (st.met && !st.told && !queue.length) { st.told = true; persist(); }
       // il gomme : sa main va et vient ; les nœuds éveillés brillent

@@ -161,7 +161,7 @@ export function createHero(camera, dom) {
     if (len > 0) { dx /= len; dz /= len; st.yaw = Math.atan2(dx, dz); }
     const k = st.ground ? 1 : 0.35; // en l'air, on se dirige moins bien
     st.v.x += ((dx * speed) - st.v.x) * Math.min(1, dt * 10 * k); st.v.z += ((dz * speed) - st.v.z) * Math.min(1, dt * 10 * k);
-    if (st.ground && has('Space')) { st.v.y = JUMP; st.ground = false; }
+    if (st.ground && has('Space')) { st.v.y = JUMP; st.ground = false; hero.onJump?.(); }
     // une paroi vivante (world.climbs : des fûts) : avancer contre elle, c'est s'y agripper
     if (world.climbs && len > 0 && f > 0) for (const C of world.climbs) {
       const ox = st.p.x - C.x, oz = st.p.z - C.z, d = Math.hypot(ox, oz);
@@ -181,6 +181,7 @@ export function createHero(camera, dom) {
     if (st.p.y <= h) { st.p.y = h; st.v.y = 0; st.ground = true; } else if (st.ground && st.p.y - h < 0.6 && st.v.y <= 0) { st.p.y = h; st.v.y = 0; } else st.ground = false;
     // une chute trop haute (la strate le dit) ramène au dernier appui
     if (was && !st.ground) st.fallFrom = st.p.y;
+    if (!was && st.ground && st.fallFrom - h > 1.5) hero.onTouch?.();
     if (!was && st.ground && world.maxFall && st.fallFrom - h > world.maxFall) { st.p.copy(st.safe); st.v.set(0, 0, 0); st.fade = 1; }
     if (st.ground && h > -1e8) st.safe.copy(st.p);
     // dans la sortie : dès qu'il est passé sous le bord (de exitDrop mètres), la chute vers la strate suivante commence
@@ -193,7 +194,9 @@ export function createHero(camera, dom) {
     st.fade = Math.max(0, st.fade - dt * 0.8);
     // la silhouette : se tourne vers où elle va, balance les jambes et les bras, le manteau ondule
     const sp = Math.hypot(st.v.x, st.v.z);
+    const foot = Math.floor(st.walk / Math.PI);
     st.walk += dt * sp * 2.3; // un pas complet (deux foulées) tous les 2,7 m environ
+    if (st.ground && sp > 1 && Math.floor(st.walk / Math.PI) !== foot) hero.onStep?.();
     g.position.copy(st.p);
     g.rotation.y += Math.atan2(Math.sin(st.yaw - g.rotation.y), Math.cos(st.yaw - g.rotation.y)) * Math.min(1, dt * 10);
     rig.walk(st.walk, sp, st.ground, performance.now() / 1000);
@@ -213,7 +216,9 @@ export function createHero(camera, dom) {
     const h = floorAt(st.p.x, st.p.z, st.p.y + 0.5);
     if (f < 0 && st.p.y <= h + 0.05) { st.climb = null; st.p.y = h; st.ground = true; rig.reset(); return follow(dt); } // il reprend pied
     // les gestes : une main après l'autre, un pied après l'autre, collé à la paroi
+    const grip = Math.floor(K.ph / Math.PI);
     K.ph += dt * (Math.abs(f) + Math.abs(s) * 0.7) * sp * 1.6;
+    if (Math.floor(K.ph / Math.PI) !== grip) hero.onClimb?.();
     const w = Math.sin(K.ph);
     rig.reset(); g.position.copy(st.p); g.rotation.y = st.yaw;
     AL.rotation.set(-2.5 + w * 0.45, 0, -0.25); AR.rotation.set(-2.5 - w * 0.45, 0, 0.25); rig.EL.rotation.x = rig.ER.rotation.x = -0.5 - Math.abs(w) * 0.3;
@@ -249,7 +254,9 @@ export function createHero(camera, dom) {
     // la brasse : le corps s'allonge dans le sens de la nage ; bras qui tirent, jambes qui fouettent ; au repos, il fait du sur-place
     const sp = st.v.length(), hz = Math.hypot(st.v.x, st.v.z), k = Math.min(1, sp / 3);
     if (hz > 0.5) st.yaw = Math.atan2(st.v.x, st.v.z);
+    const stroke = Math.floor(st.walk / Math.PI);
     st.walk += dt * (1.3 + sp * 0.45);
+    if (k > 0.5 && Math.floor(st.walk / Math.PI) !== stroke) hero.onSwim?.();
     const ph = st.walk * 2, pull = Math.max(0, Math.sin(ph)), kick = Math.max(0, Math.sin(ph + 2.2)), glide = 1 - pull;
     rig.reset(); g.rotation.order = 'YXZ';
     g.rotation.y += Math.atan2(Math.sin(st.yaw - g.rotation.y), Math.cos(st.yaw - g.rotation.y)) * Math.min(1, dt * 4);

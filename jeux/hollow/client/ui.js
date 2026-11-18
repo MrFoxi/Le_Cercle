@@ -38,7 +38,7 @@ export function createUI(camera, canvas) {
       c.width = w; c.height = h; const x = c.getContext('2d');
       x.filter = 'grayscale(1) contrast(1.7) brightness(1.08) sepia(.25)'; x.drawImage(canvas, 0, 0, w, h);
       pages.push({ img: c.toDataURL('image/jpeg', 0.72), caption: pending }); keep('hollow-carnet', pages);
-      toastPage(pending); pending = null;
+      toastPage(pending); pending = null; ui.sons?.play('g-page');
     },
     get pages() { return pages; },
     toggleBook() {

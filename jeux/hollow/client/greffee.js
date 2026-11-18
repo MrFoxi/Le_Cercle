@@ -5,7 +5,7 @@
 // — nourrir le Battement (4 gouttes dans sa bouche) : il bat plus fort, la Valve s'ouvre, la Greffée s'y fond tout à fait ;
 // — le faire taire au pinceau (4 gouttes) : il ralentit et s'arrête, tout refroidit, la Valve se déchire ; la Greffée
 //   entend le silence pour la première fois.
-// Le Battement s'entend (un son grave, de plus en plus fort en approchant) : c'est le seul son du jeu pour l'instant.
+// Le Battement s'entend, de plus en plus fort en approchant (sons.js).
 // Retenu dans localStorage (« hollow-terres »). Chaque moment fort devient une page du carnet.
 import * as THREE from 'three';
 import { ink } from './ink.js';
@@ -69,23 +69,9 @@ export function createStory(scene, { floorAt, mesa, heart, heartMesh, H, valve, 
   const cold = { fog: new THREE.Color('#b8b4b0'), sun: new THREE.Color('#d8dce8'), mid: new THREE.Color('#b0aca8'), top: new THREE.Color('#e8e8ec') };
   const rate = () => (st.choice === 'nourrir' ? { bpm: 46 + change * 30, amp: 1 + change * 0.5 } : st.choice === 'taire' ? { bpm: 46 * (1 - change) + 4, amp: Math.max(0, 1 - change * 1.05) } : { bpm: 46, amp: 1 });
 
-  // le son du Battement : un coup double très grave, plus fort près du cœur (le navigateur l'autorise après un geste)
-  let ac = null;
-  const wake = () => { if (!ac) { try { ac = new AudioContext(); } catch { /* pas de son */ } } else if (ac.state === 'suspended') ac.resume(); };
-  addEventListener('keydown', wake); addEventListener('pointerdown', wake);
-  const thump = (vol, at, f0) => {
-    const o = ac.createOscillator(), g = ac.createGain();
-    o.type = 'sine'; o.frequency.setValueAtTime(f0, at); o.frequency.exponentialRampToValueAtTime(f0 * 0.55, at + 0.25);
-    g.gain.setValueAtTime(0.0001, at); g.gain.exponentialRampToValueAtTime(vol, at + 0.02); g.gain.exponentialRampToValueAtTime(0.0001, at + 0.4);
-    o.connect(g).connect(ac.destination); o.start(at); o.stop(at + 0.45);
-  };
+  // le Battement s’entend, plus fort près du cœur
   let heroP = new THREE.Vector3(...start);
-  H.onBeat = () => {
-    if (!ac || ac.state !== 'running') return;
-    const d = Math.hypot(heroP.x - heart.x, heroP.z - heart.z), v = Math.min(0.9, 0.06 + 0.84 * Math.max(0, 1 - d / 1300) ** 2) * Math.min(1, H.amp);
-    if (v < 0.01) return;
-    const at = ac.currentTime + 0.02; thump(v, at, 62); thump(v * 0.6, at + (0.28 * 60) / H.bpm, 55);
-  };
+  H.onBeat = () => { const d = Math.hypot(heroP.x - heart.x, heroP.z - heart.z); ui?.sons?.heart(Math.min(0.8, 0.1 + 0.7 * Math.max(0, 1 - d / 1300) ** 2) * Math.min(1, H.amp)); };
 
   // ce qu'il faut faire maintenant ; la balise dorée sur la Greffée tant que le Battement n'a pas son sort
   const mark = beacon(scene);
@@ -117,17 +103,18 @@ export function createStory(scene, { floorAt, mesa, heart, heartMesh, H, valve, 
       if (st.ink < COST) { ui?.say('Il manque de la sève… (en haut des parois vivantes, sur le corail-poumon)', (what === 'feed' ? mouthP : flankP).clone().add(new THREE.Vector3(0, 4, 0)), 3); return; }
       st.ink -= COST; ui?.ink(st.ink, SAP_MAX);
       st.choice = what === 'feed' ? 'nourrir' : 'taire'; persist();
+      if (what === 'feed') ui?.sons?.play('t-mouth'); else ui?.sons?.hush(8); // faire taire : tous les sons meurent
       talk(LINES[st.choice], { 1: st.choice === 'nourrir' ? 'Le Battement mange' : 'Le silence' });
       return what === 'hush' ? 'encre' : undefined; // le faire taire, c'est un geste de pinceau
     },
-    leave() { removeEventListener('keydown', wake); removeEventListener('pointerdown', wake); H.onBeat = null; ac?.close(); },
+    leave() { H.onBeat = null; },
     update(t, p) {
       const dt = Math.min(0.05, last ? t - last : 0.016); last = t; heroP.copy(p);
       if (!st.met && p.distanceTo(greffee.position) < 16) { st.met = true; persist(); talk(LINES.first, { 0: 'La Greffée' }); }
-      if (queue.length && p.distanceTo(greffee.position) < 45) { qT -= dt; if (qT <= 0) { const [l, page] = queue.shift(); ui?.say(l, head(), 5); qT = 4.8; if (page) setTimeout(() => ui?.page(page), 1500); } }
+      if (queue.length && p.distanceTo(greffee.position) < 45) { qT -= dt; if (qT <= 0) { const [l, page] = queue.shift(); ui?.say(l, head(), 5); ui?.sons?.play('v-gr'); qT = 4.8; if (page) setTimeout(() => ui?.page(page), 1500); } }
       greffee.rotation.z = Math.sin(t * 0.5) * 0.02 * H.amp; greffee.scale.y = 1 + H.env * 0.02;
       // la sève : passer dans une grappe
-      for (const d of drops) if (d.m.visible && st.ink < SAP_MAX && p.distanceTo(d.m.position) < 2.6) { d.m.visible = false; st.taken.push(d.i); st.ink++; persist(); ui?.ink(st.ink, SAP_MAX); ui?.say('+1 goutte de sève', d.m.position.clone().add(new THREE.Vector3(0, 1.5, 0)), 1.6); }
+      for (const d of drops) if (d.m.visible && st.ink < SAP_MAX && p.distanceTo(d.m.position) < 2.6) { ui?.sons?.play('g-ink'); d.m.visible = false; st.taken.push(d.i); st.ink++; persist(); ui?.ink(st.ink, SAP_MAX); ui?.say('+1 goutte de sève', d.m.position.clone().add(new THREE.Vector3(0, 1.5, 0)), 1.6); }
       for (const d of drops) if (d.m.visible) d.m.scale.setScalar(1 + H.env * 0.15);
       // le choix fait son œuvre en 8 s : le rythme, la couleur, la Greffée, la Valve
       if (st.choice && change < 1) change = Math.min(1, change + dt / 8);
