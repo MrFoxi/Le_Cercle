@@ -4,31 +4,14 @@
 // s'il tombe dans la sortie de la strate (le gouffre), il le signale : la chute vers la strate suivante commence.
 // Le voyageur ne connaît pas la strate : on la lui donne (enter), avec son relief, ses obstacles et sa sortie.
 import * as THREE from 'three';
-import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
-import { ink } from './ink.js';
+import { createVoyageur } from './voyageur.js';
 
 const STEP_UP = 0.9, GRAV = 22, WALK = 4.2, RUN = 9, JUMP = 7.5, FLY = 40, FLY_FAST = 220;
 
-function part(g, col) { g = g.index ? g.toNonIndexed() : g; const c = new THREE.Color(col), a = new Float32Array(g.attributes.position.count * 3); for (let i = 0; i < a.length; i += 3) a.set([c.r, c.g, c.b], i); g.setAttribute('color', new THREE.BufferAttribute(a, 3)); for (const k of Object.keys(g.attributes)) if (!['position', 'normal', 'color'].includes(k)) g.deleteAttribute(k); return g; }
-function body() {
-  // le manteau qui s'évase, le col clair, la tête, sans visage (on le voit de dos)
-  const coat = new THREE.LatheGeometry([[0.0, 0.42], [0.42, 0.42], [0.36, 0.8], [0.27, 1.25], [0.22, 1.42], [0.0, 1.45]].map(([x, y]) => new THREE.Vector2(x, y)), 16);
-  const collar = new THREE.TorusGeometry(0.17, 0.07, 8, 16).rotateX(Math.PI / 2).translate(0, 1.43, 0);
-  const head = new THREE.SphereGeometry(0.15, 14, 10).scale(1, 1.12, 1).translate(0, 1.6, 0);
-  const hair = new THREE.SphereGeometry(0.16, 14, 10, 0, Math.PI * 2, 0, 1.6).translate(0, 1.62, -0.01);
-  return mergeGeometries([part(coat, '#2b2a38'), part(collar, '#c8ccd8'), part(head, '#d8b8a0'), part(hair, '#1c1a24')]);
-}
 
 export function createHero(camera, dom) {
-  const mat = ink({ line: 1 }), g = new THREE.Group();
-  const torso = new THREE.Mesh(body(), mat);
-  const limb = (len, y, x, col) => { const m = new THREE.Mesh(part(new THREE.CapsuleGeometry(0.07, len, 4, 8).translate(0, -len / 2 - 0.05, 0), col), mat); m.position.set(x, y, 0); return m; };
-  const L = limb(0.38, 0.46, -0.1, '#1c1a24'), R = limb(0.38, 0.46, 0.1, '#1c1a24');
-  // les bras, dans les manches : ils servent surtout aux figures pendant la chute
-  const AL = limb(0.42, 1.36, -0.24, '#2b2a38'), AR = limb(0.42, 1.36, 0.24, '#2b2a38');
-  AL.rotation.z = -0.12; AR.rotation.z = 0.12;
-  g.add(torso, L, R, AL, AR); g.traverse(o => o.layers.enable(1));
-  const rig = { g, torso, L, R, AL, AR };
+  // le dessin et le squelette (voyageur.js) : chaque membre est rattaché à son articulation
+  const rig = createVoyageur(), { g, torso, L, R, AL, AR } = rig;
 
   // fly : le vol libre de l'administrateur (on traverse tout, sans pesanteur)
   const st = { p: new THREE.Vector3(), v: new THREE.Vector3(), yaw: 0, ground: true, safe: new THREE.Vector3(), walk: 0, fade: 0, exit: false, fly: false };
@@ -79,9 +62,10 @@ export function createHero(camera, dom) {
       st.v.y += ((-40 + open * 30) - st.v.y) * Math.min(1, dt * (1 + open * 3));
       st.p.y += st.v.y * dt;
       g.position.copy(st.p); g.rotation.set(A.bounce ? g.rotation.x : 0, g.rotation.y + dt * (2.5 - open * 2), 0);
-      torso.rotation.x = -0.25 * open; torso.scale.set(1 + open * 0.45 + Math.sin(A.t * 20) * 0.04 * open, 1 - open * 0.08, 1 + open * 0.45);
-      AL.rotation.set(0, 0, -0.4 - open * 1.5 + Math.sin(A.t * 11) * 0.12); AR.rotation.set(0, 0, 0.4 + open * 1.5 - Math.sin(A.t * 11) * 0.12);
-      L.rotation.set(0.3 * open + Math.sin(A.t * 8) * 0.3 * (1 - open), 0, -0.15); R.rotation.set(-0.2 * open - Math.sin(A.t * 8) * 0.3 * (1 - open), 0, 0.15);
+      torso.rotation.x = -0.2 * open; rig.flare(open * (0.9 + Math.sin(A.t * 20) * 0.08));
+      AL.rotation.set(0, 0, -0.4 - open * 1.4 + Math.sin(A.t * 11) * 0.12); AR.rotation.set(0, 0, 0.4 + open * 1.4 - Math.sin(A.t * 11) * 0.12);
+      L.rotation.set(-0.2 * open + Math.sin(A.t * 8) * 0.3 * (1 - open), 0, -0.15); R.rotation.set(-0.1 * open - Math.sin(A.t * 8) * 0.3 * (1 - open), 0, 0.15);
+      rig.KL.rotation.x = 0.3 + 0.4 * open; rig.KR.rotation.x = 0.5;
       if (st.p.y <= h && world.bounces && (A.bounce ?? 0) < world.bounces.length) {
         const b = A.bounce ?? 0; A.bounce = b + 1; st.p.y = h; st.v.y = world.bounces[b]; A.t = 0; A.shake = 0.5; hero.onLand?.(st.p.clone(), A.bounce); world.onBounce?.(st.p, A.bounce);
       } else if (st.p.y <= h) { st.p.y = h; st.v.set(0, 0, 0); A.phase = 'land'; A.t = 0; A.shake = 1; hero.onLand?.(st.p.clone(), 0); world.onBounce?.(st.p, 0); }
@@ -89,11 +73,13 @@ export function createHero(camera, dom) {
       // l'impact : il s'écrase en boule, genou à terre, puis se relève lentement
       const hit = Math.exp(-A.t * 9), up = ease(clamp01((A.t - 0.7) / 0.9));
       g.position.copy(st.p); g.rotation.x = 0; g.rotation.z = 0;
-      torso.position.y = -0.38 * (1 - up) - hit * 0.12; torso.rotation.x = 0.45 * (1 - up);
-      torso.scale.set(1 + hit * 0.35 + (1 - up) * 0.08, 1 - hit * 0.3, 1 + hit * 0.35 + (1 - up) * 0.08);
-      L.rotation.set(-1.3 * (1 - up), 0, 0); R.rotation.set(1.1 * (1 - up), 0, 0); L.position.y = R.position.y = 0.46 - 0.3 * (1 - up);
-      AL.rotation.set(0.6 * (1 - up), 0, -0.12 - 1.2 * hit - 0.5 * (1 - up)); AR.rotation.set(-0.9 * (1 - up), 0, 0.12 + 1.2 * hit + 0.3 * (1 - up));
-      if (A.t > 1.8) { st.arrive = null; st.safe.copy(st.p); st.ground = true; pose(); L.position.y = R.position.y = 0.46; }
+      rig.reset(); torso.rotation.x = 0.45 * (1 - up) + hit * 0.2;
+      rig.crouch(Math.min(1, (1 - up) * 0.9 + hit * 0.3)); // genou à terre : le bassin descend, les genoux plient, les pieds restent au sol
+      R.rotation.x += 0.5 * (1 - up); rig.KR.rotation.x += 0.4 * (1 - up); // une jambe en avant, l'autre en arrière
+      rig.flare(hit * 0.8);
+      AL.rotation.set(-0.6 * (1 - up), 0, -0.12 - 1.2 * hit - 0.4 * (1 - up)); AR.rotation.set(-0.9 * (1 - up), 0, 0.12 + 1.2 * hit + 0.3 * (1 - up));
+      rig.EL.rotation.x = rig.ER.rotation.x = -0.4 * (1 - up);
+      if (A.t > 1.8) { st.arrive = null; st.safe.copy(st.p); st.ground = true; pose(); }
     }
     // la caméra : d'en dessous pendant la descente (le ciel derrière lui), puis tout près au ras du sol ; elle tremble à l'impact
     A.shake *= Math.exp(-dt * 4);
@@ -105,9 +91,10 @@ export function createHero(camera, dom) {
     camera.position.y = Math.max(camera.position.y, floorAt(camera.position.x, camera.position.z, st.p.y + 1) + (low ? 3 : 0.8)); // pas au ras du sol : le sol vu de trop près se raye
     camera.position.x += (Math.random() - 0.5) * A.shake * 0.8; camera.position.y += (Math.random() - 0.5) * A.shake * 0.8;
     camera.lookAt(look); cam.look.copy(look).setY(st.p.y + 1.6);
+    rig.scarfStep(dt);
   }
   // remettre la silhouette debout (après la chute)
-  function pose() { for (const o of [g, torso, L, R, AL, AR]) o.rotation.set(0, 0, 0); L.position.y = R.position.y = 0.46; AL.rotation.z = -0.12; AR.rotation.z = 0.12; torso.position.set(0, 0, 0); torso.scale.set(1, 1, 1); g.scale.set(1, 1, 1); }
+  function pose() { rig.reset(); }
 
   // le vol libre : on va où regarde la caméra (Espace monte, Ctrl descend, Maj : très vite)
   function flyUpdate(dt) {
@@ -157,19 +144,19 @@ export function createHero(camera, dom) {
     st.fade = Math.max(0, st.fade - dt * 0.8);
     // la silhouette : se tourne vers où elle va, balance les jambes et les bras, le manteau ondule
     const sp = Math.hypot(st.v.x, st.v.z);
-    st.walk += dt * sp * 2.2;
+    st.walk += dt * sp * 2.3; // un pas complet (deux foulées) tous les 2,7 m environ
     g.position.copy(st.p);
     g.rotation.y += Math.atan2(Math.sin(st.yaw - g.rotation.y), Math.cos(st.yaw - g.rotation.y)) * Math.min(1, dt * 10);
-    const sw = Math.sin(st.walk) * Math.min(1, sp / 4) * 0.7;
-    L.rotation.x = sw; R.rotation.x = -sw; AL.rotation.x = -sw * 0.5; AR.rotation.x = sw * 0.5;
-    torso.position.y = Math.abs(Math.cos(st.walk)) * 0.05 * Math.min(1, sp / 4);
-    torso.rotation.x = Math.min(0.25, sp * 0.02) * (st.ground ? 1 : -0.5);
-    torso.scale.set(1 + Math.sin(st.walk * 0.5) * 0.03 * Math.min(1, sp / 4), 1, 1);
+    rig.walk(st.walk, sp, st.ground, performance.now() / 1000);
     follow(dt);
   }
   // la silhouette suit le voyageur ; la caméra suit, au-dessus et derrière, sans passer sous le sol (sauf en vol libre)
   function follow(dt) {
-    if (st.fly) { g.position.copy(st.p); g.rotation.y += Math.atan2(Math.sin(st.yaw - g.rotation.y), Math.cos(st.yaw - g.rotation.y)) * Math.min(1, dt * 6); torso.rotation.x = 0.5; L.rotation.x = R.rotation.x = 0.2; }
+    if (st.fly) { // en vol libre : allongé, bras tendus devant, jambes derrière
+      g.position.copy(st.p); g.rotation.y += Math.atan2(Math.sin(st.yaw - g.rotation.y), Math.cos(st.yaw - g.rotation.y)) * Math.min(1, dt * 6);
+      rig.reset(); torso.rotation.x = 1.1; L.rotation.x = R.rotation.x = 0.35; AL.rotation.set(-2.6, 0, -0.15); AR.rotation.set(-2.6, 0, 0.15); rig.flare(0.25);
+    }
+    rig.scarfStep(dt);
     cam.look.lerp(new THREE.Vector3(st.p.x, st.p.y + 1.6, st.p.z), st.fly ? 1 : 1 - Math.exp(-dt * 8));
     const cx = cam.look.x + Math.sin(cam.yaw) * Math.cos(cam.pitch) * cam.dist, cz = cam.look.z + Math.cos(cam.yaw) * Math.cos(cam.pitch) * cam.dist;
     let cy = cam.look.y + Math.sin(cam.pitch) * cam.dist + 1.5;

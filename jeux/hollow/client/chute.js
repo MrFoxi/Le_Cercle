@@ -18,12 +18,14 @@ const THEMES = {
     ring: (k, r) => { const m = new THREE.Mesh(paint(new THREE.TorusGeometry(9 + r() * 9, 0.35 + r() * 0.5, 8, 64), k % 2 ? '#ffffff' : '#e8e0f0', '#9a90b8'), ink({ line: 1 })); m.userData.flat = true; return m; },
     cloud: (k, r) => { const K = []; for (let i = 0; i < 4; i++) K.push(paint(lump(2 + r() * 3, { sy: 0.7, lumpy: 0.2, seed: k * 5 + i, detail: 2 }).translate((i - 1.5) * 3, r() * 1.5, (r() - 0.5) * 2), '#ffffff', '#c8d0e8')); return new THREE.Mesh(merge(K), ink({ line: 0.8 })); },
     line: { color: '#2a2838', glow: 0 }, bits: ['#7fd090', '#ffd6e8', '#a8b0b8'], bitsGlow: 0, mist: '#ffffff',
-    tricks(t, { g, torso, L, R, AL, AR }, seg) {
+    tricks(t, rig, seg) {
+      const { g, torso, L, R, AL, AR } = rig;
       g.rotation.set(-0.4 + seg(1.6, 3.0) * TAU * 2 - seg(5.6, 7) * 0.2, seg(0.3, 1.6) * TAU * 2, seg(4.0, 5.4) * TAU);
       const star = seg(3.0, 3.4) - seg(3.9, 4.2), glide = seg(5.4, 6.0);
       AL.rotation.set(0, 0, -0.12 - star * 2.4 - glide * 1.3 + Math.sin(t * 9) * 0.15); AR.rotation.set(0, 0, 0.12 + star * 2.4 + glide * 1.3 - Math.sin(t * 9) * 0.15);
       L.rotation.set(Math.sin(t * 7) * 0.4 * (1 - star), 0, -star * 0.5); R.rotation.set(-Math.sin(t * 7) * 0.4 * (1 - star), 0, star * 0.5);
-      torso.scale.set(1 + star * 0.25 + Math.sin(t * 14) * 0.05, 1, 1 + star * 0.25); torso.rotation.x = glide * 0.9; g.position.y = 0;
+      rig.flare(star * 0.9 + glide * 0.5 + Math.sin(t * 14) * 0.05); torso.rotation.x = glide * 0.9; g.position.y = 0;
+      rig.KL.rotation.x = rig.KR.rotation.x = 0.2 + glide * 0.3;
     },
   },
   // vers la Forêt : chapeaux géants qui remontent (dessous rose qui luit), spores, fils cyan, méduses d'air ;
@@ -38,14 +40,17 @@ const THEMES = {
     cloud: (k, r) => { const K = []; for (let i = 0; i < 6; i++) K.push(paint(lump(0.6 + r() * 1.2, { lumpy: 0.3, seed: k * 7 + i, detail: 1 }).translate((r() - 0.5) * 5, (r() - 0.5) * 4, (r() - 0.5) * 5), r() < 0.5 ? '#ff8ae0' : '#7af0ff')); return new THREE.Mesh(merge(K), ink({ line: 0.4, glow: 1.2 })); },
     line: { color: '#4ae8f0', glow: 1.4 }, bits: ['#ff6ad8', '#7af0ff', '#b8a8ff'], bitsGlow: 1.2, mist: '#6a4aa8',
     jellies: true,
-    tricks(t, { g, torso, L, R, AL, AR }, seg) {
+    tricks(t, rig, seg) {
+      const { g, torso, L, R, AL, AR } = rig;
       const ball = seg(0.2, 0.6) - seg(1.6, 2.0), plank = seg(1.6, 2.0) - seg(2.2, 2.4), swim = seg(2.2, 2.5) - seg(3.8, 4.0), bounce = seg(4.0, 4.3), zen = seg(4.6, 5.0) - seg(6.0, 6.3), dive = seg(6.0, 6.5);
       g.rotation.set(ball * t * 6 + plank * -Math.PI / 2 + swim * -Math.PI / 2 + dive * Math.PI, t * 0.4 + zen * t * 0.8, 0);
       g.position.y = Math.sin(seg(4.0, 4.6) * Math.PI) * 4; // le rebond sur le chapeau qui passe dessous
       const stroke = Math.sin(t * 6) * swim;
       AL.rotation.set(-ball * 1.6 + swim * (1.2 + stroke), 0, -0.12 - plank * 1.4 - zen * 0.6 - dive * 0.1); AR.rotation.set(-ball * 1.6 + swim * (1.2 - stroke), 0, 0.12 + plank * 1.4 + zen * 0.6 + dive * 0.1);
       L.rotation.set(-ball * 1.8 + swim * Math.sin(t * 6 + 1) * 0.6 - zen * 1.5, 0, zen * 0.9); R.rotation.set(-ball * 1.8 - swim * Math.sin(t * 6 + 1) * 0.6 - zen * 1.5, 0, -zen * 0.9);
-      torso.scale.set(1 - ball * 0.15 + bounce * Math.exp(-(t - 4.0) * 6) * 0.3, 1 - ball * 0.25, 1 - ball * 0.15); torso.rotation.x = ball * 0.8;
+      torso.rotation.x = ball * 0.8;
+      rig.KL.rotation.x = rig.KR.rotation.x = ball * 2.2 + zen * 2.4 + swim * Math.max(0, Math.sin(t * 6)) * 0.8; rig.EL.rotation.x = rig.ER.rotation.x = -ball * 1.6 - swim * 0.6;
+      rig.flare(plank * 0.6 + bounce * Math.exp(-(t - 4.0) * 6) * 0.8);
     },
   },
 };
@@ -124,7 +129,7 @@ export function createFall(camera) {
       live.mist.position.y = -60 + ease(Math.max(0, (t - 5.5) / 2)) * 58;
       // les figures du voyageur
       const seg = (a, b) => ease(Math.max(0, Math.min(1, (t - a) / (b - a))));
-      R.theme.tricks(t, R.hero.rig, seg);
+      R.hero.rig.reset(); R.theme.tricks(t, R.hero.rig, seg); R.hero.rig.scarfStep(dt);
       // la caméra : loin au début, elle plonge vers lui, tourne autour, puis le regarde arriver d'en dessous
       const d = 22 - seg(0, 2.2) * 16 + seg(6.2, 7.5) * 6, a = t * 0.7, h = 3 - seg(5.5, 7.5) * 7;
       camera.position.set(Math.sin(a) * d, h, Math.cos(a) * d); camera.lookAt(0, 0.9 + R.hero.rig.g.position.y, 0);
