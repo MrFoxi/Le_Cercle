@@ -2,51 +2,11 @@
 // Arbres courbés vers le puits, ombrelles de verre qui colorent le sol, arches de roche, îles suspendues à leurs
 // racines, cascades, touffes d'herbe, Semeurs qui dérivent, et le Jardinier, debout sur la crête, qui regarde.
 import * as THREE from 'three';
-import { mergeGeometries, mergeVertices } from 'three/addons/utils/BufferGeometryUtils.js';
 import { terrain, heightAt, fbm, noise, rampAngle, spawn, R_ABYSS, R_WALL, TERRACE } from './terrain.js';
 import { ink, glowy, skyMaterial, U } from './ink.js';
+import { rng, paint, lump, tube, merge, cast } from './modelage.js';
 
 const TAU = Math.PI * 2;
-export const rng = seed => () => { seed = (seed + 0x6d2b79f5) | 0; let t = Math.imul(seed ^ (seed >>> 15), 1 | seed); t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t; return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
-
-/* ---------- Outils de modelage ---------- */
-// peint une forme : dégradé de la base (b) au sommet (a), taches douces
-function paint(g, a, b = a, jit = 0.06) {
-  g.computeBoundingBox();
-  const { min, max } = g.boundingBox, span = max.y - min.y || 1, p = g.attributes.position, col = new Float32Array(p.count * 3);
-  const A = new THREE.Color(a), B = new THREE.Color(b), c = new THREE.Color();
-  for (let i = 0; i < p.count; i++) {
-    c.copy(B).lerp(A, (p.getY(i) - min.y) / span).offsetHSL(0, 0, (noise(p.getX(i) * 0.9 + 3, p.getZ(i) * 0.9 + p.getY(i) * 0.7) - 0.5) * jit * 2);
-    col.set([c.r, c.g, c.b], i * 3);
-  }
-  g.setAttribute('color', new THREE.BufferAttribute(col, 3));
-  return g;
-}
-const clean = g => { g = g.index ? g.toNonIndexed() : g; for (const k of Object.keys(g.attributes)) if (!['position', 'normal', 'color', 'uv'].includes(k)) g.deleteAttribute(k); if (!g.attributes.uv) g.setAttribute('uv', new THREE.BufferAttribute(new Float32Array(g.attributes.position.count * 2), 2)); return g; };
-const merge = gs => mergeGeometries(gs.map(clean));
-// une boule bosselée (feuillage, rochers) : top coupe le dessus à plat
-function lump(r, { sx = 1, sy = 1, sz = 1, lumpy = 0.25, seed = 1, detail = 3, top = null } = {}) {
-  let g = new THREE.IcosahedronGeometry(1, detail); g.deleteAttribute('normal'); g.deleteAttribute('uv'); g = mergeVertices(g);
-  const p = g.attributes.position;
-  for (let i = 0; i < p.count; i++) {
-    const x = p.getX(i), y = p.getY(i), z = p.getZ(i), n = r * (1 + (fbm(x * 1.7 + seed * 7.3, y * 1.7 + z * 1.3 + seed) - 0.5) * 2 * lumpy);
-    p.setXYZ(i, x * n * sx, top !== null ? Math.min(top, y * n * sy) : y * n * sy, z * n * sz);
-  }
-  g.computeVertexNormals();
-  return g;
-}
-// une tige qui s'affine le long d'une courbe (troncs, branches, racines, tentacules)
-function tube(pts, r0, r1 = r0, radial = 8, seg = 16) {
-  const curve = new THREE.CatmullRomCurve3(pts.map(q => new THREE.Vector3(...q)));
-  const g = new THREE.TubeGeometry(curve, seg, 1, radial, false), p = g.attributes.position, c = new THREE.Vector3(), v = new THREE.Vector3();
-  for (let i = 0; i <= seg; i++) {
-    curve.getPointAt(i / seg, c); const r = r0 + (r1 - r0) * (i / seg);
-    for (let j = 0; j <= radial; j++) { const k = i * (radial + 1) + j; v.fromBufferAttribute(p, k).sub(c).multiplyScalar(r).add(c); p.setXYZ(k, v.x, v.y, v.z); }
-  }
-  g.computeVertexNormals();
-  return g;
-}
-const cast = o => { o.layers.enable(1); return o; }; // ce qui porte une ombre
 
 /* ---------- Le sol : 2 km de rayon, par morceaux ---------- */
 // Morceaux de 160 m, plus ou moins fins selon leur distance au voyageur (2 m près de lui, 27 m au loin), refaits quand
@@ -337,4 +297,18 @@ export function buildJardins(scene, Q) {
   live.ground({ x: sx0, z: sz0 }, 1e6); // tout le sol, avant la première image
   live.updateGrass({ x: sx0, z: sz0 });
   return live;
+}
+
+// La strate telle que le jeu la voit : son allure, son relief, son départ, sa sortie (le gouffre)
+export const LOOK = {
+  name: 'Les Jardins suspendus', sun: [0.3, 1, 0.2], sunCol: '#fff4dc', shadowCol: '#4f6fa8', fog: '#cdeee6', density: 0.00085, shadows: true,
+  pal: [[0.16, 0.42, 0.3], [0.36, 0.64, 0.36], [0.24, 0.6, 0.56], [0.64, 0.68, 0.7], [0.44, 0.48, 0.56], [0.2, 0.48, 0.34], [1, 0.55, 0.72], [1, 0.9, 0.4]],
+  skyMid: '#9edbfa', skyTop: '#fffdf5',
+};
+export function create(scene, Q) {
+  const w = buildJardins(scene, Q), start = spawn();
+  return Object.assign(w, {
+    look: LOOK, terrain, start, camYaw: Math.atan2(start[0], start[2]),
+    exitAt: (x, z) => terrain(x, z).kind === 'void', killY: () => -150,
+  });
 }

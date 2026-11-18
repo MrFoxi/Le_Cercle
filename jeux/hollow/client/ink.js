@@ -17,12 +17,23 @@ export const U = {
   uFogCol: { value: new THREE.Color('#cdeee6') }, uFogDensity: { value: 0.00085 },
   uReveal: { value: null }, uRevealRect: { value: new THREE.Vector4(-2500, -2500, 5000, 5000) }, uRevealAll: { value: 0 },
   uShadowMap: { value: null }, uShadowMatrix: { value: new THREE.Matrix4() }, uShadowOn: { value: 0 },
+  // la palette du sol de la strate : herbe sombre, herbe claire, nappes, roche claire, roche sombre, mousse, fleurs (2)
+  uPal: { value: [new THREE.Vector3(0.16, 0.42, 0.3), new THREE.Vector3(0.36, 0.64, 0.36), new THREE.Vector3(0.24, 0.6, 0.56), new THREE.Vector3(0.64, 0.68, 0.7), new THREE.Vector3(0.44, 0.48, 0.56), new THREE.Vector3(0.2, 0.48, 0.34), new THREE.Vector3(1, 0.55, 0.72), new THREE.Vector3(1, 0.9, 0.4)] },
+  uSkyMid: { value: new THREE.Color(.62, .86, .98) }, uSkyTop: { value: new THREE.Color(1, .99, .96) },
 };
+// L'allure d'une strate : soleil, ombres, brume, palette du sol, ciel. On la pose d'un coup en entrant.
+export function setLook(L) {
+  U.uSunDir.value.set(...L.sun).normalize(); U.uSunCol.value.set(L.sunCol); U.uShadowCol.value.set(L.shadowCol);
+  U.uFogCol.value.set(L.fog); U.uFogDensity.value = L.density;
+  L.pal.forEach((c, i) => U.uPal.value[i].set(...c));
+  U.uSkyMid.value.set(L.skyMid); U.uSkyTop.value.set(L.skyTop);
+}
 
 const COMMON = /* glsl */ `
 uniform float uTime, uBoil, uFogDensity, uShadowOn, uRevealAll;
 uniform vec3 uSunDir, uSunCol, uShadowCol, uFogCol;
 uniform sampler2D uReveal, uShadowMap; uniform vec4 uRevealRect; uniform mat4 uShadowMatrix;
+uniform vec3 uPal[8], uSkyMid, uSkyTop;
 float hash12(vec2 p) { vec3 p3 = fract(vec3(p.xyx) * .1031); p3 += dot(p3, p3.yzx + 33.33); return fract((p3.x + p3.y) * p3.z); }
 float vnoise(vec2 p) { vec2 i = floor(p), f = fract(p); f = f * f * (3. - 2. * f);
   return mix(mix(hash12(i), hash12(i + vec2(1, 0)), f.x), mix(hash12(i + vec2(0, 1)), hash12(i + vec2(1, 1)), f.x), f.y); }
@@ -88,18 +99,18 @@ float strokes(vec2 p, float size) {
 // mousse accrochée, et quelques entailles parfaitement droites (quelque chose taille ces falaises)
 vec3 terrainColor(vec3 w, vec3 N) {
   float big = vnoise(w.xz * .02), mid = vnoise(w.xz * .09 + 3.);
-  vec3 grass = mix(vec3(.16, .42, .3), vec3(.36, .64, .36), big);
-  grass = mix(grass, vec3(.24, .6, .56), smoothstep(.6, .85, vnoise(w.xz * .008 + 7.)) * .6);
+  vec3 grass = mix(uPal[0], uPal[1], big);
+  grass = mix(grass, uPal[2], smoothstep(.6, .85, vnoise(w.xz * .008 + 7.)) * .6);
   grass *= (.86 + mid * .26) * (1. + strokes(w.xz, .7) * .16 + strokes(w.xz + 9.3, 1.9) * .12);
   vec2 fc = floor(w.xz / .9);
-  if (hash12(fc + 3.1) > .985 && length(fract(w.xz / .9) - .5) < .16) grass = mix(vec3(1., .55, .72), vec3(1., .9, .4), hash12(fc));
-  vec3 rock = mix(vec3(.64, .68, .7), vec3(.44, .48, .56), vnoise(w.xz * .07 + w.y * .11));
+  if (hash12(fc + 3.1) > .985 && length(fract(w.xz / .9) - .5) < .16) grass = mix(uPal[6], uPal[7], hash12(fc));
+  vec3 rock = mix(uPal[3], uPal[4], vnoise(w.xz * .07 + w.y * .11));
   float sb = vnoise(vec2(w.y * .25, (w.x + w.z) * .02));
   rock *= 1. - smoothstep(.5, .55, fract(w.y * .12 + vnoise(w.xz * .03) * 1.4)) * (.05 + sb * .08);
   rock *= 1. - smoothstep(.75, 1., vnoise(vec2((w.x + w.z) * .35, w.y * .02))) * .18;
   rock *= 1. - step(.97, fract(w.y * .21)) * .3 * step(.62, vnoise(w.xz * .02 + 3.));
   float moss = smoothstep(.62, .78, vnoise(w.xz * .05 + w.y * .04) + vnoise(vec2((w.x - w.z) * .5, w.y * .05)) * .35);
-  rock = mix(rock, vec3(.2, .48, .34) * (.8 + mid * .4), moss * .85);
+  rock = mix(rock, uPal[5] * (.8 + mid * .4), moss * .85);
   float g = smoothstep(.62, .8, N.y + (vnoise(w.xz * .3) - .5) * .2);
   vec3 c = mix(rock, grass, g);
   return mix(c, grass * .62, smoothstep(.5, .62, N.y) * (1. - g) * .8);
@@ -193,8 +204,8 @@ export function skyMaterial() {
 layout(location = 1) out highp vec4 gInfo; varying vec3 vDir;
       void main() {
         float y = vDir.y, sun = max(0., dot(vDir, uSunDir));
-        vec3 c = mix(uFogCol, vec3(.62, .86, .98), smoothstep(.0, .6, y));
-        c = mix(c, vec3(1., .99, .96), smoothstep(.82, .97, y) * .9);
+        vec3 c = mix(uFogCol, uSkyMid, smoothstep(.0, .6, y));
+        c = mix(c, uSkyTop, smoothstep(.82, .97, y) * .9);
         c += uSunCol * (pow(sun, 40.) * .8 + pow(sun, 6.) * .15);
         c = floor(c * 18.) / 18.; // le ciel aussi est peint par aplats
         oColor = vec4(c, 1.); gInfo = vec4(.5, .5, 0., 9000.);

@@ -22,16 +22,32 @@
     #title p { margin: 0; font-size: clamp(1.1rem, 2.6vw, 1.7rem); font-style: italic; }
     #title small { margin-top: 26px; font-size: 1rem; letter-spacing: .2em; text-transform: uppercase; opacity: .7; }
     #title kbd { font-family: inherit; border-bottom: 1px solid currentColor; }
+    #title button { margin-top: 18px; justify-self: center; font: italic 500 1.25rem 'Cormorant Garamond', Georgia, serif; color: inherit; background: none; border: 0; border-bottom: 1px solid currentColor; cursor: pointer; }
+    /* le nom de la strate qui arrive, pendant la chute : il s'écrit à l'encre, de gauche à droite, avec une bavure */
+    #card { position: fixed; left: 0; right: 0; bottom: 14vh; display: grid; justify-items: center; gap: 4px; pointer-events: none; opacity: 0; }
+    #card small { font-size: 1.1rem; letter-spacing: .5em; text-transform: uppercase; }
+    #card b { font-size: clamp(2.4rem, 7vw, 5.5rem); font-weight: 700; font-style: italic; filter: url(#bavure); }
+    #card.on { animation: card 5s ease forwards; }
+    #card.on b, #card.on small { animation: ecrit 2.2s cubic-bezier(.6, .1, .3, 1) forwards; clip-path: inset(0 100% 0 0); }
+    #card.on b { animation-delay: .35s; }
+    @keyframes ecrit { to { clip-path: inset(0 0 0 0); } }
+    @keyframes card { 0% { opacity: 0; } 8% { opacity: 1; } 80% { opacity: 1; } 100% { opacity: 0; } }
+    #toast { position: fixed; left: 50%; top: 18vh; transform: translateX(-50%); font-size: 1.5rem; font-style: italic; opacity: 0; pointer-events: none; text-align: center; }
+    #toast.on { animation: card 4.5s ease forwards; }
     a.back { position: fixed; left: 16px; top: 14px; color: inherit; text-decoration: none; font-size: 1.4rem; opacity: .6; }
   </style>
 </head>
 <body>
   <canvas id="view" aria-label="The Hollow, Strate 01 : les Jardins suspendus"></canvas>
   <div id="veil"></div>
+  <div id="card" aria-live="polite"></div>
+  <div id="toast" aria-live="polite"></div>
+  <svg width="0" height="0" style="position:absolute"><filter id="bavure"><feTurbulence type="fractalNoise" baseFrequency=".035" numOctaves="2" seed="4"/><feDisplacementMap in="SourceGraphic" scale="3.5"/></filter></svg>
   <a class="back" href="/" title="Retour au Cercle">←</a>
   <section id="title">
     <h1>THE HOLLOW</h1>
     <p>Strate 01 — Les Jardins suspendus</p>
+    <button id="resume" hidden></button>
     <small>Cliquer pour entrer · <kbd>ZQSD</kbd> marcher · <kbd>Maj</kbd> courir · <kbd>Espace</kbd> sauter · souris : regarder · <kbd>R</kbd> tout en couleur</small>
   </section>
 </body>
