@@ -58,14 +58,14 @@ export function createHero(camera, dom) {
     if (A.phase === 'air') {
       // il tombe vite, puis le manteau s'ouvre en corolle et le freine
       const open = A.bounce ? 0.3 : clamp01((45 - above) / 25);
-      if (A.bounce) g.rotation.x = Math.min(1, A.t / 1.2) * Math.PI * 2;
       st.v.y += ((-40 + open * 30) - st.v.y) * Math.min(1, dt * (1 + open * 3));
       st.p.y += st.v.y * dt;
-      g.position.copy(st.p); g.rotation.set(A.bounce ? g.rotation.x : 0, g.rotation.y + dt * (2.5 - open * 2), 0);
+      g.position.copy(st.p); g.rotation.set(Math.sin(A.t * 1.3) * 0.05, g.rotation.y, Math.sin(A.t * 1.7) * 0.06); // il se balance un peu sous le manteau ouvert
       torso.rotation.x = -0.2 * open; rig.flare(open * (0.9 + Math.sin(A.t * 20) * 0.08));
       AL.rotation.set(0, 0, -0.4 - open * 1.4 + Math.sin(A.t * 11) * 0.12); AR.rotation.set(0, 0, 0.4 + open * 1.4 - Math.sin(A.t * 11) * 0.12);
       L.rotation.set(-0.2 * open + Math.sin(A.t * 8) * 0.3 * (1 - open), 0, -0.15); R.rotation.set(-0.1 * open - Math.sin(A.t * 8) * 0.3 * (1 - open), 0, 0.15);
       rig.KL.rotation.x = 0.3 + 0.4 * open; rig.KR.rotation.x = 0.5;
+      if (A.bounce) { const up = Math.max(0, st.v.y) / 17; L.rotation.x = R.rotation.x = -0.9 * up; rig.KL.rotation.x = rig.KR.rotation.x = 1.6 * up + 0.2; } // le rebond : genoux repliés
       if (st.p.y <= h && world.bounces && (A.bounce ?? 0) < world.bounces.length) {
         const b = A.bounce ?? 0; A.bounce = b + 1; st.p.y = h; st.v.y = world.bounces[b]; A.t = 0; A.shake = 0.5; hero.onLand?.(st.p.clone(), A.bounce); world.onBounce?.(st.p, A.bounce);
       } else if (st.p.y <= h) { st.p.y = h; st.v.set(0, 0, 0); A.phase = 'land'; A.t = 0; A.shake = 1; hero.onLand?.(st.p.clone(), 0); world.onBounce?.(st.p, 0); }

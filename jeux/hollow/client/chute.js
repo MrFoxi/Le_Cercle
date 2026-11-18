@@ -1,8 +1,7 @@
 // THE HOLLOW — la chute d'une strate à l'autre. Le voyageur plonge dans la sortie ; la caméra le rattrape et zoome
 // sur lui pendant qu'il tombe en faisant des figures. Chaque passage a sa propre mise en scène (son tunnel, ce qui
-// défile, ses figures) : vers les Brumes, des anneaux d'encre et des nuages, une vrille, deux saltos, l'étoile ;
-// vers la Forêt, des chapeaux géants qui remontent en luisant, des spores, des méduses d'air, et il nage dans le vide,
-// rebondit sur un chapeau, médite, puis plonge. Le ciel passe des couleurs d'une strate à l'autre, et le nom de la
+// défile) : vers les Brumes, des anneaux d'encre et des nuages ; vers la Forêt, des chapeaux géants qui remontent en
+// luisant, des spores, des méduses d'air. La chute elle-même est une vraie chute libre, sans pirouettes. Le ciel passe des couleurs d'une strate à l'autre, et le nom de la
 // strate qui arrive s'écrit à l'encre. Un clic (ou Espace) abrège.
 import * as THREE from 'three';
 import { ink, glowy, skyMaterial, U } from './ink.js';
@@ -11,6 +10,27 @@ import { rng, paint, lump, tube, merge } from './modelage.js';
 const DUR = 7.5, TAU = Math.PI * 2;
 const ease = t => t * t * (3 - 2 * t);
 
+/* ---------- La chute libre ---------- */
+// Comme un vrai saut : il bascule en sortant, se stabilise à plat ventre (cambré, bras et jambes écartés, coudes et
+// genoux pliés), le vent le fait tanguer ; il passe en piqué (bras le long du corps) pour prendre de la vitesse, se
+// remet à plat pour freiner, puis se redresse pieds en bas avant l'arrivée. Aucune pirouette.
+function skydive(t, rig, seg) {
+  const { g, torso, L, R, AL, AR, KL, KR, EL, ER, head } = rig;
+  const exit = seg(0, 1.2), track = seg(2.8, 3.4) - seg(4.6, 5.2), upright = seg(6.2, 7.2);
+  const buffet = Math.sin(t * 2.3) * 0.06 + Math.sin(t * 5.1) * 0.025;
+  // l'assiette du corps : debout à la sortie, à plat ventre (π/2), un peu tête en bas en piqué, debout à la fin
+  g.rotation.set((Math.PI / 2) * exit * (1 - upright) + track * 0.45 + buffet, Math.sin(t * 0.4) * 0.15 * (1 - upright), Math.sin(t * 1.7) * 0.05);
+  g.position.y = 0;
+  // la cambrure : bassin en avant, tête relevée pour regarder le sol (puis l'horizon en se redressant)
+  torso.rotation.x = -0.25 * exit * (1 - track) * (1 - upright); head.rotation.x = -0.45 * exit * (1 - upright);
+  const spread = exit * (1 - track) * (1 - upright), tuck = track;
+  AL.rotation.set(-0.3 * spread + 0.25 * tuck, 0, -0.1 - 1.35 * spread - 0.2 * tuck + buffet); AR.rotation.set(-0.3 * spread + 0.25 * tuck, 0, 0.1 + 1.35 * spread + 0.2 * tuck - buffet);
+  EL.rotation.x = ER.rotation.x = -1.1 * spread - 0.1;
+  L.rotation.set(0.25 * spread, 0, -0.32 * spread); R.rotation.set(0.25 * spread, 0, 0.32 * spread);
+  KL.rotation.x = KR.rotation.x = 0.7 * spread + 0.25 * upright + 0.05;
+  rig.flare(0.35 * spread + 0.15 * tuck + 0.45 * upright + Math.sin(t * 13) * 0.05); // le manteau claque au vent
+}
+
 /* ---------- Les mises en scène ---------- */
 const THEMES = {
   // vers les Brumes : anneaux d'encre, nuages, traits de vitesse ; vrille, saltos, étoile, tire-bouchon, il plane
@@ -18,15 +38,7 @@ const THEMES = {
     ring: (k, r) => { const m = new THREE.Mesh(paint(new THREE.TorusGeometry(9 + r() * 9, 0.35 + r() * 0.5, 8, 64), k % 2 ? '#ffffff' : '#e8e0f0', '#9a90b8'), ink({ line: 1 })); m.userData.flat = true; return m; },
     cloud: (k, r) => { const K = []; for (let i = 0; i < 4; i++) K.push(paint(lump(2 + r() * 3, { sy: 0.7, lumpy: 0.2, seed: k * 5 + i, detail: 2 }).translate((i - 1.5) * 3, r() * 1.5, (r() - 0.5) * 2), '#ffffff', '#c8d0e8')); return new THREE.Mesh(merge(K), ink({ line: 0.8 })); },
     line: { color: '#2a2838', glow: 0 }, bits: ['#7fd090', '#ffd6e8', '#a8b0b8'], bitsGlow: 0, mist: '#ffffff',
-    tricks(t, rig, seg) {
-      const { g, torso, L, R, AL, AR } = rig;
-      g.rotation.set(-0.4 + seg(1.6, 3.0) * TAU * 2 - seg(5.6, 7) * 0.2, seg(0.3, 1.6) * TAU * 2, seg(4.0, 5.4) * TAU);
-      const star = seg(3.0, 3.4) - seg(3.9, 4.2), glide = seg(5.4, 6.0);
-      AL.rotation.set(0, 0, -0.12 - star * 2.4 - glide * 1.3 + Math.sin(t * 9) * 0.15); AR.rotation.set(0, 0, 0.12 + star * 2.4 + glide * 1.3 - Math.sin(t * 9) * 0.15);
-      L.rotation.set(Math.sin(t * 7) * 0.4 * (1 - star), 0, -star * 0.5); R.rotation.set(-Math.sin(t * 7) * 0.4 * (1 - star), 0, star * 0.5);
-      rig.flare(star * 0.9 + glide * 0.5 + Math.sin(t * 14) * 0.05); torso.rotation.x = glide * 0.9; g.position.y = 0;
-      rig.KL.rotation.x = rig.KR.rotation.x = 0.2 + glide * 0.3;
-    },
+    tricks: skydive,
   },
   // vers la Forêt : chapeaux géants qui remontent (dessous rose qui luit), spores, fils cyan, méduses d'air ;
   // en boule, la planche, la brasse dans le vide, un rebond sur un chapeau, assis en tailleur, puis le plongeon
@@ -40,18 +52,7 @@ const THEMES = {
     cloud: (k, r) => { const K = []; for (let i = 0; i < 6; i++) K.push(paint(lump(0.6 + r() * 1.2, { lumpy: 0.3, seed: k * 7 + i, detail: 1 }).translate((r() - 0.5) * 5, (r() - 0.5) * 4, (r() - 0.5) * 5), r() < 0.5 ? '#ff8ae0' : '#7af0ff')); return new THREE.Mesh(merge(K), ink({ line: 0.4, glow: 1.2 })); },
     line: { color: '#4ae8f0', glow: 1.4 }, bits: ['#ff6ad8', '#7af0ff', '#b8a8ff'], bitsGlow: 1.2, mist: '#6a4aa8',
     jellies: true,
-    tricks(t, rig, seg) {
-      const { g, torso, L, R, AL, AR } = rig;
-      const ball = seg(0.2, 0.6) - seg(1.6, 2.0), plank = seg(1.6, 2.0) - seg(2.2, 2.4), swim = seg(2.2, 2.5) - seg(3.8, 4.0), bounce = seg(4.0, 4.3), zen = seg(4.6, 5.0) - seg(6.0, 6.3), dive = seg(6.0, 6.5);
-      g.rotation.set(ball * t * 6 + plank * -Math.PI / 2 + swim * -Math.PI / 2 + dive * Math.PI, t * 0.4 + zen * t * 0.8, 0);
-      g.position.y = Math.sin(seg(4.0, 4.6) * Math.PI) * 4; // le rebond sur le chapeau qui passe dessous
-      const stroke = Math.sin(t * 6) * swim;
-      AL.rotation.set(-ball * 1.6 + swim * (1.2 + stroke), 0, -0.12 - plank * 1.4 - zen * 0.6 - dive * 0.1); AR.rotation.set(-ball * 1.6 + swim * (1.2 - stroke), 0, 0.12 + plank * 1.4 + zen * 0.6 + dive * 0.1);
-      L.rotation.set(-ball * 1.8 + swim * Math.sin(t * 6 + 1) * 0.6 - zen * 1.5, 0, zen * 0.9); R.rotation.set(-ball * 1.8 - swim * Math.sin(t * 6 + 1) * 0.6 - zen * 1.5, 0, -zen * 0.9);
-      torso.rotation.x = ball * 0.8;
-      rig.KL.rotation.x = rig.KR.rotation.x = ball * 2.2 + zen * 2.4 + swim * Math.max(0, Math.sin(t * 6)) * 0.8; rig.EL.rotation.x = rig.ER.rotation.x = -ball * 1.6 - swim * 0.6;
-      rig.flare(plank * 0.6 + bounce * Math.exp(-(t - 4.0) * 6) * 0.8);
-    },
+    tricks: skydive,
   },
 };
 
@@ -131,8 +132,8 @@ export function createFall(camera) {
       const seg = (a, b) => ease(Math.max(0, Math.min(1, (t - a) / (b - a))));
       R.hero.rig.reset(); R.theme.tricks(t, R.hero.rig, seg); R.hero.rig.scarfStep(dt);
       // la caméra : loin au début, elle plonge vers lui, tourne autour, puis le regarde arriver d'en dessous
-      const d = 22 - seg(0, 2.2) * 16 + seg(6.2, 7.5) * 6, a = t * 0.7, h = 3 - seg(5.5, 7.5) * 7;
-      camera.position.set(Math.sin(a) * d, h, Math.cos(a) * d); camera.lookAt(0, 0.9 + R.hero.rig.g.position.y, 0);
+      const d = 16 - seg(0, 2.0) * 9 + seg(6.0, 7.5) * 3, a = 0.5 + t * 0.12, h = 2 + seg(0.8, 2.4) * 4 - seg(6.0, 7.5) * 5;
+      camera.position.set(Math.sin(a) * d, h, Math.cos(a) * d); camera.lookAt(0, 0.4, 0);
       live.sky.position.copy(camera.position);
       if (t >= DUR) { const done = R.done; R.off(); el.classList.remove('on'); U.uRevealAll.value -= 10; R.hero.rig.g.position.y = 0; run = null; done(); }
     },

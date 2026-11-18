@@ -86,10 +86,10 @@ hero.onLand = p => {
     fx.push({ m: ring, t: -delay, life: 1.1, step(m, k2) { m.visible = true; m.scale.setScalar(1 + k2 * (16 - k * 5)); m.scale.y = 1; } });
   }
   for (let i = 0; i < 18; i++) {
-    const a = (i / 18) * Math.PI * 2 + Math.random() * 0.3, puff = new THREE.Mesh(paint(lump(0.9 + Math.random() * 0.8, { detail: 2, lumpy: 0.3, seed: i }), '#ffffff', col), ink({ line: 0.5, glow: 0.35 }));
-    puff.position.copy(p); scene.add(puff);
-    const sp = 6 + Math.random() * 6, upv = 1.5 + Math.random() * 2.5;
-    fx.push({ m: puff, t: 0, life: 1.4, step(m, k2) { m.position.set(p.x + Math.cos(a) * sp * Math.sqrt(k2) * 1.6, p.y + 0.4 + upv * Math.sin(k2 * Math.PI) , p.z + Math.sin(a) * sp * Math.sqrt(k2) * 1.6); m.scale.setScalar(Math.max(0.01, 1 - k2) * (0.6 + k2)); } });
+    const a = (i / 18) * Math.PI * 2 + Math.random() * 0.3, puff = new THREE.Mesh(paint(lump(0.35 + Math.random() * 0.3, { detail: 2, lumpy: 0.3, seed: i }), '#ffffff', col), ink({ line: 0.5, glow: 0.35 }));
+    puff.visible = false; scene.add(puff);
+    const sp = 5 + Math.random() * 5, upv = 0.4 + Math.random() * 0.8;
+    fx.push({ m: puff, t: 0, life: 1.4, step(m, k2) { m.visible = true; const d = 1.4 + sp * Math.sqrt(k2); m.position.set(p.x + Math.cos(a) * d, p.y + 0.15 + upv * Math.sin(k2 * Math.PI), p.z + Math.sin(a) * d); m.scale.setScalar(Math.max(0.01, 1 - k2) * (0.7 + k2 * 1.2)); } });
   }
 };
 function stepFX(dt) {

@@ -95,7 +95,7 @@ export function createVoyageur() {
   // le pinceau, en travers du dos (la touffe au-dessus de l'épaule droite), tenu par une seconde sangle ;
   // dans la main droite quand il encre (wield)
   const brush = grp(0, 0, 0, mesh(brushGeometry()), mesh(new THREE.SphereGeometry(0.03, 8, 6).translate(0, 2.07, 0), glow)); brush.scale.setScalar(1.2); // 2,5 m : plus grand que lui
-  const onBack = grp(-0.14, -0.28, -0.29); onBack.rotation.set(0.12, 0, -0.62); spine.add(onBack);
+  const onBack = grp(-0.2, -0.73, -0.29); onBack.rotation.set(0.1, 0, -0.55); spine.add(onBack);
   spine.add(mesh(part(new THREE.TorusGeometry(0.3, 0.012, 4, 24, Math.PI * 0.7).rotateZ(-0.6).scale(0.75, 1, 1.05).translate(0.02, 0.2, 0), '#5a4028')));
   const inHand = grp(0, -0.29, 0.02); ER.add(inHand);
   onBack.add(brush);
@@ -124,7 +124,7 @@ export function createVoyageur() {
     reset() {
       for (const o of [g, hips, spine, head, L, R, KL, KR, AL, AR, EL, ER, ...panels]) o.rotation.set(0, 0, 0);
       AL.rotation.z = -0.1; AR.rotation.z = 0.1; EL.rotation.x = -0.15; ER.rotation.x = -0.15;
-      hips.position.y = HIP; spine.scale.set(1, 1, 1); spine.position.y = 0.06; g.scale.set(1, 1, 1); g.position.y = 0;
+      hips.position.y = HIP; spine.scale.set(1, 1, 1); spine.position.y = 0.06; g.scale.set(1, 1, 1); // la position de g appartient au voyageur : on ne la touche pas ici
     },
     // s'accroupir (k de 0 à 1) : le bassin descend, les genoux plient juste ce qu'il faut pour que les pieds restent au sol
     crouch(k) {
