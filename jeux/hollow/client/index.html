@@ -45,6 +45,13 @@
     #ink i { position: absolute; left: 0; right: 0; bottom: 0; background: #2a2048; transition: height .5s; }
     #ink b { position: absolute; inset: 0; display: grid; place-items: center; font: 700 1.2rem Caveat, cursive; color: #f4efe4; mix-blend-mode: difference; }
     #ink.full { box-shadow: 0 0 12px #ffd860; }
+    /* le souffle (sous l'eau) : une bande qui se vide, rouge et qui bat quand il en manque */
+    #air { position: fixed; left: 18px; bottom: 18px; width: 180px; height: 16px; border: 2px solid #1a1828; border-radius: 9px; overflow: hidden; background: rgba(244, 239, 228, .7); }
+    #air[hidden] { display: none; }
+    #air::before { content: ''; position: absolute; inset: 0 auto 0 0; width: calc(var(--k, 1) * 100%); background: repeating-radial-gradient(circle at 6px 8px, #7af0e8 0 3px, #4ae8e0 3px 7px); transition: width .25s linear; }
+    #air::after { content: 'souffle'; position: absolute; left: 190px; top: -6px; font: 700 1.3rem Caveat, cursive; color: #f4efe4; text-shadow: 0 1px 2px #000; }
+    #air.low::before { background: #e85a4a; animation: manque .6s steps(2) infinite; }
+    @keyframes manque { 50% { opacity: .35; } }
     /* le carnet */
     #carnet { position: fixed; inset: 5vh 6vw; overflow: auto; padding: 26px 32px; background: #f1ead9; box-shadow: 0 10px 40px rgba(0, 0, 0, .35), inset 0 0 60px rgba(120, 90, 40, .2); display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 26px; align-content: start; }
     #carnet[hidden] { display: none; }
@@ -67,6 +74,7 @@
   <div id="say" aria-live="polite"></div>
   <div id="prompt"></div>
   <div id="ink" hidden title="Encre"></div>
+  <div id="air" hidden title="Souffle"></div>
   <div id="pagetoast" aria-live="polite"></div>
   <section id="carnet" hidden></section>
   <svg width="0" height="0" style="position:absolute"><filter id="bavure"><feTurbulence type="fractalNoise" baseFrequency=".035" numOctaves="2" seed="4"/><feDisplacementMap in="SourceGraphic" scale="3.5"/></filter></svg>

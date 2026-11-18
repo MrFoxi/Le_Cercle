@@ -24,6 +24,8 @@ export const U = {
   uHero: { value: new THREE.Vector3() }, uReact: { value: 0 },
   // sous cette altitude, tout se noie dans la brume (le gouffre des Jardins, la mer de brume) ; une strate peut s'en passer
   uAbyssY: { value: 5 },
+  // une strate sous l'eau : x = hauteur de la surface, y = 1 (sinon 0)
+  uWater: { value: new THREE.Vector2(0, 0) },
 };
 // L'allure d'une strate : soleil, ombres, brume, palette du sol, ciel. On la pose d'un coup en entrant.
 export function setLook(L) {
@@ -32,13 +34,14 @@ export function setLook(L) {
   L.pal.forEach((c, i) => U.uPal.value[i].set(...c));
   U.uSkyMid.value.set(L.skyMid); U.uSkyTop.value.set(L.skyTop);
   U.uAbyssY.value = L.abyssY ?? 5;
+  U.uWater.value.set(L.water ?? 0, L.water ? 1 : 0);
 }
 
 const COMMON = /* glsl */ `
 uniform float uTime, uBoil, uFogDensity, uShadowOn, uRevealAll;
 uniform vec3 uSunDir, uSunCol, uShadowCol, uFogCol;
 uniform sampler2D uReveal, uShadowMap; uniform vec4 uRevealRect; uniform mat4 uShadowMatrix;
-uniform vec3 uPal[8], uSkyMid, uSkyTop, uHero; uniform float uReact, uAbyssY;
+uniform vec3 uPal[8], uSkyMid, uSkyTop, uHero; uniform float uReact, uAbyssY; uniform vec2 uWater;
 float hash12(vec2 p) { vec3 p3 = fract(vec3(p.xyx) * .1031); p3 += dot(p3, p3.yzx + 33.33); return fract((p3.x + p3.y) * p3.z); }
 float vnoise(vec2 p) { vec2 i = floor(p), f = fract(p); f = f * f * (3. - 2. * f);
   return mix(mix(hash12(i), hash12(i + vec2(1, 0)), f.x), mix(hash12(i + vec2(0, 1)), hash12(i + vec2(1, 1)), f.x), f.y); }
@@ -140,10 +143,20 @@ void main() {
   // ce qui luit ne prend pas l'ombre ; avec uPulse, la lumière respire par vagues et répond au voyageur
   float breathe = mix(1., .45 + .55 * (.5 + .5 * sin(uTime * .9 - dot(vW.xz, vec2(.012, .008)) - vW.y * .01)), uPulse);
   breathe *= 1. + uReact * uPulse * smoothstep(34., 6., distance(vW, uHero)) * 1.4;
+  // sous l'eau : la surface jette des reflets verts qui ondulent sur ce qui regarde vers le haut ; sous 30 m, la lumière
+  // s'éteint ; il ne reste qu'un peu de jour autour du voyageur (son encrier luit) et ce qui luit de soi-même
+  if (uWater.y > .5) {
+    float dpt = uWater.x - vW.y, day = 1. - smoothstep(25., 110., dpt);
+    float ca = abs(sin((vnoise(vW.xz * .09 + uTime * .25) + vnoise(vW.xz * .21 - uTime * .18) * .6) * 9.));
+    ca = step(.82, ca) * (1. - smoothstep(0., 70., dpt)) * max(N.y, 0.);
+    col = col * mix(.2, 1., day) + vec3(.3, 1., .7) * ca * .28;
+    col += base * .6 * smoothstep(26., 4., distance(vW, uHero)) * (1. - day);
+  }
   col = mix(col, base * (1. + uGlow * max(breathe, 0.)), step(.01, uGlow));
   // perspective aérienne : par lavis (paliers), et une brume plus épaisse vers le gouffre
   float fog = 1. - exp(-vDepth * uFogDensity);
   fog = max(fog, (1. - smoothstep(uAbyssY - 265., uAbyssY, vW.y)) * .9); // le gouffre se noie dans la brume (bornes dans l'ordre : sinon indéfini)
+  fog *= 1. - step(.01, uGlow) * uWater.y * .7; // sous l'eau, ce qui luit perce le noir de loin
   fog = floor(fog * 7. + vnoise(vW.xz * .05) * .6) / 7.;
   col = mix(col, uFogCol, clamp(fog, 0., 1.));
   // la révélation : esquisse au crayon tant qu'on n'y est pas allé, la couleur s'y répand comme une aquarelle
@@ -153,6 +166,8 @@ void main() {
   float lum = dot(col, vec3(.3, .59, .11));
   vec3 paper = vec3(.94, .91, .85), lead = vec3(.27, .26, .31);
   vec3 sketch = mix(paper, lead, clamp((1. - lum) * .75 - .1, 0., 1.));
+  // sous l'eau, le papier est l'eau elle-même (noir au fond) et l'esquisse est à la craie : ce qui est éclairé blanchit
+  if (uWater.y > .5) { paper = uFogCol * 1.1 + .015; lead = mix(vec3(.62, .86, .82), uFogCol, .3); sketch = mix(paper, lead, clamp(lum * 1.3, 0., .7)); }
   sketch = mix(sketch, lead, hatch(vW, N, 1.6) * (1. - b1) * .55);
   sketch = mix(sketch, paper, fog * .8);
   col = mix(sketch, col, shown);
@@ -250,6 +265,8 @@ void main() {
   float line = max(smoothstep(.03, .07, edgeD), smoothstep(.2, .45, edgeN) * .8) * clamp(lw, 0., 1.25);
   line *= .75 + vnoise(vUv * uRes / 6. + b * 3.) * .35; // la pression de la plume varie
   vec3 inkC = mix(vec3(.09, .08, .16), c0.rgb * .3, .4);
+  // sous l'eau, dans le noir, le trait est à la craie
+  inkC = mix(inkC, vec3(.55, .8, .78), uWater.y * (1. - smoothstep(.02, .3, dot(c0.rgb, vec3(.3, .59, .11)))));
   oColor = vec4(mix(c0.rgb, inkC, clamp(line, 0., 1.) * .92), 1.);
 }`;
 const FINAL = /* glsl */ `${COMMON}
@@ -263,7 +280,7 @@ void main() {
     for (int i = 0; i < 48; i++) { p -= dir; float s = texture(tInfo, clamp(p, 0., 1.)).w > 5000. ? 1. : 0.; acc += s * dec; dec *= .965; }
     float r = acc / 48. * uRays;
     r = floor(r * 6.) / 6.; // les rayons aussi sont posés en aplats
-    c += vec3(1., .98, .9) * r * .55;
+    c += mix(vec3(1., .98, .9), vec3(.5, 1., .8), uWater.y) * r * mix(.55, .12, uWater.y); // sous l'eau : des rais verts, discrets
   }
   // papier : fibres, grain, et un vignettage à l'encre
   float fib = vnoise(vUv * uRes / vec2(2.5, 14.)) * .6 + vnoise(vUv * uRes / 1.3) * .4;

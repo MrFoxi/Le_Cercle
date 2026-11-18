@@ -78,3 +78,31 @@ test('la Forêt se descend de chapeau en chapeau jusqu’au sol, et le gouffre s
   const [x, y, z] = F.spawn();
   assert.ok(Math.abs(F.terrain(x, z, y + 1).h - y) < 0.01, 'on part du haut du premier chapeau');
 });
+
+// Les Abysses : on arrive dans l'eau au-dessus du Plongeur ; les trois fenêtres sont au fond, dans le noir, et le
+// souffle tient d'une cloche de nacre à la suivante (moins de 130 m, même à 5,5 m/s il en reste) ; la Fosse s'ouvre
+test('les Abysses : fenêtres au fond, cloches de nacre assez proches, la Fosse fermée puis ouverte', async () => {
+  const A = await import('./client/abysses.js');
+  const [x, y, z] = A.spawn();
+  assert.ok(y < A.SURF && y > A.PL.top + 10 && A.terrain(x, z, y).h < y - 20, 'on arrive dans l’eau, au-dessus de la ville');
+  assert.ok(A.PL.top > A.DARK, 'le toit du Plongeur est dans la lumière');
+  assert.strictEqual(A.WINDOWS.length, 3, 'trois fenêtres allumées');
+  const inside = (px, py, pz) => A.TOWERS.some(T => Math.hypot(px - T.x, pz - T.z) < T.r && py < T.top) || A.spheres.some(([cx, cy, cz, r]) => Math.hypot(px - cx, py - cy, pz - cz) < r) || py < A.floorAt(px, pz);
+  for (const W of A.WINDOWS) {
+    assert.ok(W.y < A.DARK - 60, 'une fenêtre au fond, dans le noir');
+    assert.ok(!inside(W.x + Math.cos(W.a) * 3, W.y, W.z + Math.sin(W.a) * 3), 'devant la fenêtre, de l’eau libre');
+  }
+  for (const [bx, by, bz] of A.BELLS) assert.ok(!inside(bx, by, bz), 'une cloche dans de l’eau libre');
+  // le long de chaque chemin (du Plongeur à chaque but, d'un but à l'autre), d'un point où l'on respire au suivant : jamais plus de 130 m
+  for (const [f, t] of A.LEGS) {
+    const from = f.toArray(), to = t.toArray();
+    const L = Math.hypot(to[0] - from[0], to[1] - from[1], to[2] - from[2]);
+    const along = A.BELLS.map(b => [b, ((b[0] - from[0]) * (to[0] - from[0]) + (b[1] - from[1]) * (to[1] - from[1]) + (b[2] - from[2]) * (to[2] - from[2])) / L]).filter(([b, d]) => d > 0 && d < L && Math.hypot(...b.map((v, i) => v - (from[i] + ((to[i] - from[i]) * d) / L))) < 40).sort((u, v) => u[1] - v[1]);
+    let prev = from;
+    for (const [b] of along) { assert.ok(Math.hypot(b[0] - prev[0], b[1] - prev[1], b[2] - prev[2]) < 130, 'deux cloches trop loin l’une de l’autre'); prev = b; }
+    assert.ok(Math.hypot(to[0] - prev[0], to[1] - prev[1], to[2] - prev[2]) < 130, 'la dernière cloche est trop loin du but');
+  }
+  for (const T of A.TOWERS) assert.ok(Math.hypot(T.x - A.FOSSE.x, T.z - A.FOSSE.z) > T.r + A.FOSSE.R, 'une tour dans la Fosse');
+  assert.ok(!A.exitAt(A.FOSSE.x, A.FOSSE.z) && A.terrain(A.FOSSE.x, A.FOSSE.z).kind === 'ground', 'fermée, la Fosse porte');
+  A.gates.fosse = true; assert.ok(A.exitAt(A.FOSSE.x, A.FOSSE.z) && A.terrain(A.FOSSE.x, A.FOSSE.z).kind === 'void', 'la Fosse s’ouvre'); A.gates.fosse = false;
+});

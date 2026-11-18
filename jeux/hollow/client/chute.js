@@ -1,7 +1,8 @@
 // THE HOLLOW — la chute d'une strate à l'autre. Le voyageur plonge dans la sortie ; la caméra le rattrape et zoome
 // sur lui pendant qu'il tombe en faisant des figures. Chaque passage a sa propre mise en scène (son tunnel, ce qui
 // défile) : vers les Brumes, des anneaux d'encre et des nuages ; vers la Forêt, des chapeaux géants qui remontent en
-// luisant, des spores, des méduses d'air. La chute elle-même est une vraie chute libre, sans pirouettes. Le ciel passe des couleurs d'une strate à l'autre, et le nom de la
+// luisant, des spores, des méduses d'air ; vers les Abysses, des anneaux de racines, puis l'eau : bulles, méduses, et la
+// surface verte qui monte à sa rencontre. La chute elle-même est une vraie chute libre, sans pirouettes. Le ciel passe des couleurs d'une strate à l'autre, et le nom de la
 // strate qui arrive s'écrit à l'encre. Un clic (ou Espace) abrège.
 import * as THREE from 'three';
 import { ink, glowy, skyMaterial, U } from './ink.js';
@@ -51,6 +52,19 @@ const THEMES = {
     },
     cloud: (k, r) => { const K = []; for (let i = 0; i < 6; i++) K.push(paint(lump(0.6 + r() * 1.2, { lumpy: 0.3, seed: k * 7 + i, detail: 1 }).translate((r() - 0.5) * 5, (r() - 0.5) * 4, (r() - 0.5) * 5), r() < 0.5 ? '#ff8ae0' : '#7af0ff')); return new THREE.Mesh(merge(K), ink({ line: 0.4, glow: 1.2 })); },
     line: { color: '#4ae8f0', glow: 1.4 }, bits: ['#ff6ad8', '#7af0ff', '#b8a8ff'], bitsGlow: 1.2, mist: '#6a4aa8',
+    jellies: true,
+    tricks: skydive,
+  },
+  // vers les Abysses : des anneaux de racines (le chemin des racines), des grappes de bulles, des méduses ; la brume du
+  // fond est la surface verte de l'eau
+  4: {
+    ring: (k, r) => {
+      const K = [paint(new THREE.TorusGeometry(10 + r() * 8, 0.9 + r() * 0.8, 8, 48), '#6a4a9a', '#2a1a48')];
+      for (let i = 0; i < 5; i++) { const a = r() * TAU; K.push(paint(tube([[Math.cos(a) * 11, Math.sin(a) * 11, 0], [Math.cos(a) * 13, Math.sin(a) * 13, (r() - 0.5) * 6], [Math.cos(a + 0.3) * 16, Math.sin(a + 0.3) * 16, (r() - 0.5) * 10]], 0.5, 0.1, 5, 8), '#5a4a7a', '#2a1a48')); }
+      const m = new THREE.Mesh(merge(K), ink({ line: 1, glow: 0.15 })); m.userData.flat = true; return m;
+    },
+    cloud: (k, r) => { const K = []; for (let i = 0; i < 7; i++) K.push(lump(0.3 + r() * 0.9, { detail: 1, seed: k * 7 + i }).translate((r() - 0.5) * 3, (r() - 0.5) * 6, (r() - 0.5) * 3)); return new THREE.Mesh(merge(K), ink({ line: 0.4, trans: 0.8, glow: 0.5, color: '#e8fff8', vertexColors: false })); },
+    line: { color: '#7af0e8', glow: 0.9 }, bits: ['#4ae8e0', '#e8fff4', '#ffe08a'], bitsGlow: 0.8, mist: '#2f8a84',
     jellies: true,
     tricks: skydive,
   },

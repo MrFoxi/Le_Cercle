@@ -122,7 +122,8 @@ export function createVoyageur() {
     },
     // tout remettre droit
     reset() {
-      for (const o of [g, hips, spine, head, L, R, KL, KR, AL, AR, EL, ER, ...panels]) o.rotation.set(0, 0, 0);
+      for (const o of [hips, spine, head, L, R, KL, KR, AL, AR, EL, ER, ...panels]) o.rotation.set(0, 0, 0);
+      g.rotation.set(0, g.rotation.y, 0); // il garde son cap
       AL.rotation.z = -0.1; AR.rotation.z = 0.1; EL.rotation.x = -0.15; ER.rotation.x = -0.15;
       hips.position.y = HIP; spine.scale.set(1, 1, 1); spine.position.y = 0.06; g.scale.set(1, 1, 1); // la position de g appartient au voyageur : on ne la touche pas ici
     },
@@ -159,7 +160,7 @@ export function createVoyageur() {
       for (const p of panels) { const left = p.name[1] === 'L', front = p.name[0] === 'F', th = (left ? L : R).rotation.x; p.rotation.set(front ? Math.min(0, th) * 0.95 - 0.03 + flap : Math.max(0, th) * 0.95 + 0.05 + run * 0.25 + flap, 0, 0); }
     },
     // l'écharpe : elle part de la nuque, traîne derrière, retombe, ondule au vent (à appeler après avoir posé g)
-    scarfStep(dt) {
+    scarfStep(dt, grav = 9) { // grav : sous l'eau, elle flotte presque
       g.updateMatrixWorld(true);
       spine.localToWorld(neckWorld.set(0.03, 0.58, -0.2));
       if (!started) { pts.forEach((p, i) => { p.copy(neckWorld).add(tmp.set(0, -i * SEG, -i * 0.02)); prev[i].copy(p); }); started = true; }
@@ -167,7 +168,7 @@ export function createVoyageur() {
       const t = performance.now() / 1000, h = Math.min(dt, 0.033);
       for (let i = 1; i < N; i++) {
         const p = pts[i], v = tmp.copy(p).sub(prev[i]).multiplyScalar(0.94); prev[i].copy(p);
-        p.add(v); p.y -= 9 * h * h; p.x += Math.sin(t * 3 + i) * 0.0015 * i; p.z += Math.cos(t * 2.3 + i) * 0.0015 * i;
+        p.add(v); p.y -= grav * h * h; p.x += Math.sin(t * 3 + i) * 0.0015 * i; p.z += Math.cos(t * 2.3 + i) * 0.0015 * i;
       }
       // un souffle qui pousse vers l'arrière du voyageur, et le corps que l'écharpe ne traverse pas (un cylindre autour du buste)
       spine.localToWorld(back.set(0, 0.3, -1)); spine.localToWorld(axis.set(0, 0.3, 0)); back.sub(axis).normalize().multiplyScalar(0.0025);

@@ -6,7 +6,7 @@
 import * as THREE from 'three';
 import { createVoyageur } from './voyageur.js';
 
-const STEP_UP = 0.9, GRAV = 22, WALK = 4.2, RUN = 9, JUMP = 7.5, FLY = 40, FLY_FAST = 220;
+const STEP_UP = 0.9, GRAV = 22, WALK = 4.2, RUN = 9, JUMP = 7.5, FLY = 40, FLY_FAST = 220, SWIM = 5.5, SWIM_FAST = 11;
 
 
 export function createHero(camera, dom) {
@@ -27,7 +27,7 @@ export function createHero(camera, dom) {
   addEventListener('mousemove', e => {
     if (document.pointerLockElement === dom) { cam.yaw -= e.movementX * 0.0024; cam.pitch += e.movementY * 0.0022; }
     else if (drag) { cam.yaw -= (e.clientX - drag[0]) * 0.005; cam.pitch += (e.clientY - drag[1]) * 0.004; drag = [e.clientX, e.clientY]; }
-    cam.pitch = Math.max(-0.35, Math.min(1.2, cam.pitch));
+    cam.pitch = Math.max(world?.swim ? -1 : -0.35, Math.min(1.2, cam.pitch)); // sous l'eau, on peut regarder la surface
   });
   dom.addEventListener('mousedown', e => (drag = [e.clientX, e.clientY]));
   addEventListener('mouseup', () => (drag = null));
@@ -39,22 +39,42 @@ export function createHero(camera, dom) {
   const floorAt = (x, z, below = Infinity) => { const t = world.terrain(x, z, below); return t.kind === 'void' ? -1e9 : t.h; };
   // un obstacle [x, z, rayon, hauteur ?] : au-dessus de sa hauteur (sur un chapeau, par exemple), il ne gêne plus
   const blocked = (x, z) => world.colliders.some(([cx, cz, r, top = Infinity]) => st.p.y < top && (x - cx) ** 2 + (z - cz) ** 2 < (r + 0.3) ** 2);
+  // un obstacle rond (tronc, trompette, pied de champignon, tour) : on est repoussé sur son bord, donc on glisse autour
+  const pushOut = (x, z) => {
+    for (const [cx, cz, r, top = Infinity] of world.colliders) {
+      if (st.p.y >= top) continue;
+      const dx = x - cx, dz = z - cz, m = r + 0.32, d2 = dx * dx + dz * dz;
+      if (d2 < m * m) { const d = Math.sqrt(d2) || 1e-4; x = cx + (dx / d) * m; z = cz + (dz / d) * m; }
+    }
+    return [x, z];
+  };
 
   // entrer dans une strate : posé à son départ, la caméra regardant où elle le dit. arrive : il tombe du ciel de la
   // strate (après la chute), freine en ouvrant son manteau, se pose genou à terre et se relève (onLand : l'impact)
   const hero = { onLand: null };
   function enter(scene, w, arrive = false) {
-    world = w; scene.add(g);
+    world = w; scene.add(g); g.rotation.order = 'XYZ';
     st.p.set(...w.start); st.safe.copy(st.p); st.v.set(0, 0, 0); st.ground = true; st.exit = false;
     cam.yaw = w.camYaw; cam.look.set(w.start[0], w.start[1] + 1.6, w.start[2]);
     pose();
     st.arrive = arrive ? { phase: 'air', t: 0, shake: 0 } : null;
-    if (arrive) { st.p.y += 90; st.v.y = -40; st.ground = false; }
+    if (arrive && w.swim) { st.arrive = { phase: 'dive', t: 0 }; st.v.set(0, -16, 0); st.ground = false; hero.onLand?.(new THREE.Vector3(st.p.x, w.swim.surface, st.p.z), 0); } // il crève la surface
+    else if (arrive) { st.p.y += 90; st.v.y = -40; st.ground = false; }
   }
   const ease = k => k * k * (3 - 2 * k), clamp01 = k => Math.max(0, Math.min(1, k));
   function arriveUpdate(dt) {
     const A = st.arrive, h = floorAt(st.p.x, st.p.z, st.p.y + 0.6), above = st.p.y - h;
     A.t += dt;
+    if (A.phase === 'dive') { // sous l'eau : l'élan s'éteint, il se remet d'aplomb, manteau ouvert, puis il nage
+      st.v.multiplyScalar(Math.exp(-dt * 1.6)); st.p.addScaledVector(st.v, dt);
+      const up = ease(clamp01((A.t - 0.4) / 1.4));
+      rig.reset(); g.position.copy(st.p); g.rotation.x = 2.6 * (1 - up) + 0.25 * up; rig.flare(0.9 - up * 0.5);
+      AL.rotation.set(-2.6 * (1 - up), 0, -0.3 - up * 0.9); AR.rotation.set(-2.6 * (1 - up), 0, 0.3 + up * 0.9);
+      rig.KL.rotation.x = rig.KR.rotation.x = 0.5 * up;
+      rig.scarfStep(dt, 1);
+      if (A.t > 2.2) { st.arrive = null; st.safe.copy(st.p); }
+      return follow(dt);
+    }
     if (A.phase === 'air') {
       // il tombe vite, puis le manteau s'ouvre en corolle et le freine
       const open = A.bounce ? 0.3 : clamp01((45 - above) / 25);
@@ -131,6 +151,7 @@ export function createHero(camera, dom) {
     if (st.arrive) return arriveUpdate(dt);
     if (st.act) return actUpdate(dt);
     if (st.fly) { flyUpdate(dt); return follow(dt); }
+    if (world.swim) return swimUpdate(dt);
     // déplacement relatif à la caméra
     const f = (has('KeyW', 'KeyZ', 'ArrowUp') ? 1 : 0) - (has('KeyS', 'ArrowDown') ? 1 : 0), s = (has('KeyD', 'ArrowRight') ? 1 : 0) - (has('KeyA', 'KeyQ', 'ArrowLeft') ? 1 : 0);
     const run = has('ShiftLeft', 'ShiftRight'), speed = run ? RUN : WALK;
@@ -142,15 +163,6 @@ export function createHero(camera, dom) {
     if (st.ground && has('Space')) { st.v.y = JUMP; st.ground = false; }
     // pas à pas : une falaise arrête, une pente se monte ; on glisse le long de l'obstacle
     const tryMove = (nx, nz) => { const h = floorAt(nx, nz, st.p.y + STEP_UP + 0.05); return !(st.ground && h > st.p.y + STEP_UP) && !(!st.ground && h > st.p.y + 0.2) && !blocked(nx, nz); };
-    // un obstacle rond (tronc, trompette, pied de champignon) : on est repoussé sur son bord, donc on glisse autour
-    const pushOut = (x, z) => {
-      for (const [cx, cz, r, top = Infinity] of world.colliders) {
-        if (st.p.y >= top) continue;
-        const dx = x - cx, dz = z - cz, m = r + 0.32, d2 = dx * dx + dz * dz;
-        if (d2 < m * m) { const d = Math.sqrt(d2) || 1e-4; x = cx + (dx / d) * m; z = cz + (dz / d) * m; }
-      }
-      return [x, z];
-    };
     const [nx, nz] = pushOut(st.p.x + st.v.x * dt, st.p.z + st.v.z * dt);
     if (tryMove(nx, nz)) { st.p.x = nx; st.p.z = nz; }
     else if (tryMove(nx, st.p.z)) { st.p.x = nx; st.v.z = 0; }
@@ -179,17 +191,62 @@ export function createHero(camera, dom) {
     rig.walk(st.walk, sp, st.ground, performance.now() / 1000);
     follow(dt);
   }
+  // la nage (une strate sous l'eau) : on va où regarde la caméra, Espace remonte, X descend (pas Ctrl : Ctrl+Z/W ferme
+  // l'onglet dans certains navigateurs), Maj nage vite. L'eau
+  // freine et porte : lâcher les touches, c'est dériver. Le fond, les toits et les tours arrêtent ; la surface aussi.
+  function swimUpdate(dt) {
+    const S = world.swim, t = performance.now() / 1000;
+    const f = (has('KeyW', 'KeyZ', 'ArrowUp') ? 1 : 0) - (has('KeyS', 'ArrowDown') ? 1 : 0), s = (has('KeyD', 'ArrowRight') ? 1 : 0) - (has('KeyA', 'KeyQ', 'ArrowLeft') ? 1 : 0);
+    const u = (has('Space') ? 1 : 0) - (has('KeyX') ? 1 : 0), speed = has('ShiftLeft', 'ShiftRight') ? SWIM_FAST : SWIM;
+    const pitch = (cam.pitch - 0.16) * 1.3; // caméra à sa hauteur habituelle : on nage à l'horizontale
+    const want = new THREE.Vector3(-Math.sin(cam.yaw) * Math.cos(pitch), -Math.sin(pitch), -Math.cos(cam.yaw) * Math.cos(pitch)).multiplyScalar(f)
+      .add(new THREE.Vector3(Math.cos(cam.yaw), 0, -Math.sin(cam.yaw)).multiplyScalar(s)).add(new THREE.Vector3(0, u, 0));
+    const moving = want.lengthSq() > 0;
+    if (moving) want.normalize().multiplyScalar(speed);
+    st.v.lerp(want, Math.min(1, dt * (moving ? 2.2 : 1.1)));
+    if (!moving) st.v.y += Math.sin(t * 0.9) * 0.6 * dt; // il flotte
+    let [x, z] = pushOut(st.p.x + st.v.x * dt, st.p.z + st.v.z * dt), y = st.p.y + st.v.y * dt;
+    // les obstacles en volume (la grande poutre de roche) : des boules
+    for (const [cx, cy, cz, r] of world.spheres || []) { const dx = x - cx, dy = y - cy, dz = z - cz, d = Math.hypot(dx, dy, dz), m = r + 0.5; if (d < m) { const k = m / (d || 1e-4); x = cx + dx * k; y = cy + dy * k; z = cz + dz * k; } }
+    const h = floorAt(x, z, y + 1.2);
+    if (y < h + 0.4) { y = h + 0.4; st.v.y = Math.max(0, st.v.y); }
+    y = Math.min(y, S.surface - 0.7);
+    st.p.set(x, y, z);
+    if (y < world.killY(st.safe) && world.exitAt(x, z)) st.exit = true;
+    st.fade = Math.max(0, st.fade - dt * 0.8);
+    // la brasse : le corps s'allonge dans le sens de la nage ; bras qui tirent, jambes qui fouettent ; au repos, il fait du sur-place
+    const sp = st.v.length(), hz = Math.hypot(st.v.x, st.v.z), k = Math.min(1, sp / 3);
+    if (hz > 0.5) st.yaw = Math.atan2(st.v.x, st.v.z);
+    st.walk += dt * (1.3 + sp * 0.45);
+    const ph = st.walk * 2, pull = Math.max(0, Math.sin(ph)), kick = Math.max(0, Math.sin(ph + 2.2)), glide = 1 - pull;
+    rig.reset(); g.rotation.order = 'YXZ';
+    g.rotation.y += Math.atan2(Math.sin(st.yaw - g.rotation.y), Math.cos(st.yaw - g.rotation.y)) * Math.min(1, dt * 4);
+    const tilt = k * (Math.PI / 2 - Math.atan2(st.v.y, hz)) + (1 - k) * 0.25;
+    st.tilt = (st.tilt ?? 0) + (tilt - (st.tilt ?? 0)) * Math.min(1, dt * 3);
+    g.rotation.x = st.tilt; g.position.copy(st.p); g.position.y += Math.sin(st.tilt) * 0.8;
+    AL.rotation.set(k * (-2.9 + pull * 1.7) + (1 - k) * -0.4, (1 - k) * Math.sin(t * 2.2) * 0.5, k * (-0.15 - pull * 1.1) + (1 - k) * -0.95);
+    AR.rotation.set(k * (-2.9 + pull * 1.7) + (1 - k) * -0.4, (1 - k) * -Math.sin(t * 2.2) * 0.5, k * (0.15 + pull * 1.1) + (1 - k) * 0.95);
+    rig.EL.rotation.x = rig.ER.rotation.x = -0.2 - glide * 0.3 * k - (1 - k) * 0.6;
+    const bike = (1 - k) * Math.sin(t * 2.4) * 0.35;
+    L.rotation.set(-0.7 * kick * k + bike - (1 - k) * 0.2, 0, -0.45 * kick * k); R.rotation.set(-0.7 * kick * k - bike - (1 - k) * 0.2, 0, 0.45 * kick * k);
+    rig.KL.rotation.x = 1.5 * kick * k + (1 - k) * (0.5 + bike); rig.KR.rotation.x = 1.5 * kick * k + (1 - k) * (0.5 - bike);
+    rig.head.rotation.x = -0.9 * k * Math.sin(st.tilt);
+    rig.flare(0.3 + k * 0.15 + Math.sin(t * 1.3) * 0.06); // le manteau flotte
+    rig.scarfStep(dt, 1);
+    follow(dt);
+  }
   // la silhouette suit le voyageur ; la caméra suit, au-dessus et derrière, sans passer sous le sol (sauf en vol libre)
   function follow(dt) {
     if (st.fly) { // en vol libre : allongé, bras tendus devant, jambes derrière
       g.position.copy(st.p); g.rotation.y += Math.atan2(Math.sin(st.yaw - g.rotation.y), Math.cos(st.yaw - g.rotation.y)) * Math.min(1, dt * 6);
       rig.reset(); torso.rotation.x = 1.1; L.rotation.x = R.rotation.x = 0.35; AL.rotation.set(-2.6, 0, -0.15); AR.rotation.set(-2.6, 0, 0.15); rig.flare(0.25);
     }
-    rig.scarfStep(dt);
+    if (!world?.swim || st.fly) rig.scarfStep(dt);
     cam.look.lerp(new THREE.Vector3(st.p.x, st.p.y + 1.6, st.p.z), st.fly ? 1 : 1 - Math.exp(-dt * 8));
     const cx = cam.look.x + Math.sin(cam.yaw) * Math.cos(cam.pitch) * cam.dist, cz = cam.look.z + Math.cos(cam.yaw) * Math.cos(cam.pitch) * cam.dist;
     let cy = cam.look.y + Math.sin(cam.pitch) * cam.dist + 1.5;
     if (!st.fly) cy = Math.max(cy, floorAt(cx, cz, cy + 1) + 1.2);
+    if (world.swim) cy = Math.min(cy, world.swim.surface - 0.6); // la caméra reste sous l'eau
     camera.position.set(cx, cy, cz); camera.lookAt(cam.look.x, cam.look.y + 1.2, cam.look.z);
   }
   function setFly(on) { st.fly = on; st.v.set(0, 0, 0); if (!on) pose(); }

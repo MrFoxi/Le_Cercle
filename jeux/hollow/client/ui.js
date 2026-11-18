@@ -7,7 +7,7 @@ const load = (k, d) => { try { return JSON.parse(localStorage.getItem(k)) ?? d; 
 const keep = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch { /* stockage plein ou bloqué : tant pis, la page reste en mémoire */ } };
 
 export function createUI(camera, canvas) {
-  const say = $('#say'), prompt = $('#prompt'), inkEl = $('#ink'), book = $('#carnet'), v = new THREE.Vector3();
+  const say = $('#say'), prompt = $('#prompt'), inkEl = $('#ink'), airEl = $('#air'), book = $('#carnet'), v = new THREE.Vector3();
   let anchor = null, sayTimer = 0, pending = null;
   const pages = load('hollow-carnet', []);
   const place = (el, p, dy) => { v.copy(p).project(camera); const vis = v.z < 1 && Math.abs(v.x) < 1.2 && Math.abs(v.y) < 1.2; el.style.opacity = vis ? '' : 0; el.style.left = `${(v.x * 0.5 + 0.5) * innerWidth}px`; el.style.top = `${(-v.y * 0.5 + 0.5) * innerHeight - dy}px`; };
@@ -21,6 +21,10 @@ export function createUI(camera, canvas) {
     prompt(text) { prompt.textContent = text ? `E — ${text}` : ''; prompt.classList.toggle('on', !!text); },
     // l'encrier : n gouttes sur max
     ink(n, max) { inkEl.innerHTML = `<i style="height:${(n / max) * 100}%"></i><b>${n}</b>`; inkEl.classList.toggle('full', n >= max); inkEl.hidden = false; },
+    // le souffle, de 0 à 1 (null : on respire, la bande disparaît)
+    air(k) { airEl.hidden = k == null; if (k != null) { airEl.style.setProperty('--k', k.toFixed(3)); airEl.classList.toggle('low', k < 0.25); } },
+    // une strate neuve : ni encrier ni souffle tant qu'elle ne les montre pas
+    clear() { inkEl.hidden = true; ui.air(null); ui.prompt(null); },
     // une page du carnet : on capture l'image juste après le prochain dessin, on l'encre en noir et blanc
     page(caption) { pending = caption; },
     capture() {
