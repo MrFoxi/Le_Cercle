@@ -137,7 +137,7 @@ export function create(scene, Q, ctx = {}) {
   live.ground = createGround(scene, floorAt, (cx, cz, c) => Math.hypot(cx, cz) - c > R_BASIN + 300);
   { const [x0, , z0] = spawn(); live.ground({ x: x0, z: z0 }, 1e6); } // tout le sol, avant la première image
   // la surface, vue d'en dessous : une grande tache de lumière qui suit le voyageur ; des rais verts qui plongent
-  const surf = new THREE.Mesh(new THREE.PlaneGeometry(2400, 2400).rotateX(Math.PI / 2), glowy({ color: '#f4fff8', alpha: 0.55, soft: 0.1 })); surf.position.y = SURF; scene.add(surf);
+  const surf = new THREE.Mesh(new THREE.PlaneGeometry(700, 700).rotateX(Math.PI / 2), glowy({ color: '#f4fff8', alpha: 0.5, soft: 1 })); // une tache de lumière au-dessus de lui, qui s'efface vers ses bords (vue de loin, à plat, elle faisait une ligne d'horizon) surf.position.y = SURF; scene.add(surf);
   for (let k = 0; k < 18; k++) { const a = r() * TAU, d = r() * 900, R = 6 + r() * 16, m = new THREE.Mesh(new THREE.CylinderGeometry(R * 0.6, R, 170, 16, 1, true), glowy({ color: '#9af0c8', alpha: 0.08, add: true, soft: 1 })); m.position.set(Math.cos(a) * d, SURF - 85, Math.sin(a) * d); m.rotation.set((r() - 0.5) * 0.25, 0, (r() - 0.5) * 0.25); scene.add(m); }
   // les tours, leurs fenêtres (quelques-unes allumées, toujours en bas), les obstacles
   const lit = [], dark = [];

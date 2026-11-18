@@ -227,7 +227,8 @@ export function skyMaterial() {
 layout(location = 1) out highp vec4 gInfo; varying vec3 vDir;
       void main() {
         float y = vDir.y, sun = max(0., dot(vDir, uSunDir));
-        vec3 c = mix(uFogCol, uSkyMid, smoothstep(.0, .6, y));
+        // sous l'eau, le ciel reste noir d'eau jusque haut : la lumière ne vient que de la surface (pas de ligne d'horizon)
+        vec3 c = mix(uFogCol, uSkyMid, uWater.y > .5 ? smoothstep(.45, 1., y) : smoothstep(.0, .6, y));
         c = mix(c, uSkyTop, smoothstep(.82, .97, y) * .9);
         c += uSunCol * (pow(sun, 40.) * .8 + pow(sun, 6.) * .15);
         c = floor(c * 18.) / 18.; // le ciel aussi est peint par aplats
@@ -280,7 +281,7 @@ void main() {
     for (int i = 0; i < 48; i++) { p -= dir; float s = texture(tInfo, clamp(p, 0., 1.)).w > 5000. ? 1. : 0.; acc += s * dec; dec *= .965; }
     float r = acc / 48. * uRays;
     r = floor(r * 6.) / 6.; // les rayons aussi sont posés en aplats
-    c += mix(vec3(1., .98, .9), vec3(.5, 1., .8), uWater.y) * r * mix(.55, .12, uWater.y); // sous l'eau : des rais verts, discrets
+    c += mix(vec3(1., .98, .9), vec3(.5, 1., .8), uWater.y) * r * mix(.38, .1, uWater.y); // sous l'eau : des rais verts, discrets
   }
   // papier : fibres, grain, et un vignettage à l'encre
   float fib = vnoise(vUv * uRes / vec2(2.5, 14.)) * .6 + vnoise(vUv * uRes / 1.3) * .4;
@@ -318,7 +319,9 @@ export function createPipeline(renderer) {
       renderer.setRenderTarget(rtInk); renderer.render(inkP.s, cam);
       // où est le soleil à l'écran (il peut être hors de l'image : les rayons tombent quand même d'en haut)
       v.copy(camera.position).addScaledVector(U.uSunDir.value, 1000).project(camera);
-      finP.m.uniforms.uSun.value.set(v.x * .5 + .5, v.y * .5 + .5); finP.m.uniforms.uRays.value = v.z < 1 ? 1.2 : 0;
+      // les rayons seulement quand le soleil est dans le champ ou tout près : loin hors de l'image, ils feraient des bandes
+      const off = Math.max(Math.abs(v.x), Math.abs(v.y)), ss = Math.max(0, Math.min(1, (off - 1) / 0.6));
+      finP.m.uniforms.uSun.value.set(v.x * .5 + .5, v.y * .5 + .5); finP.m.uniforms.uRays.value = v.z < 1 ? 1.2 * (1 - ss * ss * (3 - 2 * ss)) : 0;
       renderer.setRenderTarget(null); renderer.render(finP.s, cam);
     },
   };

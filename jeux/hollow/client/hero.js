@@ -277,7 +277,8 @@ export function createHero(camera, dom) {
     cam.look.lerp(new THREE.Vector3(st.p.x, st.p.y + 1.6, st.p.z), st.fly ? 1 : 1 - Math.exp(-dt * 8));
     const cx = cam.look.x + Math.sin(cam.yaw) * Math.cos(cam.pitch) * cam.dist, cz = cam.look.z + Math.cos(cam.yaw) * Math.cos(cam.pitch) * cam.dist;
     let cy = cam.look.y + Math.sin(cam.pitch) * cam.dist + 1.5;
-    if (!st.fly) cy = Math.max(cy, floorAt(cx, cz, cy + 1) + 1.2);
+    // jamais sous le sol : le sol cherché sous la tête du voyageur (pas sous la caméra : passée dessous, elle ne le verrait plus)
+    if (!st.fly) cy = Math.max(cy, floorAt(cx, cz, cam.look.y + 1.5) + 1.2);
     if (world.swim) cy = Math.min(cy, world.swim.surface - 0.6); // la caméra reste sous l'eau
     camera.position.set(cx, cy, cz); camera.lookAt(cam.look.x, cam.look.y + 1.2, cam.look.z);
   }
