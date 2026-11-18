@@ -6,6 +6,7 @@ import { terrain, heightAt, fbm, noise, rampAngle, spawn, R_ABYSS, R_WALL, TERRA
 import { ink, glowy, skyMaterial, U } from './ink.js';
 import { rng, paint, lump, tube, merge, cast } from './modelage.js';
 import { createGround, sectors } from './sol.js';
+import { createStory } from './glaneuse.js';
 
 const TAU = Math.PI * 2;
 
@@ -25,7 +26,7 @@ function abyssWall() {
 /* ---------- Les êtres et les choses ---------- */
 const LEAVES = [['#5fbf86', '#2f7a5a'], ['#7fd6b8', '#3a8a78'], ['#9be08a', '#4a9a5a'], ['#6ac8c8', '#2f7a88']];
 // un arbre au tronc courbé : il penche vers +x (on le tourne vers le puits à la pose)
-function tree(seed, giant = false) {
+export function tree(seed, giant = false) {
   const r = rng(seed), H = (16 + r() * 22) * (giant ? 2.6 : 1), lean = (4 + r() * 10) * (giant ? 2 : 1), K = [], leaf = LEAVES[seed % LEAVES.length];
   const top = [lean, H, (r() - 0.5) * 4];
   K.push(paint(tube([[0, -1, 0], [lean * 0.05, H * 0.3, 0], [lean * 0.45, H * 0.7, top[2] * 0.3], top], 1.0 + H * 0.03, 0.35, 9, 22), '#c8b8a0', '#6a5a52', 0.12));
@@ -46,7 +47,7 @@ function tree(seed, giant = false) {
 }
 // une ombrelle de verre : tige, pétales translucides, cœur qui luit
 const PETAL = ['#ffd6e8', '#d8f6ff', '#fff2c0', '#e8dcff', '#c8ffe8'];
-function umbrella(seed, giant = false) {
+export function umbrella(seed, giant = false) {
   const r = rng(seed), H = (9 + r() * 16) * (giant ? 3.5 : 1), bend = (r() - 0.5) * 5, R = 4 + H * 0.28, col = PETAL[seed % PETAL.length];
   const stem = paint(tube([[0, -0.5, 0], [bend * 0.3, H * 0.4, 0], [bend, H * 0.85, bend * 0.2], [bend, H, 0]], 0.5 + H * 0.02, 0.3, 8, 18), '#8fd6a0', '#3f8a5a');
   const P = [];
@@ -60,7 +61,7 @@ function umbrella(seed, giant = false) {
   return { stem, petals: merge(P), heart, top: [bend, H, 0], R, col };
 }
 // un Semeur : petit Flottant (cloche pâle, filaments)
-function seeder() {
+export function seeder() {
   const bell = new THREE.LatheGeometry([[0.01, 0.5], [0.35, 0.45], [0.5, 0.2], [0.48, 0], [0.3, 0.05]].map(([x, y]) => new THREE.Vector2(x, y)), 14);
   const K = [paint(bell, '#ffffff', '#cfefff', 0.02)];
   for (let k = 0; k < 6; k++) { const a = (k / 6) * TAU; K.push(paint(tube([[Math.cos(a) * 0.3, 0.05, Math.sin(a) * 0.3], [Math.cos(a) * 0.35, -0.8, Math.sin(a) * 0.35], [Math.cos(a) * 0.2, -1.8, Math.sin(a) * 0.2]], 0.03, 0.01, 4, 6), '#e8f8ff')); }
@@ -241,10 +242,14 @@ export const LOOK = {
   pal: [[0.16, 0.42, 0.3], [0.36, 0.64, 0.36], [0.24, 0.6, 0.56], [0.64, 0.68, 0.7], [0.44, 0.48, 0.56], [0.2, 0.48, 0.34], [1, 0.55, 0.72], [1, 0.9, 0.4]],
   skyMid: '#9edbfa', skyTop: '#fffdf5',
 };
-export function create(scene, Q) {
+export function create(scene, Q, ctx = {}) {
   const w = buildJardins(scene, Q), start = spawn();
+  // l'histoire : la Glaneuse, l'encre, la passerelle, les Semeurs, l'arbre-mère ; la descente est fermée jusqu'au bout
+  const story = createStory(scene, { terrain, exitAt: (x, z) => terrain(x, z).kind === 'void', start, ui: ctx.ui }), base = w.update;
+  w.colliders.push(...story.colliders);
   return Object.assign(w, {
-    look: LOOK, terrain, start, camYaw: Math.atan2(start[0], start[2]),
-    exitAt: (x, z) => terrain(x, z).kind === 'void', killY: () => -150,
+    look: LOOK, terrain: story.terrain, start, camYaw: Math.atan2(start[0], start[2]),
+    exitAt: story.exitAt, killY: () => -150, interact: story.interact, story,
+    update(t, p) { base(t, p); story.update(t, p); },
   });
 }

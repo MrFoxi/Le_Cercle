@@ -109,10 +109,10 @@ export function createHero(camera, dom) {
   // remettre la silhouette debout (après la chute)
   function pose() { for (const o of [g, torso, L, R, AL, AR]) o.rotation.set(0, 0, 0); L.position.y = R.position.y = 0.46; AL.rotation.z = -0.12; AR.rotation.z = 0.12; torso.position.set(0, 0, 0); torso.scale.set(1, 1, 1); g.scale.set(1, 1, 1); }
 
-  // le vol libre : on va où regarde la caméra (Espace monte, Ctrl ou C descend, Maj : très vite)
+  // le vol libre : on va où regarde la caméra (Espace monte, Ctrl descend, Maj : très vite)
   function flyUpdate(dt) {
     const f = (has('KeyW', 'KeyZ', 'ArrowUp') ? 1 : 0) - (has('KeyS', 'ArrowDown') ? 1 : 0), s = (has('KeyD', 'ArrowRight') ? 1 : 0) - (has('KeyA', 'KeyQ', 'ArrowLeft') ? 1 : 0);
-    const u = (has('Space') ? 1 : 0) - (has('ControlLeft', 'ControlRight', 'KeyC') ? 1 : 0), speed = has('ShiftLeft', 'ShiftRight') ? FLY_FAST : FLY;
+    const u = (has('Space') ? 1 : 0) - (has('ControlLeft', 'ControlRight') ? 1 : 0), speed = has('ShiftLeft', 'ShiftRight') ? FLY_FAST : FLY;
     const fwd = new THREE.Vector3(-Math.sin(cam.yaw) * Math.cos(cam.pitch), -Math.sin(cam.pitch), -Math.cos(cam.yaw) * Math.cos(cam.pitch));
     const right = new THREE.Vector3(Math.cos(cam.yaw), 0, -Math.sin(cam.yaw));
     const want = fwd.multiplyScalar(f).addScaledVector(right, s).add(new THREE.Vector3(0, u, 0));

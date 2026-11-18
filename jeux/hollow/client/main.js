@@ -5,6 +5,7 @@ import { U, createPipeline, setLook, ink } from './ink.js';
 import { paint, lump } from './modelage.js';
 import { createHero } from './hero.js';
 import { createFall } from './chute.js';
+import { createUI } from './ui.js';
 
 // les strates, de haut en bas ; celles qui n'ont pas encore de module arrivent plus tard
 const STRATES = [
@@ -29,7 +30,7 @@ const renderer = new THREE.WebGLRenderer({ canvas, antialias: false, powerPrefer
 renderer.autoClear = false;
 const camera = new THREE.PerspectiveCamera(52, 1, 0.3, 12000);
 const pipe = createPipeline(renderer);
-const hero = createHero(camera, canvas), fall = createFall(camera);
+const hero = createHero(camera, canvas), fall = createFall(camera), ui = createUI(camera, canvas);
 
 // la carte de ce que le voyageur a vu : 1024 × 1024 cases sur 5 km (une case = 5 m) ; remise à blanc à chaque strate
 const N = 1024, seen = new Uint8Array(N * N), revealTex = new THREE.DataTexture(seen, N, N, THREE.RedFormat, THREE.UnsignedByteType);
@@ -53,7 +54,7 @@ async function enter(n, place = true) {
   const S = STRATES[n - 1], mod = await S.load();
   if (world) { scene.remove(hero.rig.g); dispose(scene); }
   scene = new THREE.Scene(); cur = S;
-  world = mod.create(scene, Q);
+  world = mod.create(scene, Q, { ui });
   seen.fill(0); revealTex.needsUpdate = true; reveal(world.start[0], world.start[2], 70);
   if (place) { setLook(world.look); hero.enter(scene, world); }
   save(n);
@@ -118,6 +119,8 @@ addEventListener('keydown', e => {
   hero.setFly(!hero.state.fly);
   toast(hero.state.fly ? 'Vol libre · Espace monte, Ctrl descend, Maj très vite' : 'Vol libre coupé');
 });
+// E : agir (parler, encrer, emmener) ; ce que la strate propose dépend de ce qui est tout près
+addEventListener('keydown', e => { if (e.code === 'KeyE' && !fall.active && !falling) world?.interact?.(hero.state.p); });
 // R : tout montrer en couleur (pour comparer avec l'esquisse)
 addEventListener('keydown', e => { if (e.code === 'KeyR' && !fall.active) U.uRevealAll.value = U.uRevealAll.value ? 0 : 1; });
 if (params.has('debug')) window.hollow = { hero, U, reveal, camera, enter, descend, arrive: () => hero.enter(scene, world, true), get world() { return world; }, set: (x, z) => { hero.state.p.set(x, 2000, z); hero.state.v.set(0, 0, 0); } };
@@ -143,6 +146,7 @@ function frame(now) {
   world.sky.position.copy(camera.position);
   reveal(hero.state.p.x, hero.state.p.z, 46);
   pipe.render(scene, camera, hero.state.p, Q.shadows && world.look.shadows);
+  ui.update(dt); ui.capture(); // une page du carnet se prend juste après le dessin (l'image est encore là)
   document.body.style.setProperty('--fade', hero.state.fade.toFixed(3));
   // repli automatique : si les images tardent trop longtemps, on allège (moins de pixels, plus d'ombres)
   if (++frames > 90) { slow = dt > 0.034 ? slow + 1 : Math.max(0, slow - 1); if (slow > 120) { slow = 0; Q.dpr = Math.max(0.75, Q.dpr - 0.25); if (Q.dpr <= 1) Q.shadows = false; resize(); } }

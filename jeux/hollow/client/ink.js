@@ -71,7 +71,7 @@ const FRAG = /* glsl */ `
 ${COMMON}
 layout(location = 0) out highp vec4 oColor;
 layout(location = 1) out highp vec4 gInfo;
-uniform vec3 uTint; uniform float uLine, uTrans, uKind, uGlow, uPulse;
+uniform vec3 uTint; uniform float uLine, uTrans, uKind, uGlow, uPulse, uFade;
 varying vec3 vW, vN, vC; varying float vDepth; varying vec2 vUv;
 
 float shadowAt(vec3 w) {
@@ -146,7 +146,7 @@ void main() {
   // la révélation : esquisse au crayon tant qu'on n'y est pas allé, la couleur s'y répand comme une aquarelle
   vec2 ruv = (vW.xz - uRevealRect.xy) / uRevealRect.zw;
   float rv = max(texture(uReveal, ruv).r, uRevealAll) + (vnoise(vW.xz * .12) - .5) * .4 + (vnoise(vW.xz * .9) - .5) * .12;
-  float shown = smoothstep(.42, .5, rv);
+  float shown = smoothstep(.42, .5, rv) * (1. - uFade); // uFade : ce qui n'est pas (encore, ou plus) encré reste au crayon
   float lum = dot(col, vec3(.3, .59, .11));
   vec3 paper = vec3(.94, .91, .85), lead = vec3(.27, .26, .31);
   vec3 sketch = mix(paper, lead, clamp((1. - lum) * .75 - .1, 0., 1.));
@@ -166,7 +166,7 @@ export function ink(o = {}) {
     glslVersion: THREE.GLSL3, vertexShader: VERT, fragmentShader: FRAG, vertexColors: o.vertexColors !== false, side: o.side ?? THREE.FrontSide,
     uniforms: {
       ...U, uTint: { value: new THREE.Color(o.color ?? '#ffffff') }, uLine: { value: o.line ?? 1 }, uTrans: { value: o.trans ?? 0 },
-      uWind: { value: o.wind ?? 0 }, uKind: { value: { terrain: 1, water: 2 }[o.kind] ?? 0 }, uGlow: { value: o.glow ?? 0 }, uPulse: { value: o.pulse ?? 0 },
+      uWind: { value: o.wind ?? 0 }, uKind: { value: { terrain: 1, water: 2 }[o.kind] ?? 0 }, uGlow: { value: o.glow ?? 0 }, uPulse: { value: o.pulse ?? 0 }, uFade: { value: o.fade ?? 0 },
     },
   });
   return m;

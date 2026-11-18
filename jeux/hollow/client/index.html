@@ -7,7 +7,7 @@
   <link rel="icon" href="data:,">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,500;0,700;1,500&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Caveat:wght@500;700&family=Cormorant+Garamond:ital,wght@0,500;0,700;1,500&display=swap" rel="stylesheet">
   <script type="importmap">{ "imports": { "three": "/vendor/three/build/three.module.js", "three/addons/": "/vendor/three/addons/" } }</script>
   <script type="module" src="main.js"></script>
   <style>
@@ -34,6 +34,28 @@
     @keyframes card { 0% { opacity: 0; } 8% { opacity: 1; } 80% { opacity: 1; } 100% { opacity: 0; } }
     #toast { position: fixed; left: 50%; top: 18vh; transform: translateX(-50%); font-size: 1.5rem; font-style: italic; opacity: 0; pointer-events: none; text-align: center; }
     #toast.on { animation: card 4.5s ease forwards; }
+    /* les paroles, écrites à la main au-dessus de celui qui parle */
+    #say { position: fixed; transform: translate(-50%, -100%); max-width: min(420px, 80vw); text-align: center; pointer-events: none; font: 700 1.7rem/1.15 Caveat, cursive; color: #1a1828; text-shadow: 0 0 6px #f4efe4, 0 0 12px #f4efe4; opacity: 0; }
+    #say.on { opacity: 1; }
+    #say.on span { display: inline-block; animation: ecrit 1.6s cubic-bezier(.6, .1, .3, 1) forwards; clip-path: inset(0 100% 0 0); }
+    #prompt { position: fixed; left: 50%; bottom: 9vh; transform: translateX(-50%); font: 700 1.5rem Caveat, cursive; padding: 2px 14px; background: rgba(244, 239, 228, .82); border-bottom: 2px solid #1a1828; opacity: 0; transition: opacity .2s; pointer-events: none; }
+    #prompt.on { opacity: 1; }
+    /* l'encrier */
+    #ink { position: fixed; left: 18px; bottom: 18px; width: 34px; height: 52px; border: 2px solid #1a1828; border-radius: 6px 6px 12px 12px; overflow: hidden; background: rgba(244, 239, 228, .7); }
+    #ink i { position: absolute; left: 0; right: 0; bottom: 0; background: #2a2048; transition: height .5s; }
+    #ink b { position: absolute; inset: 0; display: grid; place-items: center; font: 700 1.2rem Caveat, cursive; color: #f4efe4; mix-blend-mode: difference; }
+    #ink.full { box-shadow: 0 0 12px #ffd860; }
+    /* le carnet */
+    #carnet { position: fixed; inset: 5vh 6vw; overflow: auto; padding: 26px 32px; background: #f1ead9; box-shadow: 0 10px 40px rgba(0, 0, 0, .35), inset 0 0 60px rgba(120, 90, 40, .2); display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 26px; align-content: start; }
+    #carnet[hidden] { display: none; }
+    #carnet h2, #carnet small, #carnet .vide { grid-column: 1 / -1; margin: 0; font: italic 700 2.2rem 'Cormorant Garamond', serif; }
+    #carnet small { font: 1.1rem Caveat, cursive; opacity: .6; }
+    #carnet figure { margin: 0; transform: rotate(-.6deg); }
+    #carnet figure:nth-child(odd) { transform: rotate(.8deg); }
+    #carnet img { width: 100%; border: 1px solid #1a1828; box-shadow: 3px 4px 0 rgba(26, 24, 40, .2); }
+    #carnet figcaption { font: 700 1.5rem Caveat, cursive; text-align: center; }
+    #pagetoast { position: fixed; right: 18px; bottom: 18px; font: 700 1.3rem Caveat, cursive; opacity: 0; pointer-events: none; }
+    #pagetoast.on { animation: card 4s ease forwards; }
     a.back { position: fixed; left: 16px; top: 14px; color: inherit; text-decoration: none; font-size: 1.4rem; opacity: .6; }
   </style>
 </head>
@@ -42,13 +64,18 @@
   <div id="veil"></div>
   <div id="card" aria-live="polite"></div>
   <div id="toast" aria-live="polite"></div>
+  <div id="say" aria-live="polite"></div>
+  <div id="prompt"></div>
+  <div id="ink" hidden title="Encre"></div>
+  <div id="pagetoast" aria-live="polite"></div>
+  <section id="carnet" hidden></section>
   <svg width="0" height="0" style="position:absolute"><filter id="bavure"><feTurbulence type="fractalNoise" baseFrequency=".035" numOctaves="2" seed="4"/><feDisplacementMap in="SourceGraphic" scale="3.5"/></filter></svg>
   <a class="back" href="/" title="Retour au Cercle">←</a>
   <section id="title">
     <h1>THE HOLLOW</h1>
     <p>Strate 01 — Les Jardins suspendus</p>
     <button id="resume" hidden></button>
-    <small>Cliquer pour entrer · <kbd>ZQSD</kbd> marcher · <kbd>Maj</kbd> courir · <kbd>Espace</kbd> sauter · souris : regarder · <kbd>R</kbd> tout en couleur</small>
+    <small>Cliquer pour entrer · <kbd>ZQSD</kbd> marcher · <kbd>Maj</kbd> courir · <kbd>Espace</kbd> sauter · souris : regarder · <kbd>E</kbd> agir · <kbd>C</kbd> carnet · <kbd>R</kbd> tout en couleur</small>
   </section>
 </body>
 </html>
