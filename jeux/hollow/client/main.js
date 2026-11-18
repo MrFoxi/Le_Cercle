@@ -115,7 +115,19 @@ addEventListener('resize', resize); resize();
 
 // L'administrateur (MrFoxi, connecté sur le site) : F bascule le vol libre (on traverse tout, Maj pour filer à 220 m/s)
 let admin = false;
-fetch('/api/admin/me').then(r => r.json()).then(r => { admin = !!r.admin; if (admin) toast('Administrateur : F pour voler'); }).catch(() => {});
+fetch('/api/admin/me').then(r => r.json()).then(r => { admin = !!r.admin; if (admin) { toast('Administrateur : F pour voler'); warpMenu(); } }).catch(() => {});
+// le menu de l'administrateur : aller tout de suite au départ de n'importe quelle strate dessinée
+function warpMenu() {
+  const sel = document.createElement('select'); sel.id = 'warp'; sel.title = 'Aller à une strate';
+  sel.innerHTML = '<option value="">Aller à une strate…</option>' + STRATES.filter(s => s.load).map(s => `<option value="${s.n}">Strate ${String(s.n).padStart(2, '0')} — ${s.name}</option>`).join('');
+  sel.onchange = async () => {
+    const n = +sel.value; sel.value = ''; sel.blur(); // les touches reviennent au voyageur
+    if (!n || fall.active || falling) return;
+    title.classList.add('gone'); hero.setFly(false); await enter(n); toast(`Strate ${String(n).padStart(2, '0')} — ${STRATES[n - 1].name}`);
+  };
+  sel.addEventListener('keydown', e => e.stopPropagation());
+  document.body.append(sel);
+}
 addEventListener('keydown', e => {
   if (e.code !== 'KeyF' || !admin || fall.active || falling) return;
   hero.setFly(!hero.state.fly);
