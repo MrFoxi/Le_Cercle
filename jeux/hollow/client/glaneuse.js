@@ -120,7 +120,7 @@ export function createStory(scene, { terrain, exitAt, start, ui }) {
   }
 
   /* --- ce qui se passe --- */
-  let near = null, fadeB = st.bridge ? 0 : 1, opening = st.open ? 1 : 0, last = 0, began = performance.now() / 1000;
+  let near = null, fadeB = st.bridge ? 0 : 1, inkDelay = 0, opening = st.open ? 1 : 0, last = 0, began = performance.now() / 1000;
   ui?.ink(st.ink, INK_MAX);
   function nearest(p) {
     const c = [];
@@ -144,6 +144,7 @@ export function createStory(scene, { terrain, exitAt, start, ui }) {
         if (st.ink < BRIDGE_COST) { ui?.say('Il manque de l’encre…', stone.position.clone().add(new THREE.Vector3(0, 3, 0)), 3); return; }
         st.ink -= BRIDGE_COST; st.bridge = true; persist(); ui?.ink(st.ink, INK_MAX);
         setTimeout(() => ui?.page('La passerelle encrée'), 2600);
+        return 'encre'; // le voyageur fait le geste : il trace la passerelle au pinceau
       } else { what.follow = true; ui?.say('…', what.m.position.clone().add(new THREE.Vector3(0, 2, 0)), 1.5); }
     },
     update(t, p) {
@@ -157,7 +158,7 @@ export function createStory(scene, { terrain, exitAt, start, ui }) {
       // le pollen : passer sous une ombrelle remplit l'encrier
       for (const b of blooms) if (!st.pollen.includes(b.k) && st.ink < INK_MAX && Math.hypot(p.x - b.x, p.z - b.z) < 7) { st.pollen.push(b.k); st.ink++; persist(); ui?.ink(st.ink, INK_MAX); b.heart.uniforms.uGlow.value = 0.1; ui?.say('+1 goutte d’encre', b.top, 1.6); }
       // la passerelle encrée : la couleur s'y répand
-      if (st.bridge && fadeB > 0) { fadeB = Math.max(0, fadeB - dt * 0.5); bridgeMat.uniforms.uFade.value = fadeB; }
+      if (st.bridge && fadeB > 0 && (inkDelay += dt) > 0.9) { fadeB = Math.max(0, fadeB - dt * 0.5); bridgeMat.uniforms.uFade.value = fadeB; }
       // les Semeurs : ils flottent chez eux, suivent le voyageur, ou rentrent au nid de l'arbre-mère
       let follow = 0;
       for (const s of seeds) {

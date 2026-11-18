@@ -1,6 +1,7 @@
 // THE HOLLOW — le voyageur : son dessin, son squelette, ses gestes. Une petite silhouette en long manteau d'encre,
 // col relevé, capuche baissée, une longue écharpe pâle qui flotte derrière lui, la sacoche du carnet à la hanche et
-// l'encrier qui luit à la ceinture. On le voit de dos : pas de visage, une nuque, des cheveux.
+// l'encrier qui luit à la ceinture, et en travers du dos un pinceau immense (2 m, plus grand que lui) : c'est avec
+// lui qu'il encre le monde. On le voit de dos : une nuque, des cheveux, le pinceau.
 // Le squelette est une vraie chaîne : bassin → cuisses → genoux → mollets → bottes ; bassin → buste → nuque → tête ;
 // buste → épaules → coudes → mains. Chaque pièce est l'enfant de la précédente : rien ne peut se détacher.
 // Les pans du manteau suivent les jambes ; l'écharpe est une petite simulation (elle traîne, ondule, retombe).
@@ -30,6 +31,15 @@ function panel(a0, top, bottom) {
   const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(P, 3)); g.setIndex(I); g.computeVertexNormals();
   const hem = new THREE.TorusGeometry(0.365, 0.016, 4, 12, Math.PI / 2).rotateX(Math.PI / 2).rotateY(a0).translate(0, -0.6, 0); // le quart de cercle du bas, tourné comme son pan
   return join([part(g, top, bottom), part(hem, '#d8ccb0')]);
+}
+
+// le pinceau : long manche de bois cerclé, virole de laiton, touffe claire qui fonce jusqu'à une pointe gorgée d'encre
+function brushGeometry() {
+  const handle = part(new THREE.CylinderGeometry(0.03, 0.038, 1.45, 10).translate(0, 0.725, 0), '#c99260', '#7a4a28');
+  const rings = [0.08, 0.5, 1.0, 1.38].map(y => part(new THREE.TorusGeometry(0.04, 0.012, 5, 12).rotateX(Math.PI / 2).translate(0, y, 0), '#3a2a20'));
+  const ferrule = part(new THREE.CylinderGeometry(0.05, 0.042, 0.13, 12).translate(0, 1.51, 0), '#f0c860', '#a87a28');
+  const tuft = part(new THREE.LatheGeometry([[0.045, 0], [0.09, 0.08], [0.125, 0.2], [0.115, 0.32], [0.07, 0.43], [0.0, 0.52]].map(([x, y]) => new THREE.Vector2(x, y)), 14).translate(0, 1.56, 0), '#14101e', '#ece2c8');
+  return join([handle, ...rings, ferrule, tuft]);
 }
 
 export function createVoyageur() {
@@ -82,6 +92,13 @@ export function createVoyageur() {
   };
   const [AL, EL] = arm(-1), [AR, ER] = arm(1);
   hips.add(spine);
+  // le pinceau, en travers du dos (la touffe au-dessus de l'épaule droite), tenu par une seconde sangle ;
+  // dans la main droite quand il encre (wield)
+  const brush = grp(0, 0, 0, mesh(brushGeometry()), mesh(new THREE.SphereGeometry(0.03, 8, 6).translate(0, 2.07, 0), glow)); brush.scale.setScalar(1.2); // 2,5 m : plus grand que lui
+  const onBack = grp(-0.14, -0.28, -0.29); onBack.rotation.set(0.12, 0, -0.62); spine.add(onBack);
+  spine.add(mesh(part(new THREE.TorusGeometry(0.3, 0.012, 4, 24, Math.PI * 0.7).rotateZ(-0.6).scale(0.75, 1, 1.05).translate(0.02, 0.2, 0), '#5a4028')));
+  const inHand = grp(0, -0.29, 0.02); ER.add(inHand);
+  onBack.add(brush);
 
   // l'écharpe : une bande qui part de la nuque et flotte (simulée dans le monde)
   const N = 9, SEG = 0.14, pts = Array.from({ length: N }, () => new THREE.Vector3()), prev = pts.map(p => p.clone());
@@ -97,7 +114,12 @@ export function createVoyageur() {
 
   const ease = k => k * k * (3 - 2 * k);
   const rig = {
-    g, hips, torso: spine, spine, head, L, R, KL, KR, AL, AR, EL, ER, panels, scarf, inkGlow,
+    g, hips, torso: spine, spine, head, L, R, KL, KR, AL, AR, EL, ER, panels, scarf, inkGlow, brush,
+    // prendre le pinceau en main (on) ou le remettre dans le dos ; en main, il prolonge l'avant-bras, la pointe devant
+    wield(on) {
+      (on ? inHand : onBack).add(brush);
+      if (on) { brush.position.set(0, 0.55, 0); brush.rotation.set(Math.PI, 0, 0); } else { brush.position.set(0, 0, 0); brush.rotation.set(0, 0, 0); }
+    },
     // tout remettre droit
     reset() {
       for (const o of [g, hips, spine, head, L, R, KL, KR, AL, AR, EL, ER, ...panels]) o.rotation.set(0, 0, 0);

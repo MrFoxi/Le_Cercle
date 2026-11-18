@@ -120,7 +120,7 @@ addEventListener('keydown', e => {
   toast(hero.state.fly ? 'Vol libre · Espace monte, Ctrl descend, Maj très vite' : 'Vol libre coupé');
 });
 // E : agir (parler, encrer, emmener) ; ce que la strate propose dépend de ce qui est tout près
-addEventListener('keydown', e => { if (e.code === 'KeyE' && !fall.active && !falling) world?.interact?.(hero.state.p); });
+addEventListener('keydown', e => { if (e.code === 'KeyE' && !fall.active && !falling && world?.interact?.(hero.state.p) === 'encre') hero.play('ink'); });
 // R : tout montrer en couleur (pour comparer avec l'esquisse)
 addEventListener('keydown', e => { if (e.code === 'KeyR' && !fall.active) U.uRevealAll.value = U.uRevealAll.value ? 0 : 1; });
 if (params.has('debug')) window.hollow = { hero, U, reveal, camera, enter, descend, arrive: () => hero.enter(scene, world, true), get world() { return world; }, set: (x, z) => { hero.state.p.set(x, 2000, z); hero.state.v.set(0, 0, 0); } };

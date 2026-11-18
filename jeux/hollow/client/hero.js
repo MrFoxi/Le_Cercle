@@ -108,8 +108,28 @@ export function createHero(camera, dom) {
     if (Math.hypot(st.v.x, st.v.z) > 0.5) st.yaw = Math.atan2(st.v.x, st.v.z);
     st.ground = false; st.exit = false;
   }
+  // un geste (play) : il s'arrête et le fait. « ink » : il saisit le pinceau dans son dos, trace un grand trait, le range
+  function actUpdate(dt) {
+    const A = st.act; A.t += dt;
+    const k = A.t, ease2 = x => ease(clamp01(x));
+    rig.reset(); g.position.copy(st.p);
+    if (k > 0.35 && !A.held) { rig.wield(true); A.held = true; }
+    if (k > 1.6 && A.held) { rig.wield(false); A.held = false; }
+    const reach = ease2(k / 0.35) - ease2((k - 0.35) / 0.25), sweep = ease2((k - 0.5) / 0.7), back = ease2((k - 1.3) / 0.3);
+    // la main droite va chercher le manche par-dessus l'épaule, puis le grand geste, de haut en bas et de droite à gauche
+    AR.rotation.set(-2.7 * reach + (1 - reach) * (-1.9 + sweep * 2.1) * (1 - back) * (k > 0.35 ? 1 : 0), 0, 0.1 + 0.5 * reach - sweep * 0.9 * (1 - back));
+    rig.ER.rotation.x = -0.9 * reach - 0.2;
+    torso.rotation.set(0.08 + sweep * 0.25 * (1 - back), 0.5 * (1 - sweep) * (k > 0.35 ? 1 : 0) - 0.35 * sweep * (1 - back), 0);
+    AL.rotation.set(-0.4 * sweep * (1 - back), 0, -0.35);
+    rig.crouch(0.25 * sweep * (1 - back)); R.rotation.x -= 0.25 * sweep * (1 - back);
+    if (k > 1.9) { st.act = null; rig.reset(); }
+    rig.scarfStep(dt);
+    follow(dt);
+  }
+  function play(kind) { if (!st.act && !st.arrive && !st.fly) { st.act = { kind, t: 0, held: false }; st.v.set(0, 0, 0); } }
   function update(dt) {
     if (st.arrive) return arriveUpdate(dt);
+    if (st.act) return actUpdate(dt);
     if (st.fly) { flyUpdate(dt); return follow(dt); }
     // déplacement relatif à la caméra
     const f = (has('KeyW', 'KeyZ', 'ArrowUp') ? 1 : 0) - (has('KeyS', 'ArrowDown') ? 1 : 0), s = (has('KeyD', 'ArrowRight') ? 1 : 0) - (has('KeyA', 'KeyQ', 'ArrowLeft') ? 1 : 0);
@@ -164,5 +184,5 @@ export function createHero(camera, dom) {
     camera.position.set(cx, cy, cz); camera.lookAt(cam.look.x, cam.look.y + 1.2, cam.look.z);
   }
   function setFly(on) { st.fly = on; st.v.set(0, 0, 0); if (!on) pose(); }
-  return Object.assign(hero, { update, enter, pose, setFly, rig, state: st, cam });
+  return Object.assign(hero, { update, enter, pose, setFly, play, rig, state: st, cam });
 }
