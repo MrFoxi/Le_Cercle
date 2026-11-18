@@ -7,7 +7,7 @@ import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { ink } from './ink.js';
 
-const STEP_UP = 0.9, GRAV = 22, WALK = 4.2, RUN = 9, JUMP = 7.5;
+const STEP_UP = 0.9, GRAV = 22, WALK = 4.2, RUN = 9, JUMP = 7.5, FLY = 40, FLY_FAST = 220;
 
 function part(g, col) { g = g.index ? g.toNonIndexed() : g; const c = new THREE.Color(col), a = new Float32Array(g.attributes.position.count * 3); for (let i = 0; i < a.length; i += 3) a.set([c.r, c.g, c.b], i); g.setAttribute('color', new THREE.BufferAttribute(a, 3)); for (const k of Object.keys(g.attributes)) if (!['position', 'normal', 'color'].includes(k)) g.deleteAttribute(k); return g; }
 function body() {
@@ -30,7 +30,8 @@ export function createHero(camera, dom) {
   g.add(torso, L, R, AL, AR); g.traverse(o => o.layers.enable(1));
   const rig = { g, torso, L, R, AL, AR };
 
-  const st = { p: new THREE.Vector3(), v: new THREE.Vector3(), yaw: 0, ground: true, safe: new THREE.Vector3(), walk: 0, fade: 0, exit: false };
+  // fly : le vol libre de l'administrateur (on traverse tout, sans pesanteur)
+  const st = { p: new THREE.Vector3(), v: new THREE.Vector3(), yaw: 0, ground: true, safe: new THREE.Vector3(), walk: 0, fade: 0, exit: false, fly: false };
   const cam = { yaw: 0, pitch: 0.16, dist: 14, look: new THREE.Vector3() };
   let world = null;
   const keys = new Set();
@@ -64,7 +65,20 @@ export function createHero(camera, dom) {
   // remettre la silhouette debout (après la chute)
   function pose() { for (const o of [g, torso, L, R, AL, AR]) o.rotation.set(0, 0, 0); AL.rotation.z = -0.12; AR.rotation.z = 0.12; torso.position.set(0, 0, 0); torso.scale.set(1, 1, 1); g.scale.set(1, 1, 1); }
 
+  // le vol libre : on va où regarde la caméra (Espace monte, Ctrl ou C descend, Maj : très vite)
+  function flyUpdate(dt) {
+    const f = (has('KeyW', 'KeyZ', 'ArrowUp') ? 1 : 0) - (has('KeyS', 'ArrowDown') ? 1 : 0), s = (has('KeyD', 'ArrowRight') ? 1 : 0) - (has('KeyA', 'KeyQ', 'ArrowLeft') ? 1 : 0);
+    const u = (has('Space') ? 1 : 0) - (has('ControlLeft', 'ControlRight', 'KeyC') ? 1 : 0), speed = has('ShiftLeft', 'ShiftRight') ? FLY_FAST : FLY;
+    const fwd = new THREE.Vector3(-Math.sin(cam.yaw) * Math.cos(cam.pitch), -Math.sin(cam.pitch), -Math.cos(cam.yaw) * Math.cos(cam.pitch));
+    const right = new THREE.Vector3(Math.cos(cam.yaw), 0, -Math.sin(cam.yaw));
+    const want = fwd.multiplyScalar(f).addScaledVector(right, s).add(new THREE.Vector3(0, u, 0));
+    if (want.lengthSq() > 0) want.normalize().multiplyScalar(speed);
+    st.v.lerp(want, Math.min(1, dt * 6)); st.p.addScaledVector(st.v, dt);
+    if (Math.hypot(st.v.x, st.v.z) > 0.5) st.yaw = Math.atan2(st.v.x, st.v.z);
+    st.ground = false; st.exit = false;
+  }
   function update(dt) {
+    if (st.fly) { flyUpdate(dt); return follow(dt); }
     // déplacement relatif à la caméra
     const f = (has('KeyW', 'KeyZ', 'ArrowUp') ? 1 : 0) - (has('KeyS', 'ArrowDown') ? 1 : 0), s = (has('KeyD', 'ArrowRight') ? 1 : 0) - (has('KeyA', 'KeyQ', 'ArrowLeft') ? 1 : 0);
     const run = has('ShiftLeft', 'ShiftRight'), speed = run ? RUN : WALK;
@@ -102,12 +116,17 @@ export function createHero(camera, dom) {
     torso.position.y = Math.abs(Math.cos(st.walk)) * 0.05 * Math.min(1, sp / 4);
     torso.rotation.x = Math.min(0.25, sp * 0.02) * (st.ground ? 1 : -0.5);
     torso.scale.set(1 + Math.sin(st.walk * 0.5) * 0.03 * Math.min(1, sp / 4), 1, 1);
-    // la caméra suit, au-dessus et derrière ; elle ne passe pas sous le sol
-    cam.look.lerp(new THREE.Vector3(st.p.x, st.p.y + 1.6, st.p.z), 1 - Math.exp(-dt * 8));
+    follow(dt);
+  }
+  // la silhouette suit le voyageur ; la caméra suit, au-dessus et derrière, sans passer sous le sol (sauf en vol libre)
+  function follow(dt) {
+    if (st.fly) { g.position.copy(st.p); g.rotation.y += Math.atan2(Math.sin(st.yaw - g.rotation.y), Math.cos(st.yaw - g.rotation.y)) * Math.min(1, dt * 6); torso.rotation.x = 0.5; L.rotation.x = R.rotation.x = 0.2; }
+    cam.look.lerp(new THREE.Vector3(st.p.x, st.p.y + 1.6, st.p.z), st.fly ? 1 : 1 - Math.exp(-dt * 8));
     const cx = cam.look.x + Math.sin(cam.yaw) * Math.cos(cam.pitch) * cam.dist, cz = cam.look.z + Math.cos(cam.yaw) * Math.cos(cam.pitch) * cam.dist;
     let cy = cam.look.y + Math.sin(cam.pitch) * cam.dist + 1.5;
-    cy = Math.max(cy, floorAt(cx, cz) + 1.2);
+    if (!st.fly) cy = Math.max(cy, floorAt(cx, cz) + 1.2);
     camera.position.set(cx, cy, cz); camera.lookAt(cam.look.x, cam.look.y + 1.2, cam.look.z);
   }
-  return { update, enter, pose, rig, state: st, cam };
+  function setFly(on) { st.fly = on; st.v.set(0, 0, 0); if (!on) pose(); }
+  return { update, enter, pose, setFly, rig, state: st, cam };
 }

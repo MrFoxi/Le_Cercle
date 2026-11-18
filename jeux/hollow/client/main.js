@@ -84,6 +84,14 @@ function resize() {
 }
 addEventListener('resize', resize); resize();
 
+// L'administrateur (MrFoxi, connecté sur le site) : F bascule le vol libre (on traverse tout, Maj pour filer à 220 m/s)
+let admin = false;
+fetch('/api/admin/me').then(r => r.json()).then(r => { admin = !!r.admin; if (admin) toast('Administrateur : F pour voler'); }).catch(() => {});
+addEventListener('keydown', e => {
+  if (e.code !== 'KeyF' || !admin || fall.active || falling) return;
+  hero.setFly(!hero.state.fly);
+  toast(hero.state.fly ? 'Vol libre · Espace monte, Ctrl descend, Maj très vite' : 'Vol libre coupé');
+});
 // R : tout montrer en couleur (pour comparer avec l'esquisse)
 addEventListener('keydown', e => { if (e.code === 'KeyR' && !fall.active) U.uRevealAll.value = U.uRevealAll.value ? 0 : 1; });
 if (params.has('debug')) window.hollow = { hero, U, reveal, camera, enter, descend, get world() { return world; }, set: (x, z) => { hero.state.p.set(x, 2000, z); hero.state.v.set(0, 0, 0); } };
