@@ -11,12 +11,18 @@ import { fbm, noise } from './terrain.js';
 import { ink, glowy, skyMaterial, U } from './ink.js';
 import { rng, paint, lump, tube, merge, cast, TAU } from './modelage.js';
 import { createGround, sectors } from './sol.js';
+import { createStory } from './veilleuse.js';
 
 /* ---------- Le relief : un sol de mousse, des chapeaux à plusieurs étages, le gouffre ---------- */
 export const R_CAVE = 1600, EXIT = { x: -760, z: 520, R: 42 };
+// le chemin des racines : un second passage, loin, dans le coin le plus noir de la grotte
+export const ROOTS = { x: 1040, z: 660, R: 16 };
+// les deux passages sont fermés au départ (un treillis de racines sur lequel on marche) ; l'histoire en ouvre un
+export const gates = { main: false, roots: false };
 export function floorAt(x, z) {
   const r = Math.hypot(x, z);
   if (Math.hypot(x - EXIT.x, z - EXIT.z) < EXIT.R + (fbm(x * 0.05, z * 0.05) - 0.5) * 10) return -400;
+  if (Math.hypot(x - ROOTS.x, z - ROOTS.z) < ROOTS.R + (fbm(x * 0.1, z * 0.1) - 0.5) * 4) return -400;
   let h = (fbm(x * 0.003 + 5, z * 0.003) - 0.5) * 60 + (fbm(x * 0.02, z * 0.02) - 0.5) * 6 + (fbm(x * 0.09, z * 0.09) - 0.5) * 1.2;
   if (r > R_CAVE - 200) { const d = (r - R_CAVE + 200) / 30; h += d * d * 8; } // la paroi de la grotte
   return h;
@@ -41,23 +47,27 @@ const SPIRAL = { x: 220, z: -260 };
   for (let k = 0; k < 46; k++) {
     for (let n = 0; n < 40; n++) {
       const a = r() * TAU, d = 120 + r() * (R_CAVE - 360), x = Math.cos(a) * d, z = Math.sin(a) * d, R = 30 + r() * r() * 140;
-      if (CAPS.some(C => Math.hypot(C.x - x, C.z - z) < C.R + R + 30) || Math.hypot(x - EXIT.x, z - EXIT.z) < EXIT.R + R + 60 || Math.hypot(x - SPIRAL.x, z - SPIRAL.z) < 330 + R) continue;
+      if (CAPS.some(C => Math.hypot(C.x - x, C.z - z) < C.R + R + 30) || Math.hypot(x - EXIT.x, z - EXIT.z) < EXIT.R + R + 60 || Math.hypot(x - ROOTS.x, z - ROOTS.z) < ROOTS.R + R + 90 || Math.hypot(x - SPIRAL.x, z - SPIRAL.z) < 330 + R) continue;
       CAPS.push({ x, z, y: floorAt(x, z) + 80 + r() * 340, R, dome: R * (0.12 + r() * 0.1), seed: 100 + k, hue: r() }); break;
     }
   }
 }
 const capTop = (C, x, z) => { const d = Math.hypot(x - C.x, z - C.z); return d > C.R ? null : C.y + C.dome * (1 - (d / C.R) ** 2); };
 // le terrain à plusieurs étages : la plus haute surface sous « below » (le voyageur passe sous les chapeaux)
+const lidY = G => floorAt(G.x + G.R + 14, G.z);
 export function terrain(x, z, below = Infinity) {
   let best = -Infinity;
-  const f = floorAt(x, z);
+  let f = floorAt(x, z);
+  // un passage fermé : on marche sur le treillis
+  if (f < -100 && !gates.main && Math.hypot(x - EXIT.x, z - EXIT.z) < EXIT.R + 8) f = lidY(EXIT);
+  if (f < -100 && !gates.roots && Math.hypot(x - ROOTS.x, z - ROOTS.z) < ROOTS.R + 4) f = lidY(ROOTS);
   if (f > -100 && f <= below) best = f;
   for (const C of CAPS) { const h = capTop(C, x, z); if (h !== null && h <= below && h > best) best = h; }
   return best === -Infinity ? { h: -1e4, kind: 'void' } : { h: best, kind: 'ground' };
 }
 export const caps = CAPS;
 const PATH = CAPS.filter(C => C.path !== undefined);
-export const exitAt = (x, z) => Math.hypot(x - EXIT.x, z - EXIT.z) < EXIT.R + 6;
+export const exitAt = (x, z) => (gates.main && Math.hypot(x - EXIT.x, z - EXIT.z) < EXIT.R + 6) || (gates.roots && Math.hypot(x - ROOTS.x, z - ROOTS.z) < ROOTS.R + 3);
 export const spawn = () => [CAPS[0].x, capTop(CAPS[0], CAPS[0].x, CAPS[0].z), CAPS[0].z];
 
 /* ---------- Les formes ---------- */
@@ -106,7 +116,7 @@ export const LOOK = {
   skyMid: '#6a4aa8', skyTop: '#f0d8ff',
 };
 
-export function create(scene, Q) {
+export function create(scene, Q, ctx = {}) {
   const live = { colliders: [] }, r = rng(31), up = new THREE.Vector3(0, 1, 0), q = new THREE.Quaternion(), s3 = new THREE.Vector3(), p3 = new THREE.Vector3(), m4 = new THREE.Matrix4();
   const sky = new THREE.Mesh(new THREE.SphereGeometry(8000, 32, 16), skyMaterial()); sky.renderOrder = -1; scene.add(sky); live.sky = sky;
   live.ground = createGround(scene, floorAt, (cx, cz, c) => Math.hypot(cx, cz) - c > R_CAVE + 400);
@@ -233,15 +243,19 @@ export function create(scene, Q) {
     }
     // l'Endormi respire ; de temps en temps, sa fente s'entrouvre
     sleeper.scale.set(1 + Math.sin(t * 0.4) * 0.03, 1 + Math.sin(t * 0.4) * 0.05, 1 + Math.sin(t * 0.4) * 0.03);
-    sleeper.userData.eye.scale.set(1, Math.max(0.05, Math.sin(t * 0.07) ** 40), 1);
+    sleeper.userData.eye.scale.set(1, sleeper.userData.awake ? 1 : Math.max(0.05, Math.sin(t * 0.07) ** 40), 1);
     // le chapeau du départ s'écrase et se regonfle sous un rebond
     if (squash) { squash.k += 0.016; const e = Math.exp(-squash.k * 5) * Math.sin(squash.k * 22) * squash.a; squash.m.scale.set(1 + e * 0.3, 1 - e, 1 + e * 0.3); if (squash.k > 1.5) { squash.m.scale.set(1, 1, 1); squash = null; } }
   };
   let squash = null;
   const start = spawn(), next = CAPS[1];
+  // l'histoire : la Veilleuse, l'encre des spores, l'Endormi, le choix (le réveiller, ou le chemin des racines)
+  const story = createStory(scene, { floorAt, caps: PATH, exit: EXIT, roots: ROOTS, gates, sleeper, lidY, ui: ctx.ui }), base = live.update;
+  live.colliders.push(...story.colliders);
   return Object.assign(live, {
     look: LOOK, terrain, start, camYaw: Math.atan2(start[0] - next.x, start[2] - next.z),
-    exitAt, killY: safe => Math.min(safe.y - 60, -60), maxFall: 30,
+    exitAt, killY: safe => Math.min(safe.y - 60, -60), maxFall: 30, interact: story.interact, story,
+    update(t, p) { base(t, p); story.update(t, p); },
     // l'arrivée : il rebondit deux fois sur le chapeau (qui s'écrase comme un trampoline), puis se pose
     bounces: [17, 8],
     onBounce(p, n) {

@@ -44,7 +44,13 @@ test('les Brumes se traversent à pied, d’île en île, jusqu’au Puits', asy
     }
   }
   const E = path.at(-1), [x, , z] = B.spawn();
+  assert.ok(!B.exitAt(E.x, E.z) && B.terrain(E.x, E.z).kind === 'ground', 'fermé, le Puits porte');
+  E.open = true;
   assert.ok(B.exitAt(E.x, E.z) && B.terrain(E.x, E.z).kind === 'void', 'le Puits s’ouvre au milieu de la dernière île');
+  E.open = false;
+  // un pont de côté ne porte qu'une fois encré
+  const S = B.bridges.find(b => b.sketch), mx = (S.a[0] + S.b[0]) / 2, mz = (S.a[1] + S.b[1]) / 2;
+  assert.strictEqual(B.terrain(mx, mz).kind, 'void'); S.inked = true; assert.strictEqual(B.terrain(mx, mz).kind, 'bridge'); S.inked = false;
   assert.strictEqual(B.terrain(x, z).kind, 'ground');
 });
 
@@ -65,7 +71,10 @@ test('la Forêt se descend de chapeau en chapeau jusqu’au sol, et le gouffre s
   for (const A of path) for (const B of path) if (B.y < A.y - 1) assert.ok(Math.hypot(A.x - B.x, A.z - B.z) > B.R + 3, 'un pied traverse un chapeau');
   const L = path.at(-1);
   assert.ok(L.y - F.floorAt(L.x, L.z) < 28, 'du dernier chapeau, on saute au sol');
-  assert.ok(F.exitAt(F.EXIT.x, F.EXIT.z) && F.terrain(F.EXIT.x, F.EXIT.z).kind === 'void', 'le gouffre s’ouvre');
+  assert.ok(!F.exitAt(F.EXIT.x, F.EXIT.z) && F.terrain(F.EXIT.x, F.EXIT.z).kind === 'ground', 'fermé, le gouffre porte');
+  F.gates.main = true; assert.ok(F.exitAt(F.EXIT.x, F.EXIT.z) && F.terrain(F.EXIT.x, F.EXIT.z).kind === 'void', 'le gouffre s’ouvre'); F.gates.main = false;
+  F.gates.roots = true; assert.ok(F.exitAt(F.ROOTS.x, F.ROOTS.z) && F.terrain(F.ROOTS.x, F.ROOTS.z).kind === 'void', 'le chemin des racines s’ouvre'); F.gates.roots = false;
+  assert.ok(Math.hypot(F.ROOTS.x, F.ROOTS.z) < F.R_CAVE - 220, 'le chemin des racines est dans la grotte');
   const [x, y, z] = F.spawn();
   assert.ok(Math.abs(F.terrain(x, z, y + 1).h - y) < 0.01, 'on part du haut du premier chapeau');
 });

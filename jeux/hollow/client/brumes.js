@@ -9,6 +9,7 @@ import * as THREE from 'three';
 import { fbm } from './terrain.js';
 import { ink, glowy, skyMaterial, U } from './ink.js';
 import { rng, paint, lump, tube, merge, cast, TAU } from './modelage.js';
+import { createStory } from './passeur.js';
 
 /* ---------- Le relief : des îles, des ponts ---------- */
 const ISLANDS = [], BRIDGES = [], HOLE = 18;
@@ -35,7 +36,8 @@ const ISLANDS = [], BRIDGES = [], HOLE = 18;
     BRIDGES.push({ a: a0, b: b0, ya: topAt(A, ...a0) ?? A.y, yb: topAt(B, ...b0) ?? B.y, w: 3.4, len: Math.hypot(b0[0] - a0[0], b0[1] - a0[1]) });
   };
   for (let i = 0; i + 1 < 30; i++) link(ISLANDS[i], ISLANDS[i + 1]);
-  for (const I of ISLANDS) if (I.side) link(ISLANDS[I.from], I);
+  // les ponts vers les îles de côté ne sont qu'une esquisse : il faut les encrer pour qu'ils portent
+  for (const I of ISLANDS) if (I.side) { link(ISLANDS[I.from], I); BRIDGES.at(-1).sketch = true; BRIDGES.at(-1).to = I; }
 }
 // le dessus d'une île en (x, z), ou null si on est hors de l'île (son bord ondule)
 function topAt(I, x, z) {
@@ -43,7 +45,7 @@ function topAt(I, x, z) {
   if (d > I.R * 1.25) return null;
   const th = Math.atan2(dz, dx), Rt = I.R * (1 + (fbm(Math.cos(th) * 2 + I.seed * 3.1, Math.sin(th) * 2) - 0.5) * 0.35);
   if (d > Rt) return null;
-  if (I.exit && d < HOLE) return null;
+  if (I.exit && d < HOLE && I.open) return null; // fermé, le Puits est un bouchon de brume sur lequel on marche
   return I.y + (1 - (d / Rt) ** 2) * I.R * 0.06 + (fbm(x * 0.05 + I.seed, z * 0.05) - 0.5) * 1.6;
 }
 function radiusAt(I, th) { return I.R * (1 + (fbm(Math.cos(th) * 2 + I.seed * 3.1, Math.sin(th) * 2) - 0.5) * 0.35); }
@@ -63,6 +65,7 @@ function deckAt(B, x, z) {
 export function terrain(x, z) {
   let h = -Infinity, kind = 'void';
   for (const it of GRID.get(Math.floor(x / CELL) + ',' + Math.floor(z / CELL)) || []) {
+    if (it.B?.sketch && !it.B.inked) continue; // un pont en esquisse ne porte pas
     const v = it.I ? topAt(it.I, x, z) : deckAt(it.B, x, z);
     if (v !== null && v > h) { h = v; kind = it.I ? 'ground' : 'bridge'; }
   }
@@ -70,7 +73,8 @@ export function terrain(x, z) {
 }
 export const islands = ISLANDS, bridges = BRIDGES;
 const EXIT = ISLANDS[29];
-export const exitAt = (x, z) => Math.hypot(x - EXIT.x, z - EXIT.z) < HOLE;
+export const exitAt = (x, z) => EXIT.open && Math.hypot(x - EXIT.x, z - EXIT.z) < HOLE;
+export { EXIT, HOLE };
 export const spawn = () => [ISLANDS[0].x, topAt(ISLANDS[0], ISLANDS[0].x, ISLANDS[0].z), ISLANDS[0].z];
 
 /* ---------- Les formes ---------- */
@@ -140,13 +144,14 @@ export const LOOK = {
   skyMid: '#d6dce8', skyTop: '#f4f6fa',
 };
 
-export function create(scene, Q) {
+export function create(scene, Q, ctx = {}) {
   const live = { colliders: [], islands: [] }, r = rng(77), up = new THREE.Vector3(0, 1, 0), q = new THREE.Quaternion(), s3 = new THREE.Vector3(), p3 = new THREE.Vector3(), m4 = new THREE.Matrix4();
   const sky = new THREE.Mesh(new THREE.SphereGeometry(8000, 32, 16), skyMaterial()); sky.renderOrder = -1; scene.add(sky); live.sky = sky;
   const groundMat = ink({ kind: 'terrain', vertexColors: false, side: THREE.DoubleSide });
   // les îles du chemin et des détours
   for (const I of ISLANDS) scene.add(cast(new THREE.Mesh(islandGeometry(I), groundMat)));
-  for (const B of BRIDGES) scene.add(cast(new THREE.Mesh(bridgeGeometry(B), ink({ line: 0.8 }))));
+  // chaque pont garde sa matière : celle d'un pont en esquisse s'efface jusqu'à ce qu'on l'encre
+  for (const B of BRIDGES) { B.mat = ink({ line: 0.8, fade: B.sketch && !B.inked ? 1 : 0 }); scene.add(cast(new THREE.Mesh(bridgeGeometry(B), B.mat))); }
   // les îles lointaines, inaccessibles : à toutes les hauteurs, partout
   const far = [];
   for (let k = 0; k < Q.islands * 1.4; k++) {
@@ -257,8 +262,12 @@ export function create(scene, Q) {
     }
   };
   const start = spawn(), next = ISLANDS[1];
+  // l'histoire : le Passeur, l'encre rouge des trompettes, les ponts à encrer, les trois Lanternes, le Puits
+  const story = createStory(scene, { islands: ISLANDS, bridges: BRIDGES, exit: EXIT, hole: HOLE, horns, topAt, ui: ctx.ui }), base = live.update;
+  live.colliders.push(...story.colliders);
   return Object.assign(live, {
     look: LOOK, terrain, start, camYaw: Math.atan2(start[0] - next.x, start[2] - next.z),
-    exitAt, killY: safe => safe.y - 160,
+    exitAt, killY: safe => safe.y - 160, interact: story.interact, story,
+    update(t, p) { base(t, p); story.update(t, p); },
   });
 }
