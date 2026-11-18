@@ -81,6 +81,12 @@
     #mark::after { content: attr(data-d); position: absolute; left: 50%; top: 26px; transform: rotate(-45deg) translateX(-30%); font: 700 1rem Caveat, cursive; color: #fff; text-shadow: 0 1px 2px #000; white-space: nowrap; }
     #mark.off::after { display: none; } /* hors champ, la flèche seule (le texte tournerait avec elle) */
     #mark.off { border-radius: 0 50% 50% 50%; transform: rotate(calc(var(--a) + 135deg)); }
+    #menu-btn { position: fixed; left: 46px; top: 12px; font: 700 1.2rem Caveat, cursive; padding: 1px 10px; background: rgba(244, 239, 228, .8); border: 2px solid #1a1828; border-radius: 6px; color: #1a1828; cursor: pointer; z-index: 6; }
+    #menu { position: fixed; inset: 0; display: grid; place-content: center; justify-items: center; gap: 10px; background: rgba(241, 234, 217, .95); z-index: 11; text-align: center; }
+    #menu[hidden] { display: none; }
+    #menu h2 { margin: 0 0 10px; font: italic 700 3rem 'Cormorant Garamond', serif; }
+    #menu button { font: 700 1.5rem Caveat, cursive; padding: 6px 22px; min-width: 300px; background: transparent; border: 2px solid #1a1828; border-radius: 6px; cursor: pointer; color: #1a1828; }
+    #menu small { font: 1.05rem Caveat, cursive; opacity: .65; margin-bottom: 8px; }
     a.back { position: fixed; left: 16px; top: 14px; color: inherit; text-decoration: none; font-size: 1.4rem; opacity: .6; }
   </style>
 </head>
@@ -100,10 +106,13 @@
   <section id="fin" hidden aria-live="polite"></section>
   <svg width="0" height="0" style="position:absolute"><filter id="bavure"><feTurbulence type="fractalNoise" baseFrequency=".035" numOctaves="2" seed="4"/><feDisplacementMap in="SourceGraphic" scale="3.5"/></filter></svg>
   <a class="back" href="/" title="Retour au Cercle">←</a>
+  <button id="menu-btn" title="Menu (M)">Menu</button>
+  <section id="menu" hidden><h2>Menu</h2><button id="menu-close">Reprendre</button><button id="menu-reset">Recommencer le voyage à zéro</button><small>les histoires, les fins et la strate atteinte sont oubliées ; le carnet est gardé</small><button id="menu-wipe">Tout effacer, carnet compris</button><small>M ouvre et ferme ce menu</small></section>
   <section id="title">
     <h1>THE HOLLOW</h1>
     <p>Strate 01 — Les Jardins suspendus</p>
     <button id="resume" hidden></button>
+    <button id="fresh" hidden>Nouveau voyage (recommencer à zéro)</button>
     <small>Cliquer pour entrer · <kbd>ZQSD</kbd> marcher · <kbd>Maj</kbd> courir · <kbd>Espace</kbd> sauter · souris : regarder · <kbd>E</kbd> agir · <kbd>C</kbd> carnet · <kbd>R</kbd> tout en couleur</small>
   </section>
 </body>

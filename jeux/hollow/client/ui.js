@@ -56,4 +56,6 @@ export function createUI(camera, canvas) {
   addEventListener('keydown', e => { if (e.code === 'KeyC') ui.toggleBook(); });
   return ui;
 }
-export const save = { load, keep };
+// recommencer à zéro : toutes les histoires et la strate atteinte oubliées (et le carnet aussi, si on le demande)
+const reset = (carnet = false) => { for (const k of ['hollow-jardins', 'hollow-brumes', 'hollow-foret', 'hollow-abysses', 'hollow-terres', 'hollow-cite', 'hollow-strate', 'hollow-fin', ...(carnet ? ['hollow-carnet'] : [])]) { try { localStorage.removeItem(k); } catch { /* stockage bloqué */ } } };
+export const save = { load, keep, reset };

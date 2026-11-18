@@ -15,7 +15,7 @@ export const U = {
   uSunDir: { value: new THREE.Vector3(0.3, 1, 0.2).normalize() },
   uSunCol: { value: new THREE.Color('#fff4dc') }, uShadowCol: { value: new THREE.Color('#4f6fa8') },
   uFogCol: { value: new THREE.Color('#cdeee6') }, uFogDensity: { value: 0.00085 },
-  uReveal: { value: null }, uRevealRect: { value: new THREE.Vector4(-2500, -2500, 5000, 5000) }, uRevealAll: { value: 0 },
+  uReveal: { value: null }, uRevealRect: { value: new THREE.Vector4(-2500, -2500, 5000, 5000) }, uRevealAll: { value: 0 }, uGrey: { value: 0 }, // uGrey : tout au crayon, décoloré (la page déchirée)
   uShadowMap: { value: null }, uShadowMatrix: { value: new THREE.Matrix4() }, uShadowOn: { value: 0 },
   // la palette du sol de la strate : herbe sombre, herbe claire, nappes, roche claire, roche sombre, mousse, fleurs (2)
   uPal: { value: [new THREE.Vector3(0.16, 0.42, 0.3), new THREE.Vector3(0.36, 0.64, 0.36), new THREE.Vector3(0.24, 0.6, 0.56), new THREE.Vector3(0.64, 0.68, 0.7), new THREE.Vector3(0.44, 0.48, 0.56), new THREE.Vector3(0.2, 0.48, 0.34), new THREE.Vector3(1, 0.55, 0.72), new THREE.Vector3(1, 0.9, 0.4)] },
@@ -38,7 +38,7 @@ export function setLook(L) {
 }
 
 const COMMON = /* glsl */ `
-uniform float uTime, uBoil, uFogDensity, uShadowOn, uRevealAll;
+uniform float uTime, uBoil, uFogDensity, uShadowOn, uRevealAll, uGrey;
 uniform vec3 uSunDir, uSunCol, uShadowCol, uFogCol;
 uniform sampler2D uReveal, uShadowMap; uniform vec4 uRevealRect; uniform mat4 uShadowMatrix;
 uniform vec3 uPal[8], uSkyMid, uSkyTop, uHero; uniform float uReact, uAbyssY; uniform vec2 uWater;
@@ -162,7 +162,7 @@ void main() {
   // la révélation : esquisse au crayon tant qu'on n'y est pas allé, la couleur s'y répand comme une aquarelle
   vec2 ruv = (vW.xz - uRevealRect.xy) / uRevealRect.zw;
   float rv = max(texture(uReveal, ruv).r, uRevealAll) + (vnoise(vW.xz * .12) - .5) * .4 + (vnoise(vW.xz * .9) - .5) * .12;
-  float shown = smoothstep(.42, .5, rv) * (1. - uFade); // uFade : ce qui n'est pas (encore, ou plus) encré reste au crayon
+  float shown = smoothstep(.42, .5, rv) * (1. - uFade) * (1. - uGrey); // uFade : ce qui n'est pas (encore, ou plus) encré reste au crayon
   float lum = dot(col, vec3(.3, .59, .11));
   vec3 paper = vec3(.94, .91, .85), lead = vec3(.27, .26, .31);
   vec3 sketch = mix(paper, lead, clamp((1. - lum) * .75 - .1, 0., 1.));

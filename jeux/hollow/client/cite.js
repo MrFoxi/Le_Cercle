@@ -193,7 +193,7 @@ export function create(scene, Q, ctx = {}) {
     look: LOOK, terrain, start, camYaw: Math.atan2(start[0] - NODES[0][0], start[2] - NODES[0][2]),
     hint: 'Les anneaux dorment. Leur nœud lumineux se réveille au pinceau (E).',
     // une fois la fin choisie, le vide du centre ramène tout en haut (next : la strate où l'on tombe)
-    exitAt: (x, z) => story.finished && polyD(x, z, rotOf(3)) < R0 && Math.hypot(x, z) > PLAT.R, next: () => 1, onExit: story.onExit, exitDrop: 12,
+    exitAt: (x, z) => story.finished && polyD(x, z, rotOf(3)) < R0 && Math.hypot(x, z) > PLAT.R, next: () => 1, exitDrop: 12,
     killY: safe => safe.y - 50, maxFall: 15, interact: story.interact, story, leave: story.leave,
     update(t, p) { base(t, p); story.update(t, p); voidFx.update(t); },
   });

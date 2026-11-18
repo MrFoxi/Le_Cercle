@@ -48,7 +48,7 @@ export function createStory(scene, { nodes, nodeMeshes, rings, awake, plat, ramp
   const LINES = {
     first: () => ['Te voilà.', 'Je t’attendais. Je les attends tous.', ...memory(), 'Ici, il y a le dessin de chaque voyageur. La Glaneuse, le Passeur, la Veilleuse, le Plongeur, la Greffée…', 'Et le tien. Il est inachevé.', 'Achève-le, et tu remonteras tout en haut, tailler les Jardins. C’est ce qu’a fait celui d’avant.', 'Ou déchire-le. Le Hollow t’oubliera.'],
     achever: ['…', 'Il te ressemble. Il a toujours eu ton manteau.', 'Le Hollow est à toi : chaque strate brille, plus besoin d’encre.', 'Pour remonter, saute dans le vide, là, au bord des Archives : il te ramène tout en haut. Ou monte strate par strate par les colonnes de lumière.'],
-    dechirer: ['…', 'Bien.', 'Personne ne t’attendra plus.', 'Saute dans le vide, au bord des Archives : un autre voyage commencera, tout en haut.'],
+    dechirer: ['…', 'Bien.', 'Personne ne t’attendra plus. Tout redevient crayon.', 'Saute dans le vide, au bord des Archives : il te ramène tout en haut, dans un Hollow décoloré. Ou remonte par les colonnes grises.'],
   };
   let queue = [], qT = 0, last = 0, near = null, end = null;
   const talk = (lines, pages = {}) => { if (!queue.length) qT = 0; queue.push(...lines.map((l, k) => [l, pages[k]])); };
@@ -56,15 +56,13 @@ export function createStory(scene, { nodes, nodeMeshes, rings, awake, plat, ramp
   // l'écran de fin : un titre écrit à l'encre, deux lignes, et de quoi recommencer (le carnet est gardé)
   function showEnd(kind) {
     const T = kind === 'achever'
-      ? ['Le Jardinier', 'Tu as achevé ton dessin. Tout en haut, sur la crête des Jardins, la silhouette immense qui regarde descendre les manteaux, c’est toi, maintenant.', 'Le Hollow brille de tous ses feux. Pour remonter : saute dans le vide, au bord des Archives (il te ramène aux Jardins), ou entre dans la colonne de lumière dorée à l’arrivée de chaque strate pour monter d’un étage.']
-      : ['La page déchirée', 'Le Hollow continue, sans toi. Plus rien ne se souvient de ton passage.', 'Pour recommencer : saute dans le vide, au bord des Archives (ou appuie sur « Nouveau voyage »). Un voyage neuf commence tout en haut ; ton carnet, lui, se souvient.'];
-    fin.innerHTML = `<small>Fin</small><h2>${T[0]}</h2><p>${T[1]}</p><p>${T[2]}</p><div><button id="fin-stay">Continuer</button><button id="fin-again">${kind === 'achever' ? 'Recommencer un voyage neuf' : 'Nouveau voyage'}</button></div>`;
+      ? ['Le Jardinier', 'Tu as achevé ton dessin. Tout en haut, sur la crête des Jardins, la silhouette immense qui regarde descendre les manteaux, c’est toi, maintenant.', 'Le Hollow brille de tous ses feux. Pour remonter : saute dans le vide, au bord des Archives (il te ramène aux Jardins), ou entre dans la colonne dorée à l’arrivée de chaque strate. Pour un voyage neuf : Menu (en haut à gauche, ou M) → Recommencer à zéro.']
+      : ['La page déchirée', 'Le Hollow continue, sans toi : tout est redevenu crayon, décoloré. Plus rien ne se souvient de ton passage.', 'Pour remonter : saute dans le vide, au bord des Archives (il te ramène aux Jardins), ou entre dans la colonne grise à l’arrivée de chaque strate. Pour un voyage neuf : Menu (en haut à gauche, ou M) → Recommencer à zéro.'];
+    fin.innerHTML = `<small>Fin</small><h2>${T[0]}</h2><p>${T[1]}</p><p>${T[2]}</p><div><button id="fin-stay">Continuer</button><button id="fin-again">Recommencer à zéro</button></div>`;
     fin.hidden = false; document.exitPointerLock?.();
-    fin.querySelector('#fin-again').onclick = () => { fresh(); location.href = location.pathname; };
+    fin.querySelector('#fin-again').onclick = () => { if (confirm('Recommencer le voyage à zéro ? Le carnet est gardé.')) { save.reset(false); location.href = location.pathname; } };
     fin.querySelector('#fin-stay').onclick = () => { fin.hidden = true; };
   }
-  // un voyage neuf : toutes les histoires oubliées, sauf le carnet
-  const fresh = () => { for (const k of ['hollow-jardins', 'hollow-brumes', 'hollow-foret', 'hollow-abysses', 'hollow-terres', 'hollow-cite', 'hollow-strate', 'hollow-fin']) localStorage.removeItem(k); };
   // ce qu'il faut faire maintenant ; la balise dorée sur l'Archiviste jusqu'au choix
   const mark = beacon(scene);
   function goal(p) {
@@ -74,7 +72,7 @@ export function createStory(scene, { nodes, nodeMeshes, rings, awake, plat, ramp
     if (!st.told) return ['Écoute l’Archiviste', arch.position];
     if (!st.choice) return ['Choisis ta fin : achever ton dessin (pupitre de gauche, E) · ou déchirer la page (pupitre de droite, E)', lecterns[0].position];
     const a = Math.atan2(p.z, p.x);
-    return [st.choice === 'achever' ? 'Saute dans le vide, au bord des Archives : il te ramène tout en haut, dans les Jardins en couleur' : 'Saute dans le vide, au bord des Archives, pour commencer un nouveau voyage', new THREE.Vector3(Math.cos(a) * (plat.R + 20), 0, Math.sin(a) * (plat.R + 20))];
+    return [st.choice === 'achever' ? 'Saute dans le vide, au bord des Archives : il te ramène tout en haut, dans les Jardins en couleur' : 'Saute dans le vide, au bord des Archives : il te ramène tout en haut, dans un Hollow décoloré', new THREE.Vector3(Math.cos(a) * (plat.R + 20), 0, Math.sin(a) * (plat.R + 20))];
   }
   function nearest(p) {
     const c = [];
@@ -86,10 +84,9 @@ export function createStory(scene, { nodes, nodeMeshes, rings, awake, plat, ramp
   return {
     colliders: [[ax, az, 0.8], ...lecterns.map(m => [m.position.x, m.position.z, 0.9])],
     debug: { st, arch, lecterns, awake, get end() { return end; } },
-    leave() { if (save.load('hollow-fin', null) !== 'achever') U.uRevealAll.value = 0; fin.hidden = true; },
+    leave() { fin.hidden = true; }, // les couleurs de la fin : main.js les pose en entrant dans chaque strate
     // sauter dans le vide après la fin : retour tout en haut (un voyage neuf si la page est déchirée)
     get finished() { return !!st.choice; },
-    onExit() { if (st.choice === 'dechirer') fresh(); },
     interact() {
       if (!near) return;
       const [, what] = near;
@@ -118,7 +115,7 @@ export function createStory(scene, { nodes, nodeMeshes, rings, awake, plat, ramp
       if (end) {
         end.t += dt;
         if (end.kind === 'achever') { U.uRevealAll.value = Math.min(1, end.t / 4); page.material.uniforms.uGlow.value = 0.4 + end.t * 0.5; rings.forEach(m => { m.rotation.z += dt * 0.6; }); }
-        else { const k = Math.min(1, end.t / 6); page.scale.set(1, Math.max(0.02, 1 - k * 1.5), 1); scene.traverse(o => { const u = o.material?.uniforms?.uFade; if (u && o !== hero?.rig.g && !hero?.rig.g.getObjectById(o.id)) u.value = Math.max(u.value, k); }); }
+        else { const k = Math.min(1, end.t / 6); page.scale.set(1, Math.max(0.02, 1 - k * 1.5), 1); U.uGrey.value = k; } // tout redevient crayon
         if (end.t > 10 && !queue.length && qT < 0.5 && fin.hidden && !end.shown) { end.shown = true; showEnd(end.kind); }
       }
       if (!end || end.shown) { const [txt, at] = goal(p); ui?.goal(txt, at); } else ui?.goal(null);

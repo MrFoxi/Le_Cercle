@@ -5,7 +5,7 @@ import { U, createPipeline, setLook, ink, glowy } from './ink.js';
 import { paint, lump } from './modelage.js';
 import { createHero } from './hero.js';
 import { createFall } from './chute.js';
-import { createUI } from './ui.js';
+import { createUI, save as store } from './ui.js';
 
 // les strates, de haut en bas ; celles qui n'ont pas encore de module arrivent plus tard
 const STRATES = [
@@ -58,32 +58,35 @@ async function enter(n, place = true) {
   scene = new THREE.Scene(); cur = S;
   ui.clear(); world = mod.create(scene, Q, { ui, hero });
   seen.fill(0); revealTex.needsUpdate = true; reveal(world.start[0], world.start[2], 70);
-  if (place) { setLook(world.look); hero.enter(scene, world); U.uRevealAll.value = gardener() ? 1 : 0; }
-  column = motes = null; if (gardener()) celebrate(n); // la fête du voyage achevé (sinon, rien)
+  if (place) { setLook(world.look); hero.enter(scene, world); showEnd(); }
+  column = motes = null; if (ending()) celebrate(n); // la fin choisie se voit partout (sinon, rien)
   if (world.hint) setTimeout(() => toast(world.hint), 4000); // ce qui change dans cette strate (la nage, par exemple)
   save(n);
   document.title = `The Hollow · Strate ${String(n).padStart(2, '0')}`;
 }
-// le voyage achevé (« achever » à la fin de la Cité) : le Hollow brille de tous ses feux, plus besoin d'encre ; une fête
-// de lumière autour du voyageur, et à l'arrivée de chaque strate (sauf la première) une colonne dorée qui fait remonter
-const gardener = () => { try { return JSON.parse(localStorage.getItem('hollow-fin')) === 'achever'; } catch { return false; } };
+// la fin choisie à la Cité se voit partout quand on remonte : « achever », le Hollow brille de tous ses feux (plus besoin
+// d'encre), une pluie de lumière dorée ; « déchirer », tout est redevenu crayon, décoloré, et il tombe des cendres. Dans
+// les deux cas, une colonne (dorée ou grise) à l'arrivée de chaque strate (sauf la première) fait remonter d'un étage.
+const ending = () => store.load('hollow-fin', null);
+const showEnd = () => { const e = ending(); U.uRevealAll.value = e === 'achever' ? 1 : 0; U.uGrey.value = e === 'dechirer' ? 1 : 0; };
 let column = null, motes = null;
 function celebrate(n) {
   const [x0, , z0] = world.start, x = x0 + 14, z = z0, y = world.swim ? world.start[1] - 40 : world.terrain(x, z).h;
+  const gold = ending() === 'achever', c1 = gold ? '#ffd860' : '#c8c8d0', c2 = gold ? '#ffe8a0' : '#e8e8ee';
   if (n > 1) {
     const g = new THREE.Group(); g.position.set(x, y, z);
-    g.add(new THREE.Mesh(new THREE.CylinderGeometry(2.2, 2.2, 260, 24, 1, true).translate(0, 130, 0), glowy({ color: '#ffd860', alpha: 0.45, add: true, soft: 1 })));
-    g.add(new THREE.Mesh(new THREE.RingGeometry(2.2, 3.2, 40).rotateX(-Math.PI / 2).translate(0, 0.1, 0), glowy({ color: '#ffe8a0', alpha: 0.8, add: true, soft: 0.2 })));
+    g.add(new THREE.Mesh(new THREE.CylinderGeometry(2.2, 2.2, 260, 24, 1, true).translate(0, 130, 0), glowy({ color: c1, alpha: 0.45, add: true, soft: 1 })));
+    g.add(new THREE.Mesh(new THREE.RingGeometry(2.2, 3.2, 40).rotateX(-Math.PI / 2).translate(0, 0.1, 0), glowy({ color: c2, alpha: 0.8, add: true, soft: 0.2 })));
     scene.add(g); column = { g, armed: false, n };
   } else column = null;
-  motes = new THREE.InstancedMesh(new THREE.PlaneGeometry(0.22, 0.22), glowy({ color: '#ffd860', alpha: 0.9, add: true, soft: 0.2 }), 260); motes.frustumCulled = false; scene.add(motes);
+  motes = new THREE.InstancedMesh(new THREE.PlaneGeometry(0.22, 0.22), glowy({ color: gold ? '#ffd860' : '#5a5a64', alpha: 0.9, add: gold, soft: 0.2 }), 260); motes.userData.up = gold ? 1 : -1; // la lumière monte, les cendres tombent motes.frustumCulled = false; scene.add(motes);
   motes.userData = Array.from({ length: 260 }, () => [Math.random() * 80 - 40, Math.random() * 30, Math.random() * 80 - 40, Math.random() * 6.28]);
 }
 const m4 = new THREE.Matrix4(), q0 = new THREE.Quaternion(), s1 = new THREE.Vector3(), p1 = new THREE.Vector3();
 function party(t) {
   if (!motes) return;
   const h = hero.state.p;
-  motes.userData.forEach(([x, y, z, ph], i) => motes.setMatrixAt(i, m4.compose(p1.set(h.x + x + Math.sin(t * 0.3 + ph) * 3, h.y + ((y + t * 1.2) % 30) - 4, h.z + z + Math.cos(t * 0.25 + ph) * 3), q0.setFromEuler(new THREE.Euler(0, t + ph, 0)), s1.setScalar(0.6 + Math.sin(t * 3 + ph) * 0.4))));
+  motes.userData.forEach(([x, y, z, ph], i) => motes.setMatrixAt(i, m4.compose(p1.set(h.x + x + Math.sin(t * 0.3 + ph) * 3, h.y + ((((y + t * 1.2 * motes.userData.up) % 30) + 30) % 30) - 4, h.z + z + Math.cos(t * 0.25 + ph) * 3), q0.setFromEuler(new THREE.Euler(0, t + ph, 0)), s1.setScalar(0.6 + Math.sin(t * 3 + ph) * 0.4))));
   motes.instanceMatrix.needsUpdate = true;
   // la colonne : il faut d'abord s'en éloigner (on arrive à côté), puis y entrer
   if (column && !falling && !fall.active) {
@@ -108,7 +111,7 @@ function travel(next, up) {
     scene.remove(hero.rig.g);
     let built = null;
     // à la fin de la chute (ou dès que la strate est prête, si elle a tardé), on pose le voyageur à son départ
-    fall.start(from, mod.LOOK, next.n, hero, () => built.then(() => { setLook(world.look); hero.enter(scene, world, !up); U.uRevealAll.value = gardener() ? 1 : 0; falling = false; }), up);
+    fall.start(from, mod.LOOK, next.n, hero, () => built.then(() => { setLook(world.look); hero.enter(scene, world, !up); showEnd(); falling = false; }), up);
     // la strate suivante se construit pendant la chute
     built = new Promise(res => setTimeout(() => enter(next.n, false).then(res), 300));
   });
@@ -172,12 +175,25 @@ addEventListener('keydown', e => {
 addEventListener('keydown', e => { if (e.code === 'KeyE' && !fall.active && !falling && world?.interact?.(hero.state.p) === 'encre') hero.play('ink'); });
 // R : tout montrer en couleur (pour comparer avec l'esquisse)
 addEventListener('keydown', e => { if (e.code === 'KeyR' && !fall.active) U.uRevealAll.value = U.uRevealAll.value ? 0 : 1; });
+// le menu (bouton en haut à gauche, ou M) : reprendre, recommencer à zéro (le carnet gardé, ou tout effacé)
+const menu = document.getElementById('menu');
+const toggleMenu = on => { menu.hidden = !(on ?? menu.hidden); if (!menu.hidden) document.exitPointerLock?.(); };
+document.getElementById('menu-btn').onclick = e => { e.stopPropagation(); toggleMenu(); };
+addEventListener('keydown', e => { if (e.code === 'KeyM') toggleMenu(); });
+menu.addEventListener('click', e => e.stopPropagation());
+document.getElementById('menu-close').onclick = () => toggleMenu(false);
+for (const [id, carnet] of [['menu-reset', false], ['menu-wipe', true]]) document.getElementById(id).onclick = () => {
+  if (!confirm(carnet ? 'Tout effacer, y compris les pages du carnet ? Le voyage recommencera tout en haut.' : 'Recommencer le voyage à zéro ? Les histoires et les fins seront oubliées ; le carnet est gardé.')) return;
+  store.reset(carnet); location.href = location.pathname;
+};
 if (params.has('debug')) window.hollow = { hero, U, reveal, camera, enter, descend, arrive: () => hero.enter(scene, world, true), get world() { return world; }, set: (x, z) => { hero.state.p.set(x, 2000, z); hero.state.v.set(0, 0, 0); } };
 
 // l'écran-titre : commencer en haut, ou reprendre à la strate la plus profonde atteinte
 const title = document.getElementById('title'), deep = Math.min(saved(), STRATES.filter(s => s.load).length);
 const first = Math.min(+params.get('strate') || 1, STRATES.filter(s => s.load).length);
 if (deep > 1) { const b = document.getElementById('resume'); b.hidden = false; b.textContent = `Reprendre : Strate ${String(deep).padStart(2, '0')} — ${STRATES[deep - 1].name}`; b.onclick = e => { e.stopPropagation(); title.classList.add('gone'); enter(deep); }; }
+// une partie existe : on peut aussi tout recommencer, dès l'écran-titre
+if (deep > 1 || ending()) { const b = document.getElementById('fresh'); b.hidden = false; b.onclick = e => { e.stopPropagation(); if (confirm('Recommencer le voyage à zéro ? Les histoires et les fins seront oubliées ; le carnet est gardé.')) { store.reset(false); location.href = location.pathname; } }; }
 title.addEventListener('click', () => { title.classList.add('gone'); canvas.requestPointerLock?.(); });
 await enter(first);
 
