@@ -88,7 +88,7 @@ export function createStory(scene, { islands, bridges, exit, hole, horns, topAt,
   }
   return {
     colliders: [[passeur.position.x, passeur.position.z, 0.6], [own.g.position.x, own.g.position.z, 0.3], ...lamps.map(L => [L.g.position.x, L.g.position.z, 0.3])],
-    debug: { passeur, own, lamps, marks, st },
+    debug: { passeur, own, lamps, marks, st, horns, islands, bridges },
     interact() {
       if (!near) return;
       const [, what] = near;

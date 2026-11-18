@@ -267,7 +267,7 @@ export function create(scene, Q, ctx = {}) {
   live.colliders.push(...story.colliders);
   return Object.assign(live, {
     look: LOOK, terrain, start, camYaw: Math.atan2(start[0] - next.x, start[2] - next.z),
-    exitAt, killY: safe => safe.y - 160, interact: story.interact, story,
+    exitAt, killY: safe => safe.y - 160, maxFall: 40, interact: story.interact, story, // tomber de plus de 40 m (d'une île à une autre) ramène au dernier appui
     update(t, p) { base(t, p); story.update(t, p); },
   });
 }

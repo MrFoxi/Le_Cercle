@@ -142,7 +142,16 @@ export function createHero(camera, dom) {
     if (st.ground && has('Space')) { st.v.y = JUMP; st.ground = false; }
     // pas à pas : une falaise arrête, une pente se monte ; on glisse le long de l'obstacle
     const tryMove = (nx, nz) => { const h = floorAt(nx, nz, st.p.y + STEP_UP + 0.05); return !(st.ground && h > st.p.y + STEP_UP) && !(!st.ground && h > st.p.y + 0.2) && !blocked(nx, nz); };
-    const nx = st.p.x + st.v.x * dt, nz = st.p.z + st.v.z * dt;
+    // un obstacle rond (tronc, trompette, pied de champignon) : on est repoussé sur son bord, donc on glisse autour
+    const pushOut = (x, z) => {
+      for (const [cx, cz, r, top = Infinity] of world.colliders) {
+        if (st.p.y >= top) continue;
+        const dx = x - cx, dz = z - cz, m = r + 0.32, d2 = dx * dx + dz * dz;
+        if (d2 < m * m) { const d = Math.sqrt(d2) || 1e-4; x = cx + (dx / d) * m; z = cz + (dz / d) * m; }
+      }
+      return [x, z];
+    };
+    const [nx, nz] = pushOut(st.p.x + st.v.x * dt, st.p.z + st.v.z * dt);
     if (tryMove(nx, nz)) { st.p.x = nx; st.p.z = nz; }
     else if (tryMove(nx, st.p.z)) { st.p.x = nx; st.v.z = 0; }
     else if (tryMove(st.p.x, nz)) { st.p.z = nz; st.v.x = 0; }

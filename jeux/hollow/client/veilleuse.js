@@ -50,7 +50,8 @@ export function createStory(scene, { floorAt, caps, exit, roots, gates, sleeper,
   const sporeG = merge(Array.from({ length: 9 }, (_, k) => lump(0.18 + r() * 0.12, { detail: 1, seed: k }).translate((r() - 0.5) * 0.8, r() * 0.9, (r() - 0.5) * 0.8)));
   const spots = [];
   for (let k = 0; k < caps.length; k += 2) { const C = caps[k], a = r() * TAU, d = C.R * 0.5; spots.push([C.x + Math.cos(a) * d, C.y + C.dome * 0.7, C.z + Math.sin(a) * d]); }
-  for (let k = 0; k < 6; k++) { const a = k * 1.1, x = sleeper.position.x - 120 + Math.cos(a) * 70, z = sleeper.position.z + 80 + Math.sin(a) * 70; spots.push([x, floorAt(x, z), z]); }
+  // au pied des géants, autour de l'Endormi (jamais dans le gouffre ni le chemin des racines)
+  for (let k = 0, n = 0; k < 6 && n < 60; n++) { const a = n * 1.1, x = sleeper.position.x - 60 + Math.cos(a) * (70 + n), z = sleeper.position.z + 60 + Math.sin(a) * (70 + n); if (floorAt(x, z) < -100 || Math.hypot(x - exit.x, z - exit.z) < exit.R + 25) continue; spots.push([x, floorAt(x, z), z]); k++; }
   const clusters = spots.map((p, i) => { const m = new THREE.Mesh(sporeG, sporeMat); m.position.set(p[0], p[1] + 0.6, p[2]); m.visible = !st.spores.includes(i); scene.add(m); return { m, i }; });
 
   // les treillis de racines sur les deux passages fermés ; une colonne de spores marque le chemin des racines ouvert
@@ -61,9 +62,12 @@ export function createStory(scene, { floorAt, caps, exit, roots, gates, sleeper,
   };
   const lidMain = weave(exit, 30), lidRoots = weave(roots, 14);
   lidMain.visible = !gates.main; lidRoots.visible = !gates.roots;
-  const arch = cast(new THREE.Mesh(merge(Array.from({ length: 7 }, (_, k) => { const a = (k / 7) * Math.PI - Math.PI / 2 + 0.3; return paint(tube([[roots.x + Math.cos(a) * 22, lidY(roots) - 2, roots.z + Math.sin(a) * 22], [roots.x + Math.cos(a) * 10, lidY(roots) + 14, roots.z + Math.sin(a) * 10], [roots.x - Math.cos(a) * 18, lidY(roots) - 2, roots.z - Math.sin(a) * 18]], 1.6, 0.8, 7, 16), '#5a4a7a', '#2a1a48'); })), ink({ line: 1 })));
+  const arch = cast(new THREE.Mesh(merge(Array.from({ length: 7 }, (_, k) => { const a = (k / 7) * Math.PI - Math.PI / 2 + 0.3; return paint(tube([[roots.x + Math.cos(a) * 22, lidY(roots) - 2, roots.z + Math.sin(a) * 22], [roots.x + Math.cos(a) * 10, lidY(roots) + 14, roots.z + Math.sin(a) * 10], [roots.x - Math.cos(a) * 18, lidY(roots) - 2, roots.z - Math.sin(a) * 18]], 1.6, 0.8, 7, 16), '#5a4a7a', '#2a1a48'); })), ink({ line: 1, glow: 0.25 })));
   scene.add(arch);
-  const column = new THREE.Mesh(new THREE.CylinderGeometry(6, 10, 260, 20, 1, true), glowy({ color: '#7af0ff', alpha: 0.18, add: true })); column.position.set(roots.x, lidY(roots) + 120, roots.z); column.visible = gates.roots; scene.add(column);
+  const column = new THREE.Mesh(new THREE.CylinderGeometry(6, 10, 260, 20, 1, true), glowy({ color: '#7af0ff', alpha: 0.4, add: true })); column.position.set(roots.x, lidY(roots) + 120, roots.z);
+  // des spores cyan qui dansent sous l'arche, et l'arche qui luit un peu : on la trouve dans le noir
+  const motes = new THREE.Mesh(merge(Array.from({ length: 40 }, (_, k) => lump(0.25, { detail: 1, seed: k }).translate((r() - 0.5) * 30, 1 + r() * 14, (r() - 0.5) * 30))), ink({ glow: 2, pulse: 1, color: '#7af0ff', vertexColors: false }));
+  motes.position.set(roots.x, lidY(roots), roots.z); motes.visible = gates.roots; scene.add(motes); column.visible = gates.roots; scene.add(column);
 
   const LINES = {
     first: ['Chut… Il dort. Il ne doit pas se réveiller.', 'Je chante pour lui depuis… je ne sais plus. Le manteau que je portais est devenu trop grand.', 'Sous lui, il y a le passage. Le seul. Enfin… presque le seul.'],
@@ -86,7 +90,7 @@ export function createStory(scene, { floorAt, caps, exit, roots, gates, sleeper,
   }
   return {
     colliders: [[vx, vz, 1.6]],
-    debug: { girl, clusters, st, sleeper },
+    debug: { girl, clusters, st, sleeper, caps, roots, exit },
     interact() {
       if (!near) return;
       const [, what] = near;
@@ -107,7 +111,7 @@ export function createStory(scene, { floorAt, caps, exit, roots, gates, sleeper,
     update(t, p) {
       const dt = Math.min(0.1, last ? t - last : 0.016); last = t;
       if (!st.met && p.distanceTo(girl.position) < 14) { st.met = true; persist(); talk(LINES.first); setTimeout(() => ui?.page('La Veilleuse'), 1500); }
-      if (queue.length) { qT -= dt; if (qT <= 0) { ui?.say(queue.shift(), head(), 4.8); qT = 4.6; } }
+      if (queue.length) { qT -= dt; if (qT <= 0) { ui?.say(queue.shift(), head(), 4.8); qT = 4.6; sing = 8; } } // le chant attend que la dernière réplique soit lue
       // son chant : des notes qui montent vers l'Endormi (tant qu'il dort), et quelques mots quand on est près
       const singing = st.choice !== 'eveil';
       notes.forEach((m, k) => { const f = (t * 0.18 + k / 6) % 1; m.visible = singing; m.position.lerpVectors(head(), sleeper.position.clone().add(new THREE.Vector3(0, -170, 0)), f).add(new THREE.Vector3(Math.sin(t * 2 + k) * 2, Math.sin(f * Math.PI) * 12, Math.cos(t * 1.7 + k) * 2)); m.scale.setScalar(1 + f * 2); });
@@ -125,7 +129,7 @@ export function createStory(scene, { floorAt, caps, exit, roots, gates, sleeper,
       }
       // un passage s'ouvre : son treillis se retire dans le sol
       if (st.choice && opened < 1) { opened = Math.min(1, opened + dt / 5); const lid = st.choice === 'eveil' ? lidMain : lidRoots; lid.position.y = -opened * 30; if (opened >= 1) lid.visible = false; }
-      if (st.choice === 'racines') column.visible = true;
+      if (st.choice === 'racines') { column.visible = motes.visible = true; motes.rotation.y = t * 0.1; }
       if (gates.main && lidMain.visible && opened >= 1) lidMain.visible = false;
       near = nearest(p); ui?.prompt(near ? near[0] : null);
     },

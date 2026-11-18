@@ -22,6 +22,8 @@ export const U = {
   uSkyMid: { value: new THREE.Color(.62, .86, .98) }, uSkyTop: { value: new THREE.Color(1, .99, .96) },
   // la lumière vivante réagit au voyageur : uReact > 0 l'allume autour de lui, < 0 l'éteint (quand il court)
   uHero: { value: new THREE.Vector3() }, uReact: { value: 0 },
+  // sous cette altitude, tout se noie dans la brume (le gouffre des Jardins, la mer de brume) ; une strate peut s'en passer
+  uAbyssY: { value: 5 },
 };
 // L'allure d'une strate : soleil, ombres, brume, palette du sol, ciel. On la pose d'un coup en entrant.
 export function setLook(L) {
@@ -29,13 +31,14 @@ export function setLook(L) {
   U.uFogCol.value.set(L.fog); U.uFogDensity.value = L.density;
   L.pal.forEach((c, i) => U.uPal.value[i].set(...c));
   U.uSkyMid.value.set(L.skyMid); U.uSkyTop.value.set(L.skyTop);
+  U.uAbyssY.value = L.abyssY ?? 5;
 }
 
 const COMMON = /* glsl */ `
 uniform float uTime, uBoil, uFogDensity, uShadowOn, uRevealAll;
 uniform vec3 uSunDir, uSunCol, uShadowCol, uFogCol;
 uniform sampler2D uReveal, uShadowMap; uniform vec4 uRevealRect; uniform mat4 uShadowMatrix;
-uniform vec3 uPal[8], uSkyMid, uSkyTop, uHero; uniform float uReact;
+uniform vec3 uPal[8], uSkyMid, uSkyTop, uHero; uniform float uReact, uAbyssY;
 float hash12(vec2 p) { vec3 p3 = fract(vec3(p.xyx) * .1031); p3 += dot(p3, p3.yzx + 33.33); return fract((p3.x + p3.y) * p3.z); }
 float vnoise(vec2 p) { vec2 i = floor(p), f = fract(p); f = f * f * (3. - 2. * f);
   return mix(mix(hash12(i), hash12(i + vec2(1, 0)), f.x), mix(hash12(i + vec2(0, 1)), hash12(i + vec2(1, 1)), f.x), f.y); }
@@ -140,7 +143,7 @@ void main() {
   col = mix(col, base * (1. + uGlow * max(breathe, 0.)), step(.01, uGlow));
   // perspective aérienne : par lavis (paliers), et une brume plus épaisse vers le gouffre
   float fog = 1. - exp(-vDepth * uFogDensity);
-  fog = max(fog, smoothstep(5., -260., vW.y) * .9); // le gouffre se noie dans la brume
+  fog = max(fog, (1. - smoothstep(uAbyssY - 265., uAbyssY, vW.y)) * .9); // le gouffre se noie dans la brume (bornes dans l'ordre : sinon indéfini)
   fog = floor(fog * 7. + vnoise(vW.xz * .05) * .6) / 7.;
   col = mix(col, uFogCol, clamp(fog, 0., 1.));
   // la révélation : esquisse au crayon tant qu'on n'y est pas allé, la couleur s'y répand comme une aquarelle

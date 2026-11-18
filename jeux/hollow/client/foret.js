@@ -112,14 +112,15 @@ function porter() {
 /* ---------- La strate ---------- */
 export const LOOK = {
   name: 'La Forêt des géants', sun: [0.18, 1, 0.12], sunCol: '#c8a8ff', shadowCol: '#1a1240', fog: '#2a1f4a', density: 0.0026, shadows: true,
-  pal: [[0.16, 0.11, 0.28], [0.3, 0.22, 0.46], [0.12, 0.3, 0.42], [0.36, 0.3, 0.46], [0.18, 0.14, 0.3], [0.22, 0.52, 0.62], [1, 0.42, 0.85], [0.3, 0.9, 0.95]],
-  skyMid: '#6a4aa8', skyTop: '#f0d8ff',
+  pal: [[0.27, 0.2, 0.44], [0.42, 0.32, 0.62], [0.12, 0.3, 0.42], [0.36, 0.3, 0.46], [0.18, 0.14, 0.3], [0.22, 0.52, 0.62], [1, 0.42, 0.85], [0.3, 0.9, 0.95]],
+  skyMid: '#6a4aa8', skyTop: '#f0d8ff', abyssY: -1e5, // le sol de la grotte est vers 0 m : pas de noyade dans la brume
 };
 
 export function create(scene, Q, ctx = {}) {
   const live = { colliders: [] }, r = rng(31), up = new THREE.Vector3(0, 1, 0), q = new THREE.Quaternion(), s3 = new THREE.Vector3(), p3 = new THREE.Vector3(), m4 = new THREE.Matrix4();
   const sky = new THREE.Mesh(new THREE.SphereGeometry(8000, 32, 16), skyMaterial()); sky.renderOrder = -1; scene.add(sky); live.sky = sky;
   live.ground = createGround(scene, floorAt, (cx, cz, c) => Math.hypot(cx, cz) - c > R_CAVE + 400);
+  { const [x0, , z0] = spawn(); live.ground({ x: x0, z: z0 }, 1e6); } // tout le sol, avant la première image
   // la voûte : une coupole de roche à 700 m, percée de puits par où tombe une lumière violette
   const holes = Array.from({ length: 9 }, (_, k) => { const a = k * 2.4 + 0.5, d = 250 + (k % 3) * 330; return { x: Math.cos(a) * d, z: Math.sin(a) * d, R: 60 + (k % 4) * 30 }; });
   {
@@ -208,6 +209,7 @@ export function create(scene, Q, ctx = {}) {
 
   let last = null, react = 0;
   live.update = (t, hero) => {
+    live.ground(hero); // le sol se fait plus fin autour du voyageur
     // la forêt répond : elle s'allume autour du voyageur s'il marche, s'éteint s'il court, veille s'il s'arrête
     const v = last ? hero.distanceTo(last) / 0.016 : 0; last = hero.clone();
     react += ((v > 7 ? -0.9 : v > 0.5 ? 1 : 0.35) - react) * 0.03;
