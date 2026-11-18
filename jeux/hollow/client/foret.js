@@ -7,7 +7,7 @@
 // méduses d'air broutent les spores dans les rais et fuient ; les Porteurs défilent, un chapeau sur le dos ; l'Endormi,
 // un champignon colossal, respire. Le relief est un pur calcul, à plusieurs étages (on passe sous les chapeaux).
 import * as THREE from 'three';
-import { fbm, noise } from './terrain.js';
+import { fbm, noise, lidPlane } from './terrain.js';
 import { ink, glowy, skyMaterial, U } from './ink.js';
 import { rng, paint, lump, tube, merge, cast, TAU } from './modelage.js';
 import { createGround, sectors } from './sol.js';
@@ -55,12 +55,15 @@ const SPIRAL = { x: 220, z: -260 };
 const capTop = (C, x, z) => { const d = Math.hypot(x - C.x, z - C.z); return d > C.R ? null : C.y + C.dome * (1 - (d / C.R) ** 2); };
 // le terrain à plusieurs étages : la plus haute surface sous « below » (le voyageur passe sous les chapeaux)
 const lidY = G => floorAt(G.x + G.R + 14, G.z);
+// un passage fermé porte à la hauteur de son bord, du côté d'où l'on arrive (sinon, du côté bas, on passe dessous)
+// (un plan ajusté sur le bord : voir lidPlane)
+const lidMain = lidPlane(floorAt, EXIT, 10), lidRoots = lidPlane(floorAt, ROOTS, 5);
 export function terrain(x, z, below = Infinity) {
   let best = -Infinity;
   let f = floorAt(x, z);
   // un passage fermé : on marche sur le treillis
-  if (f < -100 && !gates.main && Math.hypot(x - EXIT.x, z - EXIT.z) < EXIT.R + 8) f = lidY(EXIT);
-  if (f < -100 && !gates.roots && Math.hypot(x - ROOTS.x, z - ROOTS.z) < ROOTS.R + 4) f = lidY(ROOTS);
+  if (f < -100 && !gates.main && Math.hypot(x - EXIT.x, z - EXIT.z) < EXIT.R + 8) f = lidMain(x, z);
+  if (f < -100 && !gates.roots && Math.hypot(x - ROOTS.x, z - ROOTS.z) < ROOTS.R + 4) f = lidRoots(x, z);
   if (f > -100 && f <= below) best = f;
   for (const C of CAPS) { const h = capTop(C, x, z); if (h !== null && h <= below && h > best) best = h; }
   return best === -Infinity ? { h: -1e4, kind: 'void' } : { h: best, kind: 'ground' };

@@ -72,6 +72,8 @@ test('la Forêt se descend de chapeau en chapeau jusqu’au sol, et le gouffre s
   const L = path.at(-1);
   assert.ok(L.y - F.floorAt(L.x, L.z) < 28, 'du dernier chapeau, on saute au sol');
   assert.ok(!F.exitAt(F.EXIT.x, F.EXIT.z) && F.terrain(F.EXIT.x, F.EXIT.z).kind === 'ground', 'fermé, le gouffre porte');
+  // fermés, on traverse les deux passages à pied de tous les côtés, sans marche ni trou
+  for (const G of [F.EXIT, F.ROOTS]) for (let an = 0; an < 6.28; an += 0.3) { let p = null; for (let d = -(G.R + 12); d <= G.R + 12; d += 0.5) { const t = F.terrain(G.x + Math.cos(an) * d, G.z + Math.sin(an) * d, (p ?? 40) + 1); assert.notStrictEqual(t.kind, 'void', 'un trou dans un passage fermé'); if (p !== null) assert.ok(Math.abs(t.h - p) < 0.9, 'une marche sur un passage fermé'); p = t.h; } }
   F.gates.main = true; assert.ok(F.exitAt(F.EXIT.x, F.EXIT.z) && F.terrain(F.EXIT.x, F.EXIT.z).kind === 'void', 'le gouffre s’ouvre'); F.gates.main = false;
   F.gates.roots = true; assert.ok(F.exitAt(F.ROOTS.x, F.ROOTS.z) && F.terrain(F.ROOTS.x, F.ROOTS.z).kind === 'void', 'le chemin des racines s’ouvre'); F.gates.roots = false;
   assert.ok(Math.hypot(F.ROOTS.x, F.ROOTS.z) < F.R_CAVE - 220, 'le chemin des racines est dans la grotte');
@@ -105,4 +107,38 @@ test('les Abysses : fenêtres au fond, cloches de nacre assez proches, la Fosse 
   for (const T of A.TOWERS) assert.ok(Math.hypot(T.x - A.FOSSE.x, T.z - A.FOSSE.z) > T.r + A.FOSSE.R, 'une tour dans la Fosse');
   assert.ok(!A.exitAt(A.FOSSE.x, A.FOSSE.z) && A.terrain(A.FOSSE.x, A.FOSSE.z).kind === 'ground', 'fermée, la Fosse porte');
   A.gates.fosse = true; assert.ok(A.exitAt(A.FOSSE.x, A.FOSSE.z) && A.terrain(A.FOSSE.x, A.FOSSE.z).kind === 'void', 'la Fosse s’ouvre'); A.gates.fosse = false;
+});
+
+// Les Terres organiques : on ne monte sur le dos de l'Hôte qu'en grimpant : un pilier vivant, une côte-pont jusqu'au
+// suivant (plus haut, on y grimpe encore), et la dernière côte qui descend sur le plateau ; la falaise ne se monte pas
+test('les Terres organiques : piliers vivants et côtes-ponts jusqu’au dos de l’Hôte, la Valve', async () => {
+  const T = await import('./client/terres.js');
+  const [x, y, z] = T.spawn();
+  assert.ok(Math.abs(T.terrain(x, z, y + 1).h - y) < 0.01 && y < 40, 'on part du sol de la cavité');
+  // du départ au pied du premier pilier, à pied
+  const C1 = T.CLIMBS[0], L = Math.hypot(C1.x - x, C1.z - z); let prev = y;
+  for (let d = 0.5; d < L - C1.r - 1; d += 0.5) { const h = T.terrain(x + ((C1.x - x) * d) / L, z + ((C1.z - z) * d) / L, prev + 1).h; assert.ok(Math.abs(h - prev) < 0.45, 'une marche sur le chemin du premier pilier'); prev = h; }
+  T.BRIDGES.forEach((B, i) => {
+    const n = 200; let p = null;
+    for (let k = 0; k <= n; k++) {
+      const t = k / n, bx = B.a[0] + (B.b[0] - B.a[0]) * t, bz = B.a[1] + (B.b[1] - B.a[1]) * t, h = T.terrain(bx, bz, T.bridgeAt(B, bx, bz) + 0.5).h;
+      if (p !== null) assert.ok(Math.abs(h - p) < 0.45, `une marche sur la côte ${i}`);
+      p = h;
+    }
+    const A = T.CLIMBS[i]; assert.ok(Math.hypot(B.a[0] - A.x, B.a[1] - A.z) < A.r, `la côte ${i} part du sommet du pilier ${i}`);
+    if (i < 2) { const N = T.CLIMBS[i + 1]; assert.ok(Math.hypot(B.b[0] - N.x, B.b[1] - N.z) < N.r + 0.5 && N.top > B.hb + 20, `la côte ${i} s’appuie contre le pilier suivant, qu’on grimpe`); }
+    else assert.ok(Math.abs(B.hb - T.floorAt(...B.b)) < 0.3 && T.floorAt(...B.b) > T.MESA.top, 'la dernière côte arrive sur le dos de l’Hôte');
+  });
+  // la falaise de l'Hôte : partout, une pente qu'on ne monte pas à pied
+  for (let a = 0; a < 6.28; a += 0.5) {
+    let worst = 0;
+    for (let s = 0.85; s < 1.2; s += 0.002) { const px = T.MESA.x + Math.cos(a) * T.MESA.a * s, pz = T.MESA.z + Math.sin(a) * T.MESA.b * s, h0 = T.floorAt(px, pz), h1 = T.floorAt(px + Math.cos(a) * 0.5, pz + Math.sin(a) * 0.5); worst = Math.max(worst, Math.abs(h1 - h0) / 0.5); }
+    assert.ok(worst > 1.5, 'la falaise de l’Hôte se monte à pied');
+  }
+  for (const C of T.CLIMBS) assert.ok(T.floorAt(C.x, C.z) < 40, 'un pilier hors du plateau');
+  assert.ok(!T.exitAt(T.VALVE.x, T.VALVE.z) && T.terrain(T.VALVE.x, T.VALVE.z).kind === 'ground', 'fermée, la Valve porte');
+  // fermée, on la traverse à pied de tous les côtés, sans marche ni trou
+  for (let a = 0; a < 6.28; a += 0.4) { let p = null; for (let d = -(T.VALVE.R + 10); d <= T.VALVE.R + 10; d += 0.5) { const t = T.terrain(T.VALVE.x + Math.cos(a) * d, T.VALVE.z + Math.sin(a) * d, (p ?? 200) + 1); assert.notStrictEqual(t.kind, 'void', 'un trou dans la Valve fermée'); if (p !== null) assert.ok(Math.abs(t.h - p) < 0.9, 'une marche sur la Valve fermée'); p = t.h; } }
+  T.gates.valve = true; assert.ok(T.exitAt(T.VALVE.x, T.VALVE.z) && T.terrain(T.VALVE.x, T.VALVE.z).kind === 'void', 'la Valve s’ouvre'); T.gates.valve = false;
+  assert.ok(T.floorAt(T.VALVE.x + T.VALVE.R + 6, T.VALVE.z) > T.MESA.top, 'la Valve est sur le dos de l’Hôte');
 });

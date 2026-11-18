@@ -15,6 +15,23 @@ export function noise(x, y) {
   const a = hash(X, Y), b = hash(X + 1, Y), c = hash(X, Y + 1), d = hash(X + 1, Y + 1);
   return a + (b - a) * u + (c - a) * v + (a - b - c + d) * u * v;
 }
+// le couvercle d'un passage fermé (un treillis, une valve) : on mesure le vrai bord du trou dans 128 directions (en
+// partant de m mètres au-delà du rayon), et le couvercle descend en pente douce du centre jusqu'à ce bord, raccordé au
+// sol de tous les côtés (une hauteur fixe laissait passer dessous du côté bas)
+export function lidPlane(floorAt, G, m) {
+  const N = 128, E = [], Hh = [];
+  for (let i = 0; i < N; i++) {
+    const a = (i / N) * Math.PI * 2, c = Math.cos(a), s = Math.sin(a); let r = G.R + m;
+    while (r > 0.5 && floorAt(G.x + c * r, G.z + s * r) > -100) r -= 0.25;
+    E.push(r + 0.25); Hh.push(floorAt(G.x + c * (r + 0.25), G.z + s * (r + 0.25)));
+  }
+  const mid = Hh.reduce((u, v) => u + v, 0) / N;
+  return (x, z) => {
+    const d = Math.hypot(x - G.x, z - G.z), a = ((Math.atan2(z - G.z, x - G.x) / (Math.PI * 2)) * N + N) % N, i = Math.floor(a) % N, j = (i + 1) % N, t = a - Math.floor(a);
+    const e = E[i] + (E[j] - E[i]) * t, h = Hh[i] + (Hh[j] - Hh[i]) * t;
+    return mid + (h - mid) * Math.min(1, d / e);
+  };
+}
 export const fbm = (x, y) => noise(x, y) * 0.55 + noise(x * 2.1 + 31, y * 2.1) * 0.3 + noise(x * 4.3 - 7, y * 4.3 + 11) * 0.15;
 const smoothstep = (a, b, x) => { const t = Math.max(0, Math.min(1, (x - a) / (b - a))); return t * t * (3 - 2 * t); };
 // écart d'angle, ramené dans [-π, π]

@@ -2,7 +2,8 @@
 // sur lui pendant qu'il tombe en faisant des figures. Chaque passage a sa propre mise en scène (son tunnel, ce qui
 // défile) : vers les Brumes, des anneaux d'encre et des nuages ; vers la Forêt, des chapeaux géants qui remontent en
 // luisant, des spores, des méduses d'air ; vers les Abysses, des anneaux de racines, puis l'eau : bulles, méduses, et la
-// surface verte qui monte à sa rencontre. La chute elle-même est une vraie chute libre, sans pirouettes. Le ciel passe des couleurs d'une strate à l'autre, et le nom de la
+// surface verte qui monte à sa rencontre ; vers les Terres organiques, des anneaux d'os (des côtes), une poussière
+// laiteuse, et le fond qui devient chair. La chute elle-même est une vraie chute libre, sans pirouettes. Le ciel passe des couleurs d'une strate à l'autre, et le nom de la
 // strate qui arrive s'écrit à l'encre. Un clic (ou Espace) abrège.
 import * as THREE from 'three';
 import { ink, glowy, skyMaterial, U } from './ink.js';
@@ -66,6 +67,13 @@ const THEMES = {
     cloud: (k, r) => { const K = []; for (let i = 0; i < 7; i++) K.push(lump(0.3 + r() * 0.9, { detail: 1, seed: k * 7 + i }).translate((r() - 0.5) * 3, (r() - 0.5) * 6, (r() - 0.5) * 3)); return new THREE.Mesh(merge(K), ink({ line: 0.4, trans: 0.8, glow: 0.5, color: '#e8fff8', vertexColors: false })); },
     line: { color: '#7af0e8', glow: 0.9 }, bits: ['#4ae8e0', '#e8fff4', '#ffe08a'], bitsGlow: 0.8, mist: '#2f8a84',
     jellies: true,
+    tricks: skydive,
+  },
+  // vers les Terres organiques : des côtes d'os en anneaux brisés, des touffes de corail-poumon, la chair au fond
+  5: {
+    ring: (k, r) => { const m = new THREE.Mesh(paint(new THREE.TorusGeometry(10 + r() * 8, 0.8 + r() * 0.6, 10, 40, Math.PI * (1.2 + r() * 0.6)), '#fff6e8', '#d8c0a0'), ink({ line: 1, trans: 0.3 })); m.userData.flat = true; return m; },
+    cloud: (k, r) => { const K = []; for (let i = 0; i < 5; i++) K.push(paint(lump(0.6 + r() * 1, { sy: 1.3, lumpy: 0.3, seed: k * 5 + i, detail: 1 }).translate((r() - 0.5) * 4, (r() - 0.5) * 3, (r() - 0.5) * 4), '#ff9a5a', '#c84a2a')); return new THREE.Mesh(merge(K), ink({ line: 0.5, trans: 0.7, glow: 0.3 })); },
+    line: { color: '#e8705a', glow: 0.4 }, bits: ['#e8705a', '#fff6e8', '#d0602a'], bitsGlow: 0.3, mist: '#ead8b8',
     tricks: skydive,
   },
 };

@@ -12,7 +12,8 @@ const STRATES = [
   { n: 1, name: 'Les Jardins suspendus', load: () => import('./jardins.js') },
   { n: 2, name: 'Les Brumes éternelles', load: () => import('./brumes.js') },
   { n: 3, name: 'La Forêt des géants', load: () => import('./foret.js') },
-  { n: 4, name: 'Les Abysses engloutis', load: () => import('./abysses.js') }, { n: 5, name: 'Les Terres organiques' }, { n: 6, name: 'La Cité oubliée' },
+  { n: 4, name: 'Les Abysses engloutis', load: () => import('./abysses.js') },
+  { n: 5, name: 'Les Terres organiques', load: () => import('./terres.js') }, { n: 6, name: 'La Cité oubliée' },
 ];
 
 // Qualité : le jeu est réglé pour une machine puissante ; il se replie tout seul si les images tardent.
@@ -53,7 +54,7 @@ let scene = new THREE.Scene(), world = null, cur = null;
 function dispose(s) { s.traverse(o => { o.geometry?.dispose(); if (o.material && o.material !== hero.rig.torso.material) o.material.dispose?.(); }); }
 async function enter(n, place = true) {
   const S = STRATES[n - 1], mod = await S.load();
-  if (world) { scene.remove(hero.rig.g); dispose(scene); }
+  if (world) { world.leave?.(); scene.remove(hero.rig.g); dispose(scene); } // leave : ce que la strate doit arrêter (un son)
   scene = new THREE.Scene(); cur = S;
   ui.clear(); world = mod.create(scene, Q, { ui, hero });
   seen.fill(0); revealTex.needsUpdate = true; reveal(world.start[0], world.start[2], 70);

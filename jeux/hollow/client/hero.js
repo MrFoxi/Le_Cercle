@@ -6,7 +6,7 @@
 import * as THREE from 'three';
 import { createVoyageur } from './voyageur.js';
 
-const STEP_UP = 0.9, GRAV = 22, WALK = 4.2, RUN = 9, JUMP = 7.5, FLY = 40, FLY_FAST = 220, SWIM = 5.5, SWIM_FAST = 11;
+const STEP_UP = 0.9, GRAV = 22, WALK = 4.2, RUN = 9, JUMP = 7.5, FLY = 40, FLY_FAST = 220, SWIM = 5.5, SWIM_FAST = 11, CLIMB = 2.6, CLIMB_FAST = 4.2;
 
 
 export function createHero(camera, dom) {
@@ -54,7 +54,7 @@ export function createHero(camera, dom) {
   const hero = { onLand: null };
   function enter(scene, w, arrive = false) {
     world = w; scene.add(g); g.rotation.order = 'XYZ';
-    st.p.set(...w.start); st.safe.copy(st.p); st.v.set(0, 0, 0); st.ground = true; st.exit = false;
+    st.p.set(...w.start); st.safe.copy(st.p); st.v.set(0, 0, 0); st.ground = true; st.exit = false; st.climb = null;
     cam.yaw = w.camYaw; cam.look.set(w.start[0], w.start[1] + 1.6, w.start[2]);
     pose();
     st.arrive = arrive ? { phase: 'air', t: 0, shake: 0 } : null;
@@ -152,6 +152,7 @@ export function createHero(camera, dom) {
     if (st.act) return actUpdate(dt);
     if (st.fly) { flyUpdate(dt); return follow(dt); }
     if (world.swim) return swimUpdate(dt);
+    if (st.climb) return climbUpdate(dt);
     // déplacement relatif à la caméra
     const f = (has('KeyW', 'KeyZ', 'ArrowUp') ? 1 : 0) - (has('KeyS', 'ArrowDown') ? 1 : 0), s = (has('KeyD', 'ArrowRight') ? 1 : 0) - (has('KeyA', 'KeyQ', 'ArrowLeft') ? 1 : 0);
     const run = has('ShiftLeft', 'ShiftRight'), speed = run ? RUN : WALK;
@@ -161,6 +162,11 @@ export function createHero(camera, dom) {
     const k = st.ground ? 1 : 0.35; // en l'air, on se dirige moins bien
     st.v.x += ((dx * speed) - st.v.x) * Math.min(1, dt * 10 * k); st.v.z += ((dz * speed) - st.v.z) * Math.min(1, dt * 10 * k);
     if (st.ground && has('Space')) { st.v.y = JUMP; st.ground = false; }
+    // une paroi vivante (world.climbs : des fûts) : avancer contre elle, c'est s'y agripper
+    if (world.climbs && len > 0 && f > 0) for (const C of world.climbs) {
+      const ox = st.p.x - C.x, oz = st.p.z - C.z, d = Math.hypot(ox, oz);
+      if (d < C.r + 0.8 && st.p.y < C.top - 0.6 && -(ox * dx + oz * dz) / d > 0.6) { st.climb = { C, a: Math.atan2(oz, ox), ph: 0 }; st.v.set(0, 0, 0); return climbUpdate(dt); }
+    }
     // pas à pas : une falaise arrête, une pente se monte ; on glisse le long de l'obstacle
     const tryMove = (nx, nz) => { const h = floorAt(nx, nz, st.p.y + STEP_UP + 0.05); return !(st.ground && h > st.p.y + STEP_UP) && !(!st.ground && h > st.p.y + 0.2) && !blocked(nx, nz); };
     const [nx, nz] = pushOut(st.p.x + st.v.x * dt, st.p.z + st.v.z * dt);
@@ -189,6 +195,30 @@ export function createHero(camera, dom) {
     g.position.copy(st.p);
     g.rotation.y += Math.atan2(Math.sin(st.yaw - g.rotation.y), Math.cos(st.yaw - g.rotation.y)) * Math.min(1, dt * 10);
     rig.walk(st.walk, sp, st.ground, performance.now() / 1000);
+    follow(dt);
+  }
+  // l'escalade : Z monte, S descend, Q et D font le tour du fût, Maj va plus vite, Espace saute en arrière. En haut, il se
+  // hisse sur le sommet ; en bas, il reprend pied.
+  function climbUpdate(dt) {
+    const K = st.climb, C = K.C, t = performance.now() / 1000;
+    const f = (has('KeyW', 'KeyZ', 'ArrowUp') ? 1 : 0) - (has('KeyS', 'ArrowDown') ? 1 : 0), s = (has('KeyD', 'ArrowRight') ? 1 : 0) - (has('KeyA', 'KeyQ', 'ArrowLeft') ? 1 : 0);
+    const sp = has('ShiftLeft', 'ShiftRight') ? CLIMB_FAST : CLIMB, rad = C.r + 0.45; // pas « R » : c'est la jambe droite
+    if (has('Space')) { st.climb = null; st.v.set(Math.cos(K.a) * 5, 5, Math.sin(K.a) * 5); st.ground = false; st.fallFrom = st.p.y; return follow(dt); }
+    st.p.y += f * sp * dt; K.a -= (s * sp * dt) / rad;
+    st.p.x = C.x + Math.cos(K.a) * rad; st.p.z = C.z + Math.sin(K.a) * rad;
+    st.yaw = Math.atan2(-Math.cos(K.a), -Math.sin(K.a));
+    if (st.p.y >= C.top - 0.3) { st.climb = null; st.p.set(C.x + Math.cos(K.a) * Math.max(0.5, C.r - 1.4), C.top, C.z + Math.sin(K.a) * Math.max(0.5, C.r - 1.4)); st.ground = true; st.v.set(0, 0, 0); st.safe.copy(st.p); rig.reset(); return follow(dt); } // il se hisse
+    const h = floorAt(st.p.x, st.p.z, st.p.y + 0.5);
+    if (f < 0 && st.p.y <= h + 0.05) { st.climb = null; st.p.y = h; st.ground = true; rig.reset(); return follow(dt); } // il reprend pied
+    // les gestes : une main après l'autre, un pied après l'autre, collé à la paroi
+    K.ph += dt * (Math.abs(f) + Math.abs(s) * 0.7) * sp * 1.6;
+    const w = Math.sin(K.ph);
+    rig.reset(); g.position.copy(st.p); g.rotation.y = st.yaw;
+    AL.rotation.set(-2.5 + w * 0.45, 0, -0.25); AR.rotation.set(-2.5 - w * 0.45, 0, 0.25); rig.EL.rotation.x = rig.ER.rotation.x = -0.5 - Math.abs(w) * 0.3;
+    L.rotation.set(-0.7 - Math.max(0, w) * 0.6, 0, -0.15); R.rotation.set(-0.7 - Math.max(0, -w) * 0.6, 0, 0.15);
+    rig.KL.rotation.x = 1.1 + Math.max(0, w) * 0.5; rig.KR.rotation.x = 1.1 + Math.max(0, -w) * 0.5;
+    torso.rotation.x = 0.12; rig.head.rotation.x = -0.35 + Math.sin(t * 0.5) * 0.05; rig.flare(0.08);
+    st.fade = Math.max(0, st.fade - dt * 0.8);
     follow(dt);
   }
   // la nage (une strate sous l'eau) : on va où regarde la caméra, Espace remonte, X descend (pas Ctrl : Ctrl+Z/W ferme
