@@ -68,10 +68,14 @@ export function seeder() {
   return merge(K).translate(0, 1.8, 0); // les filaments ondulent (le vent souffle plus en haut : on les met en haut)
 }
 // le Jardinier : une silhouette immense et maigre, debout sur la crête ; on ne le voit que de loin
+// si le voyageur a achevé son dessin (la fin de la Cité), le Jardinier porte désormais son manteau indigo
 function gardener() {
-  const K = [paint(tube([[0, 0, 0], [0.5, 22, 0], [-0.5, 46, 0.5], [0, 60, 0]], 2.4, 1.4, 8, 20), '#2a2838', '#1a1828')];
-  K.push(paint(lump(3.2, { sy: 1.4, lumpy: 0.1, detail: 2 }).translate(0, 64, 0), '#2a2838', '#1a1828'));
-  for (const s of [-1, 1]) K.push(paint(tube([[s * 1.8, 56, 0], [s * 6, 40, 2], [s * 7, 22, 4], [s * 6.5, 10, 6]], 0.9, 0.4, 6, 14), '#2a2838', '#1a1828'));
+  let fin = null; try { fin = JSON.parse(localStorage.getItem('hollow-fin')); } catch { /* pas de fin */ }
+  const [a, b] = fin === 'achever' ? ['#2a3a8a', '#141c48'] : ['#2a2838', '#1a1828'];
+  const K = [paint(tube([[0, 0, 0], [0.5, 22, 0], [-0.5, 46, 0.5], [0, 60, 0]], 2.4, 1.4, 8, 20), a, b)];
+  K.push(paint(lump(3.2, { sy: 1.4, lumpy: 0.1, detail: 2 }).translate(0, 64, 0), a, b));
+  for (const s of [-1, 1]) K.push(paint(tube([[s * 1.8, 56, 0], [s * 6, 40, 2], [s * 7, 22, 4], [s * 6.5, 10, 6]], 0.9, 0.4, 6, 14), a, b));
+  if (fin === 'achever') K.push(paint(tube([[0, 58, -1], [2, 52, -5], [5, 44, -8], [9, 36, -10]], 1.1, 0.5, 6, 14), '#e8c04a', '#a87a2a')); // son écharpe
   K.push(paint(tube([[-7, 10, 6], [-8, 2, 9], [-7.5, -6, 12]], 0.3, 0.1, 5, 6), '#5a5868')); // l'outil : une lame fine, trop longue
   return merge(K);
 }

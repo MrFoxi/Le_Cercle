@@ -13,8 +13,8 @@ const STRATES = [
   { n: 2, name: 'Les Brumes éternelles', load: () => import('./brumes.js') },
   { n: 3, name: 'La Forêt des géants', load: () => import('./foret.js') },
   { n: 4, name: 'Les Abysses engloutis', load: () => import('./abysses.js') },
-  { n: 5, name: 'Les Terres organiques', load: () => import('./terres.js') }, { n: 6, name: 'La Cité oubliée' },
-];
+  { n: 5, name: 'Les Terres organiques', load: () => import('./terres.js') },
+  { n: 6, name: 'La Cité oubliée', load: () => import('./cite.js') }, ];
 
 // Qualité : le jeu est réglé pour une machine puissante ; il se replie tout seul si les images tardent.
 const PRESETS = {

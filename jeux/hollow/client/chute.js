@@ -3,7 +3,8 @@
 // défile) : vers les Brumes, des anneaux d'encre et des nuages ; vers la Forêt, des chapeaux géants qui remontent en
 // luisant, des spores, des méduses d'air ; vers les Abysses, des anneaux de racines, puis l'eau : bulles, méduses, et la
 // surface verte qui monte à sa rencontre ; vers les Terres organiques, des anneaux d'os (des côtes), une poussière
-// laiteuse, et le fond qui devient chair. La chute elle-même est une vraie chute libre, sans pirouettes. Le ciel passe des couleurs d'une strate à l'autre, et le nom de la
+// laiteuse, et le fond qui devient chair ; vers la Cité, des cadres de pierre à angles nets, des blocs taillés qui
+// flottent, des traits cyan. La chute elle-même est une vraie chute libre, sans pirouettes. Le ciel passe des couleurs d'une strate à l'autre, et le nom de la
 // strate qui arrive s'écrit à l'encre. Un clic (ou Espace) abrège.
 import * as THREE from 'three';
 import { ink, glowy, skyMaterial, U } from './ink.js';
@@ -74,6 +75,13 @@ const THEMES = {
     ring: (k, r) => { const m = new THREE.Mesh(paint(new THREE.TorusGeometry(10 + r() * 8, 0.8 + r() * 0.6, 10, 40, Math.PI * (1.2 + r() * 0.6)), '#fff6e8', '#d8c0a0'), ink({ line: 1, trans: 0.3 })); m.userData.flat = true; return m; },
     cloud: (k, r) => { const K = []; for (let i = 0; i < 5; i++) K.push(paint(lump(0.6 + r() * 1, { sy: 1.3, lumpy: 0.3, seed: k * 5 + i, detail: 1 }).translate((r() - 0.5) * 4, (r() - 0.5) * 3, (r() - 0.5) * 4), '#ff9a5a', '#c84a2a')); return new THREE.Mesh(merge(K), ink({ line: 0.5, trans: 0.7, glow: 0.3 })); },
     line: { color: '#e8705a', glow: 0.4 }, bits: ['#e8705a', '#fff6e8', '#d0602a'], bitsGlow: 0.3, mist: '#ead8b8',
+    tricks: skydive,
+  },
+  // vers la Cité oubliée : des cadres de pierre carrés (la ligne droite arrive), des blocs taillés, des traits cyan
+  6: {
+    ring: (k, r) => { const R = 9 + r() * 8, t = 0.9, K = [[0, R, 2 * R + t, t], [0, -R, 2 * R + t, t], [R, 0, t, 2 * R], [-R, 0, t, 2 * R]].map(([x, y, w, h]) => paint(new THREE.BoxGeometry(w, h, t * 1.4).translate(x, y, 0), '#6a7088', '#3a3a7a')); const m = new THREE.Mesh(merge(K), ink({ line: 1 })); m.userData.flat = true; return m; },
+    cloud: (k, r) => new THREE.Mesh(paint(new THREE.BoxGeometry(1 + r() * 3, 1 + r() * 3, 1 + r() * 3), '#4a4a8a', '#1c2440'), ink({ line: 1, glow: 0.05 })),
+    line: { color: '#5ae8ff', glow: 1.2 }, bits: ['#5ae8ff', '#6a7088', '#c8a8ff'], bitsGlow: 0.6, mist: '#1c2440',
     tricks: skydive,
   },
 };

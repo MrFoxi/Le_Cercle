@@ -142,3 +142,25 @@ test('les Terres organiques : piliers vivants et côtes-ponts jusqu’au dos de 
   T.gates.valve = true; assert.ok(T.exitAt(T.VALVE.x, T.VALVE.z) && T.terrain(T.VALVE.x, T.VALVE.z).kind === 'void', 'la Valve s’ouvre'); T.gates.valve = false;
   assert.ok(T.floorAt(T.VALVE.x + T.VALVE.R + 6, T.VALVE.z) > T.MESA.top, 'la Valve est sur le dos de l’Hôte');
 });
+
+// La Cité : on ne descend d'une terrasse à l'autre que par les escaliers de lumière, qui ne portent qu'une fois leur
+// anneau réveillé ; le pont mène aux Archives, au-dessus du vide ; chaque nœud est sur la terrasse du haut de son escalier
+test('la Cité : terrasses, escaliers des anneaux, pont jusqu’aux Archives', async () => {
+  const C = await import('./client/cite.js');
+  const [x, y, z] = C.spawn();
+  assert.strictEqual(C.tierAt(x, z), 0); assert.strictEqual(y, C.tierY(0));
+  assert.strictEqual(C.terrain(0, C.R0 - 20 > C.PLAT.R ? C.R0 - 20 : 100).kind, 'void', 'le vide au centre');
+  assert.ok(Math.abs(C.terrain(0, 0).h - C.PLAT.y) < 0.01, 'les Archives au-dessus du vide');
+  for (const Rp of C.RAMPS) {
+    const c = Math.cos(Rp.th), s = Math.sin(Rp.th), mid = (Rp.from + Rp.to) / 2, mx = c * mid, mz = s * mid;
+    const N0 = C.NODES[Rp.k]; assert.strictEqual(C.tierAt(N0[0], N0[2]), Rp.k, `le nœud ${Rp.k} est sur la terrasse du haut`);
+    // endormi : au milieu de l'escalier, on est sur la terrasse du bas (ou dans le vide pour le pont)
+    assert.ok(C.terrain(mx, mz, 200).h < C.rampAt(Rp, mx, mz) - 3, `l’escalier ${Rp.k} ne porte pas tant que son anneau dort`);
+    C.gates.awake[Rp.k] = true;
+    let p = null;
+    for (let al = Rp.from + 20; al >= Rp.to - 15; al -= 0.5) { const t = C.terrain(c * al, s * al, (p ?? 200) + 1); assert.notStrictEqual(t.kind, 'void', `un trou dans l’escalier ${Rp.k}`); if (p !== null) assert.ok(Math.abs(t.h - p) < 0.45, `une marche dans l’escalier ${Rp.k} (à ${al})`); p = t.h; }
+    C.gates.awake[Rp.k] = false;
+  }
+  // partout ailleurs entre deux terrasses, un mur
+  for (let k = 0; k < 3; k++) { const B = C.R0 + (3 - k) * C.W, a = C.RAMPS[k].th + 1.1; assert.ok(C.floorAt(Math.cos(a) * (B + 3), Math.sin(a) * (B + 3)) - C.floorAt(Math.cos(a) * (B - 3), Math.sin(a) * (B - 3)) > 15, 'un mur entre deux terrasses'); }
+});
