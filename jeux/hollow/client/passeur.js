@@ -7,6 +7,7 @@ import * as THREE from 'three';
 import { ink, glowy } from './ink.js';
 import { rng, paint, lump, tube, merge, cast, TAU } from './modelage.js';
 import { save } from './ui.js';
+import { beacon } from './sol.js';
 
 const INK_MAX = 6, BRIDGE_COST = 2, LAMP_COST = 1;
 
@@ -78,6 +79,19 @@ export function createStory(scene, { islands, bridges, exit, hole, horns, topAt,
   let near = null, last = 0, began = performance.now() / 1000, opening = st.done ? 1 : 0;
   ui?.ink(st.ink, INK_MAX);
   const spend = (n, at) => { if (st.ink < n) { ui?.say('Il manque de l’encre rouge…', at, 2.5); return false; } st.ink -= n; ui?.ink(st.ink, INK_MAX); return true; };
+  // ce qu'il faut faire maintenant : la ligne d'objectif, son repère ; la balise dorée sur le Passeur tant que le Puits est fermé
+  const mark = beacon(scene);
+  const hornNear = p => { const h = horns.map((h, i) => [h, i]).filter(([h, i]) => h[3] > 4 && !st.tapped.includes(i)).sort((u, v) => Math.hypot(u[0][0] - p.x, u[0][2] - p.z) - Math.hypot(v[0][0] - p.x, v[0][2] - p.z))[0]; return h ? new THREE.Vector3(h[0][0], h[0][1] - h[0][3] + 2, h[0][2]) : null; };
+  const harvest = (p, need) => [`Récolte l’encre rouge : passe tout près d’une grande trompette rouge (encre ${st.ink}/${need})`, hornNear(p)];
+  function goal(p) {
+    if (!st.met) return ['Parle au Passeur, le vieil homme au bord de la première île', passeur.position];
+    if (st.done) return ['Le Puits est ouvert : saute au milieu de la dernière île du chemin', new THREE.Vector3(exit.x, exit.y, exit.z)];
+    if (!st.own) return st.ink < LAMP_COST ? harvest(p, LAMP_COST) : ['Rallume la lanterne du Passeur, à côté de lui (E)', own.g.position];
+    const L = lamps.filter(L => !st.lamps.includes(L.k)).sort((u, v) => u.g.position.distanceTo(p) - v.g.position.distanceTo(p))[0];
+    const M = marks.find(M => M.B === L.B);
+    if (M && !M.B.inked) return st.ink < BRIDGE_COST ? harvest(p, BRIDGE_COST) : [`Encre le pont en esquisse qui mène à une Lanterne perdue (E au départ du pont) · ${st.lamps.length}/3 allumées`, new THREE.Vector3(M.B.a[0], M.B.ya, M.B.a[1])];
+    return st.ink < LAMP_COST ? harvest(p, LAMP_COST) : [`Rallume la Lanterne perdue au bout du pont (E) · ${st.lamps.length}/3 allumées`, L.g.position];
+  }
   function nearest(p) {
     const c = [], d = v => p.distanceTo(v);
     if (d(passeur.position) < 6 && st.met) c.push(['parler', 'p', d(passeur.position) + 3]); // agir passe avant parler
@@ -120,6 +134,7 @@ export function createStory(scene, { islands, bridges, exit, hole, horns, topAt,
       // les trois brûlent : le Puits s'ouvre
       if (st.lamps.length === 3 && !st.done) { st.done = true; exit.open = true; persist(); talk(LINES.done); setTimeout(() => ui?.page('Le Puits s’ouvre'), 4000); }
       if (st.done && opening < 1) { opening = Math.min(1, opening + dt / 4); lid.children.forEach((m, k) => (m.material.uniforms.uAlpha.value = (0.75 - k * 0.12) * (1 - opening))); lid.position.y = exit.y - opening * 20; if (opening >= 1) lid.visible = false; }
+      { const [txt, at] = goal(p); ui?.goal(txt, at); mark.set(st.done ? null : passeur.position, 2.6); mark.update(t, p); }
       near = nearest(p); ui?.prompt(near ? near[0] : null);
     },
   };

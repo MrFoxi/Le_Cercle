@@ -12,11 +12,15 @@ import { ink, glowy, skyMaterial, U } from './ink.js';
 import { rng, paint, lump, tube, merge, cast, TAU } from './modelage.js';
 import { createGround, sectors } from './sol.js';
 import { createStory } from './veilleuse.js';
+import { createPopulation } from './population.js';
+import { abyss } from './sol.js';
 
 /* ---------- Le relief : un sol de mousse, des chapeaux à plusieurs étages, le gouffre ---------- */
-export const R_CAVE = 1600, EXIT = { x: -760, z: 520, R: 42 };
-// le chemin des racines : un second passage, loin, dans le coin le plus noir de la grotte
-export const ROOTS = { x: 1040, z: 660, R: 16 };
+// tout est à deux pas du bas des chapeaux (vers 465, -165) : la Veilleuse à 100 m, le gouffre derrière elle, sous le
+// chapeau de l'Endormi, et le chemin des racines à côté, de l'autre côté
+export const R_CAVE = 1600, EXIT = { x: 651, z: -93, R: 42 };
+export const ROOTS = { x: 589, z: -235, R: 16 };
+export const GIRL = [556, -97], OUT = [0.93, 0.36]; // la Veilleuse ; la direction du large (depuis le bouquet des chapeaux)
 // les deux passages sont fermés au départ (un treillis de racines sur lequel on marche) ; l'histoire en ouvre un
 export const gates = { main: false, roots: false };
 export function floorAt(x, z) {
@@ -206,7 +210,7 @@ export function create(scene, Q, ctx = {}) {
     const body = new THREE.Mesh(paint(lump(1, { sx: 30, sy: 120, sz: 30, lumpy: 0.15, detail: 3 }).translate(0, -110, 0), '#8a7ab8', '#2a1a48'), ink({ line: 0.9 }));
     const eye = new THREE.Mesh(paint(lump(1, { sx: 0.6, sy: 9, sz: 0.6, detail: 2 }).translate(0, -90, 29), '#fff0a0'), ink({ line: 0.3, glow: 2 }));
     sleeper.add(body, eye); sleeper.userData.eye = eye;
-    const sx = EXIT.x + 210, sz = EXIT.z - 120; sleeper.position.set(sx, floorAt(sx, sz) + 225, sz); scene.add(sleeper);
+    const sx = EXIT.x + OUT[0] * 100, sz = EXIT.z + OUT[1] * 100; sleeper.position.set(sx, floorAt(sx, sz) + 225, sz); scene.add(sleeper); // son chapeau couvre le gouffre
     live.colliders.push([sx, sz, 34]);
   }
 
@@ -255,12 +259,17 @@ export function create(scene, Q, ctx = {}) {
   let squash = null;
   const start = spawn(), next = CAPS[1];
   // l'histoire : la Veilleuse, l'encre des spores, l'Endormi, le choix (le réveiller, ou le chemin des racines)
-  const story = createStory(scene, { floorAt, caps: PATH, exit: EXIT, roots: ROOTS, gates, sleeper, lidY, ui: ctx.ui }), base = live.update;
+  const story = createStory(scene, { floorAt, caps: PATH, exit: EXIT, roots: ROOTS, gates, sleeper, lidY, girlAt: GIRL, ui: ctx.ui }), base = live.update;
   live.colliders.push(...story.colliders);
+  // les deux passages : de vrais gouffres, une paroi qui s'enfonce et la brume violette au fond
+  const holes2 = [abyss(scene, { x: EXIT.x, z: EXIT.z, R: EXIT.R + 2, y: lidMain(EXIT.x, EXIT.z) - 6, depth: 300, wall: ['#5a4a7a', '#0a0818'], mist: '#6a4aa8' }), abyss(scene, { x: ROOTS.x, z: ROOTS.z, R: ROOTS.R + 1, y: lidRoots(ROOTS.x, ROOTS.z) - 3, depth: 200, wall: ['#4a3a6a', '#0a0818'], mist: '#4ae8f0' })];
+  // trois voyageurs, dans la forêt (on croise de moins en moins de monde en descendant)
+  const Lf = ['Chut… la forêt écoute. Marche doucement, elle s’allume.', 'Tu entends la petite qui chante ? Elle est près de l’Endormi.', 'Les grappes roses, sur les chapeaux, c’est de l’encre qui luit.'];
+  const pop = createPopulation(scene, { people: [[30, 20], [-40, 60], [70, -50]].map(([dx, dz]) => ({ kind: 'voyageur', home: [GIRL[0] - OUT[0] * 60 + dx, GIRL[1] - OUT[1] * 60 + dz], wander: 20, lines: Lf })), ground: floorAt, ui: ctx.ui, seed: 31 });
   return Object.assign(live, {
     look: LOOK, terrain, start, camYaw: Math.atan2(start[0] - next.x, start[2] - next.z),
     exitAt, killY: safe => Math.min(safe.y - 60, -60), maxFall: 30, interact: story.interact, story,
-    update(t, p) { base(t, p); story.update(t, p); },
+    update(t, p) { base(t, p); story.update(t, p); pop.update(t, p); holes2.forEach(h => h.update(t)); },
     // l'arrivée : il rebondit deux fois sur le chapeau (qui s'écrase comme un trampoline), puis se pose
     bounces: [17, 8],
     onBounce(p, n) {

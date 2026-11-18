@@ -10,6 +10,7 @@ import * as THREE from 'three';
 import { ink, glowy } from './ink.js';
 import { rng, paint, lump, tube, merge, cast, TAU } from './modelage.js';
 import { save } from './ui.js';
+import { beacon } from './sol.js';
 
 const AIR0 = 40, AIR_LONG = 85; // secondes de souffle dans le noir, avant et après le cadeau du Plongeur
 
@@ -101,6 +102,15 @@ export function createStory(scene, { floorAt, PL, windows, bells, fosse, lidY, g
     else if (n === 2) talk(LINES.two);
     else { gates.fosse = true; talk(LINES.three, { 1: 'La Fosse s’ouvre' }); ui?.say('Au fond, quelque chose s’ouvre.', hero.state.p.clone().add(new THREE.Vector3(0, 2.4, 0)), 4); }
   }
+  // ce qu'il faut faire maintenant ; la balise dorée sur le Plongeur tant qu'il lui manque des fenêtres
+  const mark = beacon(scene);
+  function goal(p) {
+    if (!st.met) return ['Nage jusqu’au Plongeur, assis au bord du toit de la plus haute tour', diver.position];
+    if (st.windows.length >= 3) return ['La Fosse est ouverte : plonge tout au fond, dans la lueur rouge', new THREE.Vector3(fosse.x, lidY, fosse.z)];
+    const w = wins.filter(w => !w.done && !w.fly).sort((u, v) => u.g.position.distanceTo(p) - v.g.position.distanceTo(p))[0];
+    if (!w) return ['La fenêtre remonte vers le Plongeur…', diver.position];
+    return [`Descends dans le noir et détoure au pinceau une fenêtre allumée (E) · ${st.windows.length}/3 · les cloches de nacre ouvertes rendent le souffle`, w.g.position];
+  }
   function nearest(p) {
     const c = [];
     if (st.met && p.distanceTo(diver.position) < 7) c.push(['parler', 'diver', 0]);
@@ -159,6 +169,7 @@ export function createStory(scene, { floorAt, PL, windows, bells, fosse, lidY, g
       if (!st.long && long.some(q => q && q.distanceTo(p) < 160)) { st.long = true; persist(); ui?.page('Le Long'); }
       // la Fosse s'ouvre : le treillis s'enfonce
       if (gates.fosse && opened < 1) { opened = Math.min(1, opened + dt / 5); lid.position.y = -opened * 30; if (opened >= 1) lid.visible = false; }
+      { const [txt, at] = goal(p); ui?.goal(txt, at); mark.set(st.windows.length >= 3 ? null : diver.position, 2.6); mark.update(t, p); }
       near = nearest(p); ui?.prompt(near ? near[0] : null);
     },
   };

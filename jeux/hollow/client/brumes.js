@@ -10,6 +10,8 @@ import { fbm } from './terrain.js';
 import { ink, glowy, skyMaterial, U } from './ink.js';
 import { rng, paint, lump, tube, merge, cast, TAU } from './modelage.js';
 import { createStory } from './passeur.js';
+import { createPopulation } from './population.js';
+import { abyss } from './sol.js';
 
 /* ---------- Le relief : des îles, des ponts ---------- */
 const ISLANDS = [], BRIDGES = [], HOLE = 18;
@@ -265,9 +267,14 @@ export function create(scene, Q, ctx = {}) {
   // l'histoire : le Passeur, l'encre rouge des trompettes, les ponts à encrer, les trois Lanternes, le Puits
   const story = createStory(scene, { islands: ISLANDS, bridges: BRIDGES, exit: EXIT, hole: HOLE, horns, topAt, ui: ctx.ui }), base = live.update;
   live.colliders.push(...story.colliders);
+  // sous le Puits : un vrai puits dans le rocher de l'île, qui s'enfonce dans la brume (on ne voit plus le dessous de l'île)
+  const well = abyss(scene, { x: EXIT.x, z: EXIT.z, R: HOLE, y: EXIT.y - 0.5, depth: 120, wall: ['#a8b0b8', '#3a4048'], mist: '#ffffff' });
+  // quelques voyageurs perdus dans la brume, sur les îles du chemin
+  const onPath = ISLANDS.filter(I => I.path !== undefined), Lb = ['Je n’y vois rien. Tu entends les trompettes ?', 'Le Passeur m’a pris pour un autre, à moi aussi.', 'Ne tombe pas. Ici, on retombe toujours sur une île… ou pas.', 'Les ponts au crayon ne portent personne. Il faut les encrer.'];
+  const pop = createPopulation(scene, { people: [3, 7, 12, 18, 24].map((i, k) => ({ kind: 'voyageur', home: [onPath[i].x + 4, onPath[i].z + 3], wander: Math.min(8, onPath[i].R * 0.4), lines: Lb })), ground: (x, z) => terrain(x, z).h, ui: ctx.ui, seed: 21 });
   return Object.assign(live, {
     look: LOOK, terrain, start, camYaw: Math.atan2(start[0] - next.x, start[2] - next.z),
     exitAt, killY: safe => safe.y - 160, maxFall: 40, interact: story.interact, story, // tomber de plus de 40 m (d'une île à une autre) ramène au dernier appui
-    update(t, p) { base(t, p); story.update(t, p); },
+    update(t, p) { base(t, p); story.update(t, p); pop.update(t, p); well.update(t); },
   });
 }

@@ -1,7 +1,7 @@
 // THE HOLLOW — la boucle : le rendu « encre vivante », les strates (une à la fois en mémoire), le voyageur, la chute
 // d'une strate à l'autre, et la carte de ce qu'il a vu. La strate atteinte la plus profonde est retenue.
 import * as THREE from 'three';
-import { U, createPipeline, setLook, ink } from './ink.js';
+import { U, createPipeline, setLook, ink, glowy } from './ink.js';
 import { paint, lump } from './modelage.js';
 import { createHero } from './hero.js';
 import { createFall } from './chute.js';
@@ -58,15 +58,49 @@ async function enter(n, place = true) {
   scene = new THREE.Scene(); cur = S;
   ui.clear(); world = mod.create(scene, Q, { ui, hero });
   seen.fill(0); revealTex.needsUpdate = true; reveal(world.start[0], world.start[2], 70);
-  if (place) { setLook(world.look); hero.enter(scene, world); }
+  if (place) { setLook(world.look); hero.enter(scene, world); U.uRevealAll.value = gardener() ? 1 : 0; }
+  column = motes = null; if (gardener()) celebrate(n); // la fête du voyage achevé (sinon, rien)
   if (world.hint) setTimeout(() => toast(world.hint), 4000); // ce qui change dans cette strate (la nage, par exemple)
   save(n);
   document.title = `The Hollow · Strate ${String(n).padStart(2, '0')}`;
 }
-// sauter dans la sortie : la chute, puis la strate suivante (ou un mot si elle n'est pas encore dessinée)
+// le voyage achevé (« achever » à la fin de la Cité) : le Hollow brille de tous ses feux, plus besoin d'encre ; une fête
+// de lumière autour du voyageur, et à l'arrivée de chaque strate (sauf la première) une colonne dorée qui fait remonter
+const gardener = () => { try { return JSON.parse(localStorage.getItem('hollow-fin')) === 'achever'; } catch { return false; } };
+let column = null, motes = null;
+function celebrate(n) {
+  const [x0, , z0] = world.start, x = x0 + 14, z = z0, y = world.swim ? world.start[1] - 40 : world.terrain(x, z).h;
+  if (n > 1) {
+    const g = new THREE.Group(); g.position.set(x, y, z);
+    g.add(new THREE.Mesh(new THREE.CylinderGeometry(2.2, 2.2, 260, 24, 1, true).translate(0, 130, 0), glowy({ color: '#ffd860', alpha: 0.45, add: true, soft: 1 })));
+    g.add(new THREE.Mesh(new THREE.RingGeometry(2.2, 3.2, 40).rotateX(-Math.PI / 2).translate(0, 0.1, 0), glowy({ color: '#ffe8a0', alpha: 0.8, add: true, soft: 0.2 })));
+    scene.add(g); column = { g, armed: false, n };
+  } else column = null;
+  motes = new THREE.InstancedMesh(new THREE.PlaneGeometry(0.22, 0.22), glowy({ color: '#ffd860', alpha: 0.9, add: true, soft: 0.2 }), 260); motes.frustumCulled = false; scene.add(motes);
+  motes.userData = Array.from({ length: 260 }, () => [Math.random() * 80 - 40, Math.random() * 30, Math.random() * 80 - 40, Math.random() * 6.28]);
+}
+const m4 = new THREE.Matrix4(), q0 = new THREE.Quaternion(), s1 = new THREE.Vector3(), p1 = new THREE.Vector3();
+function party(t) {
+  if (!motes) return;
+  const h = hero.state.p;
+  motes.userData.forEach(([x, y, z, ph], i) => motes.setMatrixAt(i, m4.compose(p1.set(h.x + x + Math.sin(t * 0.3 + ph) * 3, h.y + ((y + t * 1.2) % 30) - 4, h.z + z + Math.cos(t * 0.25 + ph) * 3), q0.setFromEuler(new THREE.Euler(0, t + ph, 0)), s1.setScalar(0.6 + Math.sin(t * 3 + ph) * 0.4))));
+  motes.instanceMatrix.needsUpdate = true;
+  // la colonne : il faut d'abord s'en éloigner (on arrive à côté), puis y entrer
+  if (column && !falling && !fall.active) {
+    const d = Math.hypot(h.x - column.g.position.x, h.z - column.g.position.z);
+    if (d > 8) column.armed = true;
+    if (column.armed && d < 2.4 && Math.abs(h.y - column.g.position.y) < 8) travel(STRATES[column.n - 2], true);
+  }
+}
+// sauter dans la sortie : la chute, puis la strate suivante (ou un mot si elle n'est pas encore dessinée) ; une strate
+// peut dire où l'on tombe (next : le vide de la Cité, une fois la fin choisie, ramène tout en haut)
 let falling = false;
 function descend() {
-  const next = STRATES[cur.n];
+  world.onExit?.();
+  travel(STRATES[(world.next?.() ?? cur.n + 1) - 1], false);
+}
+// aller vers une autre strate : en tombant (up = false), ou en remontant par la colonne de lumière (up = true)
+function travel(next, up) {
   if (!next?.load) { toast(`Strate ${String(cur.n + 1).padStart(2, '0')} — ${next?.name ?? '?'} : elle se dessine encore…`); hero.state.p.copy(hero.state.safe); hero.state.v.set(0, 0, 0); hero.state.exit = false; hero.state.fade = 1; return; }
   falling = true;
   const from = world.look;
@@ -74,7 +108,7 @@ function descend() {
     scene.remove(hero.rig.g);
     let built = null;
     // à la fin de la chute (ou dès que la strate est prête, si elle a tardé), on pose le voyageur à son départ
-    fall.start(from, mod.LOOK, next.n, hero, () => built.then(() => { setLook(world.look); hero.enter(scene, world, true); falling = false; }));
+    fall.start(from, mod.LOOK, next.n, hero, () => built.then(() => { setLook(world.look); hero.enter(scene, world, !up); U.uRevealAll.value = gardener() ? 1 : 0; falling = false; }), up);
     // la strate suivante se construit pendant la chute
     built = new Promise(res => setTimeout(() => enter(next.n, false).then(res), 300));
   });
@@ -155,7 +189,7 @@ function frame(now) {
   U.uTime.value = t; U.uBoil.value = t * 8; // le trait se redessine 8 fois par seconde
   if (fall.active) { fall.update(dt); if (fall.active) pipe.render(fall.scene, camera, new THREE.Vector3(), false); return; }
   if (falling) return;
-  hero.update(dt); stepFX(dt);
+  hero.update(dt); stepFX(dt); party(t);
   if (hero.state.exit) { descend(); return; }
   world.update(t, hero.state.p);
   world.sky.position.copy(camera.position);

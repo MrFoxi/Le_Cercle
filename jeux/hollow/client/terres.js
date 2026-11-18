@@ -13,6 +13,8 @@ import { ink, glowy, skyMaterial, U } from './ink.js';
 import { rng, paint, lump, tube, merge, cast, TAU } from './modelage.js';
 import { createGround, sectors } from './sol.js';
 import { createStory } from './greffee.js';
+import { createPopulation } from './population.js';
+import { abyss } from './sol.js';
 
 /* ---------- Le relief : un sol tiède, le dos de l'Hôte, les piliers vivants, les côtes-ponts ---------- */
 export const R_CAV = 1500;
@@ -282,14 +284,17 @@ export function create(scene, Q, ctx = {}) {
   };
   const start = spawn();
   // l'histoire : la Greffée, la sève, le Battement à nourrir ou à faire taire, la Valve
-  const story = createStory(scene, { floorAt, mesa: MESA, heart: HEART, heartMesh: heart, H, valve: VALVE, gates, sap: SAP, start, look: LOOK, eye: live.eye, ui: ctx.ui, hero: ctx.hero }), base = live.update;
+  const story = createStory(scene, { floorAt, mesa: MESA, heart: HEART, heartMesh: heart, H, valve: VALVE, gates, sap: SAP, start, look: LOOK, eye: live.eye, climbs: CLIMBS, ui: ctx.ui, hero: ctx.hero }), base = live.update;
   live.colliders.push(...story.colliders);
+  // la Valve : une gorge de chair qui s'enfonce dans l'Hôte ; et un seul voyageur, assis, à moitié pris par le sol
+  const throat = abyss(scene, { x: VALVE.x, z: VALVE.z, R: VALVE.R + 1, y: valveLid(VALVE.x, VALVE.z) - 2, depth: 110, wall: ['#e8705a', '#3a0a08'], mist: '#ff9a7a' });
+  const pop = createPopulation(scene, { people: [{ kind: 'auditeur', home: [start[0] - D.x * 40 + 8, start[2] - D.y * 40], wander: 0, lines: ['C’est tiède… je reste encore un peu.', 'Tu entends ? Il bat. Il bat pour nous.'] }], ground: floorAt, ui: ctx.ui, seed: 51 });
   return Object.assign(live, {
     look: LOOK, terrain, start, climbs: CLIMBS,
     camYaw: Math.atan2(D.x, D.y), // la caméra derrière lui, il regarde vers l'Hôte
     hint: 'Les parois vivantes (veinées de rouge) s’escaladent : avance contre elles · Z/S monter, descendre · Q/D faire le tour · Espace se lâcher',
     exitAt, killY: safe => Math.min(safe.y - 40, -40), maxFall: 30, interact: story.interact, story, leave: story.leave,
-    update(t, p) { base(t, p); story.update(t, p); },
+    update(t, p) { base(t, p); story.update(t, p); pop.update(t, p); throat.update(t); },
     bounces: [12, 5],
   });
 }

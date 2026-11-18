@@ -34,6 +34,15 @@ function skydive(t, rig, seg) {
   rig.flare(0.35 * spread + 0.15 * tuck + 0.45 * upright + Math.sin(t * 13) * 0.05); // le manteau claque au vent
 }
 
+// la remontée (par la colonne de lumière) : debout, bras levés, porté vers le haut, le manteau tiré vers le bas
+function rise(t, rig, seg) {
+  const { g, torso, L, R, AL, AR, KL, KR, EL, ER, head } = rig, open = seg(0, 1.5);
+  g.rotation.set(Math.sin(t * 0.7) * 0.05, Math.sin(t * 0.3) * 0.3, Math.sin(t * 0.9) * 0.04); g.position.y = 0;
+  AL.rotation.set(-2.7 * open, 0, -0.35 - Math.sin(t * 1.5) * 0.1); AR.rotation.set(-2.7 * open, 0, 0.35 + Math.sin(t * 1.5) * 0.1); EL.rotation.x = ER.rotation.x = -0.2;
+  L.rotation.set(0.1, 0, -0.05); R.rotation.set(0.15, 0, 0.05); KL.rotation.x = 0.25; KR.rotation.x = 0.35;
+  torso.rotation.x = -0.1; head.rotation.x = -0.5 * open; rig.flare(-0.2 + Math.sin(t * 9) * 0.04);
+}
+
 /* ---------- Les mises en scène ---------- */
 const THEMES = {
   // vers les Brumes : anneaux d'encre, nuages, traits de vitesse ; vrille, saltos, étoile, tire-bouchon, il plane
@@ -41,6 +50,7 @@ const THEMES = {
     ring: (k, r) => { const m = new THREE.Mesh(paint(new THREE.TorusGeometry(9 + r() * 9, 0.35 + r() * 0.5, 8, 64), k % 2 ? '#ffffff' : '#e8e0f0', '#9a90b8'), ink({ line: 1 })); m.userData.flat = true; return m; },
     cloud: (k, r) => { const K = []; for (let i = 0; i < 4; i++) K.push(paint(lump(2 + r() * 3, { sy: 0.7, lumpy: 0.2, seed: k * 5 + i, detail: 2 }).translate((i - 1.5) * 3, r() * 1.5, (r() - 0.5) * 2), '#ffffff', '#c8d0e8')); return new THREE.Mesh(merge(K), ink({ line: 0.8 })); },
     line: { color: '#2a2838', glow: 0 }, bits: ['#7fd090', '#ffd6e8', '#a8b0b8'], bitsGlow: 0, mist: '#ffffff',
+    layers: 4, // on quitte les Jardins par la mer de nuages : on les traverse au début
     tricks: skydive,
   },
   // vers la Forêt : chapeaux géants qui remontent (dessous rose qui luit), spores, fils cyan, méduses d'air ;
@@ -109,6 +119,8 @@ function setupScene(theme) {
     const m = new THREE.Mesh(merge(K), ink({ line: 0.4, trans: 0.7, glow: 0.5 })), a = r() * TAU, d = 9 + r() * 20;
     m.userData = { x: Math.cos(a) * d, z: Math.sin(a) * d, y: -r() * 160, sp: 10 + r() * 14, s: 1 + r() * 2 }; s.add(m); return m;
   }) : [];
+  // des nappes de nuages épaisses, traversées une à une au début de la chute
+  live.layers = Array.from({ length: theme.layers || 0 }, (_, k) => { const m = new THREE.Mesh(new THREE.PlaneGeometry(160, 160).rotateX(-Math.PI / 2), glowy({ color: '#ffffff', alpha: 0.85, soft: 0.6 })); m.userData.y = -14 - k * 22; s.add(m); return m; });
   const mist = new THREE.Mesh(new THREE.PlaneGeometry(400, 400), glowy({ color: theme.mist, alpha: 0.9, soft: 1 })); mist.rotation.x = -Math.PI / 2; s.add(mist); live.mist = mist;
   return { s, live };
 }
@@ -131,11 +143,12 @@ export function createFall(camera) {
     get active() { return !!run; },
     get scene() { return stage?.s; },
     // from, to : les allures des deux strates ; n : numéro de la strate qui arrive ; hero : le voyageur ; done() à la fin
-    start(from, to, n, hero, done) {
+    // up : on remonte (la colonne de lumière) ; le décor défile alors vers le bas, et le thème est celui du passage d'au-dessous
+    start(from, to, n, hero, done, up = false) {
       if (stage) stage.s.traverse(o => { o.geometry?.dispose(); o.material?.dispose?.(); });
-      const theme = THEMES[n] || THEMES[2];
+      const theme = THEMES[up ? n + 1 : n] || THEMES[2];
       stage = setupScene(theme);
-      run = { t: 0, from, to, n, hero, done, skip: false, carded: false, theme };
+      run = { t: 0, from, to, n, hero, done, skip: false, carded: false, theme, up };
       stage.s.add(hero.rig.g); hero.rig.g.position.set(0, 0, 0); hero.pose();
       U.uRevealAll.value += 10; // pendant la chute, tout est en couleur
       const skip = e => { if (run && run.t > 1.5 && (e.type === 'click' || e.code === 'Space')) run.skip = true; };
@@ -148,19 +161,21 @@ export function createFall(camera) {
       lerpLook(R.from, R.to, ease(k));
       if (!R.carded && t > 2.2) { R.carded = true; card(el, R.n, R.to.name); }
       // le décor remonte ; la brume du fond monte à la fin (on arrive)
+      const dir = R.up ? -1 : 1;
+      for (const m of live.layers) { const u = m.userData; u.y += dt * 40 * dir; m.position.y = u.y; m.visible = !R.up; }
       for (const m of live.rings) {
-        const u = m.userData; u.y += dt * 38; if (u.y > 40) u.y -= 196;
+        const u = m.userData; u.y += dt * 38 * dir; if (u.y > 40) u.y -= 196; if (u.y < -156) u.y += 196;
         if (u.flat) { m.position.set(0, u.y, 0); m.rotation.set(Math.PI / 2 + u.tilt, 0, t * u.spin); }
         else { m.position.set(Math.cos(u.a) * u.side, u.y, Math.sin(u.a) * u.side); m.rotation.set(u.tilt, t * u.spin, 0); }
       }
-      for (const m of live.clouds) { const u = m.userData; u.y += dt * u.sp; if (u.y > 60) u.y -= 260; m.position.set(u.x, u.y, u.z); m.rotation.y = t * 0.2; }
-      for (const m of live.lines) { const u = m.userData; u.y += dt * u.sp; if (u.y > 40) u.y -= 160; m.position.set(u.x, u.y, u.z); }
-      for (const m of live.jellies) { const u = m.userData; u.y += dt * u.sp; if (u.y > 50) u.y -= 210; m.position.set(u.x + Math.sin(t + u.x) * 2, u.y, u.z); m.scale.set(u.s, u.s * (1 + Math.sin(t * 3 + u.z) * 0.1), u.s); }
+      for (const m of live.clouds) { const u = m.userData; u.y += dt * u.sp * dir; if (u.y > 60) u.y -= 260; if (u.y < -200) u.y += 260; m.position.set(u.x, u.y, u.z); m.rotation.y = t * 0.2; }
+      for (const m of live.lines) { const u = m.userData; u.y += dt * u.sp * dir; if (u.y > 40) u.y -= 160; if (u.y < -120) u.y += 160; m.position.set(u.x, u.y, u.z); }
+      for (const m of live.jellies) { const u = m.userData; u.y += dt * u.sp * dir; if (u.y > 50) u.y -= 210; if (u.y < -160) u.y += 210; m.position.set(u.x + Math.sin(t + u.x) * 2, u.y, u.z); m.scale.set(u.s, u.s * (1 + Math.sin(t * 3 + u.z) * 0.1), u.s); }
       for (const m of live.bits) { const u = m.userData; m.position.set(Math.cos(u.a + t * 0.8) * u.d, u.y + Math.sin(t * 2 + u.a) * 0.6, Math.sin(u.a + t * 0.8) * u.d); m.rotation.set(t * u.w, t * u.w * 0.7, 0); }
-      live.mist.position.y = -60 + ease(Math.max(0, (t - 5.5) / 2)) * 58;
+      live.mist.position.y = (R.up ? 1 : -1) * (60 - ease(Math.max(0, (t - 5.5) / 2)) * 58);
       // les figures du voyageur
       const seg = (a, b) => ease(Math.max(0, Math.min(1, (t - a) / (b - a))));
-      R.hero.rig.reset(); R.theme.tricks(t, R.hero.rig, seg); R.hero.rig.scarfStep(dt);
+      R.hero.rig.reset(); (R.up ? rise : R.theme.tricks)(t, R.hero.rig, seg); R.hero.rig.scarfStep(dt);
       // la caméra : loin au début, elle plonge vers lui, tourne autour, puis le regarde arriver d'en dessous
       const d = 16 - seg(0, 2.0) * 9 + seg(6.0, 7.5) * 3, a = 0.5 + t * 0.12, h = 2 + seg(0.8, 2.4) * 4 - seg(6.0, 7.5) * 5;
       camera.position.set(Math.sin(a) * d, h, Math.cos(a) * d); camera.lookAt(0, 0.4, 0);

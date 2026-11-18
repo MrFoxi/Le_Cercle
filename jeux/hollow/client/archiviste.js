@@ -10,6 +10,7 @@ import * as THREE from 'three';
 import { ink, U } from './ink.js';
 import { rng, paint, lump, tube, merge, cast, TAU } from './modelage.js';
 import { save } from './ui.js';
+import { beacon } from './sol.js';
 
 // l'Archiviste : une silhouette d'encre très haute et très mince, de longs bras, une gomme pâle dans une main
 function archivisteGeometry() {
@@ -46,8 +47,8 @@ export function createStory(scene, { nodes, nodeMeshes, rings, awake, plat, ramp
   };
   const LINES = {
     first: () => ['Te voilà.', 'Je t’attendais. Je les attends tous.', ...memory(), 'Ici, il y a le dessin de chaque voyageur. La Glaneuse, le Passeur, la Veilleuse, le Plongeur, la Greffée…', 'Et le tien. Il est inachevé.', 'Achève-le, et tu remonteras tout en haut, tailler les Jardins. C’est ce qu’a fait celui d’avant.', 'Ou déchire-le. Le Hollow t’oubliera.'],
-    achever: ['…', 'Il te ressemble. Il a toujours eu ton manteau.', 'Monte. Les Jardins t’attendent.'],
-    dechirer: ['…', 'Bien.', 'Personne ne t’attendra plus.'],
+    achever: ['…', 'Il te ressemble. Il a toujours eu ton manteau.', 'Le Hollow est à toi : chaque strate brille, plus besoin d’encre.', 'Pour remonter, saute dans le vide, là, au bord des Archives : il te ramène tout en haut. Ou monte strate par strate par les colonnes de lumière.'],
+    dechirer: ['…', 'Bien.', 'Personne ne t’attendra plus.', 'Saute dans le vide, au bord des Archives : un autre voyage commencera, tout en haut.'],
   };
   let queue = [], qT = 0, last = 0, near = null, end = null;
   const talk = (lines, pages = {}) => { if (!queue.length) qT = 0; queue.push(...lines.map((l, k) => [l, pages[k]])); };
@@ -55,16 +56,29 @@ export function createStory(scene, { nodes, nodeMeshes, rings, awake, plat, ramp
   // l'écran de fin : un titre écrit à l'encre, deux lignes, et de quoi recommencer (le carnet est gardé)
   function showEnd(kind) {
     const T = kind === 'achever'
-      ? ['Le Jardinier', 'Tout en haut, sur la crête des Jardins, une silhouette immense taille les arbres et regarde descendre les manteaux.', 'C’est toi, maintenant.']
-      : ['La page déchirée', 'Le Hollow continue, sans toi. Plus rien ne se souvient de ton passage.', 'Quelque part en haut, un manteau vide attend le prochain voyageur.'];
-    fin.innerHTML = `<small>Fin</small><h2>${T[0]}</h2><p>${T[1]}</p><p>${T[2]}</p><div><button id="fin-again">Recommencer le voyage</button><button id="fin-stay">Rester ici</button></div>`;
+      ? ['Le Jardinier', 'Tu as achevé ton dessin. Tout en haut, sur la crête des Jardins, la silhouette immense qui regarde descendre les manteaux, c’est toi, maintenant.', 'Le Hollow brille de tous ses feux. Pour remonter : saute dans le vide, au bord des Archives (il te ramène aux Jardins), ou entre dans la colonne de lumière dorée à l’arrivée de chaque strate pour monter d’un étage.']
+      : ['La page déchirée', 'Le Hollow continue, sans toi. Plus rien ne se souvient de ton passage.', 'Pour recommencer : saute dans le vide, au bord des Archives (ou appuie sur « Nouveau voyage »). Un voyage neuf commence tout en haut ; ton carnet, lui, se souvient.'];
+    fin.innerHTML = `<small>Fin</small><h2>${T[0]}</h2><p>${T[1]}</p><p>${T[2]}</p><div><button id="fin-stay">Continuer</button><button id="fin-again">${kind === 'achever' ? 'Recommencer un voyage neuf' : 'Nouveau voyage'}</button></div>`;
     fin.hidden = false; document.exitPointerLock?.();
-    fin.querySelector('#fin-again').onclick = () => { for (const k of ['hollow-jardins', 'hollow-brumes', 'hollow-foret', 'hollow-abysses', 'hollow-terres', 'hollow-cite', 'hollow-strate']) localStorage.removeItem(k); location.href = location.pathname; };
+    fin.querySelector('#fin-again').onclick = () => { fresh(); location.href = location.pathname; };
     fin.querySelector('#fin-stay').onclick = () => { fin.hidden = true; };
+  }
+  // un voyage neuf : toutes les histoires oubliées, sauf le carnet
+  const fresh = () => { for (const k of ['hollow-jardins', 'hollow-brumes', 'hollow-foret', 'hollow-abysses', 'hollow-terres', 'hollow-cite', 'hollow-strate', 'hollow-fin']) localStorage.removeItem(k); };
+  // ce qu'il faut faire maintenant ; la balise dorée sur l'Archiviste jusqu'au choix
+  const mark = beacon(scene);
+  function goal(p) {
+    const k = st.awake.indexOf(false);
+    if (k >= 0) return [k < 3 ? 'Fais apparaître l’escalier : approche-toi du nœud lumineux de l’anneau et appuie sur E' : 'Fais apparaître le pont vers les Archives : nœud lumineux, E', new THREE.Vector3(nodes[k][0], nodes[k][1] + 2, nodes[k][2])];
+    if (!st.met) return ['Traverse le pont de lumière jusqu’aux Archives, au centre', arch.position];
+    if (!st.told) return ['Écoute l’Archiviste', arch.position];
+    if (!st.choice) return ['Choisis ta fin : achever ton dessin (pupitre de gauche, E) · ou déchirer la page (pupitre de droite, E)', lecterns[0].position];
+    const a = Math.atan2(p.z, p.x);
+    return [st.choice === 'achever' ? 'Saute dans le vide, au bord des Archives : il te ramène tout en haut, dans les Jardins en couleur' : 'Saute dans le vide, au bord des Archives, pour commencer un nouveau voyage', new THREE.Vector3(Math.cos(a) * (plat.R + 20), 0, Math.sin(a) * (plat.R + 20))];
   }
   function nearest(p) {
     const c = [];
-    nodes.forEach(([x, y, z], k) => { const d = Math.hypot(p.x - x, p.z - z); if (!st.awake[k] && d < 5 && Math.abs(p.y - y) < 4) c.push(['réveiller l’anneau au pinceau', k, d]); });
+    nodes.forEach(([x, y, z], k) => { const d = Math.hypot(p.x - x, p.z - z); if (!st.awake[k] && d < 5 && Math.abs(p.y - y) < 4) c.push([k < 3 ? 'faire apparaître l’escalier (pinceau)' : 'faire apparaître le pont vers les Archives (pinceau)', k, d]); });
     if (st.met && p.distanceTo(arch.position) < 5) c.push(['écouter l’Archiviste', 'arch', p.distanceTo(arch.position)]);
     if (st.told && !st.choice && !queue.length) { const d0 = p.distanceTo(lecterns[0].position), d1 = p.distanceTo(lecterns[1].position); if (d0 < 3.5) c.push(['achever ton dessin', 'achever', d0]); if (d1 < 3.5) c.push(['déchirer la page', 'dechirer', d1]); }
     return c.sort((a, b) => a[2] - b[2])[0] || null;
@@ -72,7 +86,10 @@ export function createStory(scene, { nodes, nodeMeshes, rings, awake, plat, ramp
   return {
     colliders: [[ax, az, 0.8], ...lecterns.map(m => [m.position.x, m.position.z, 0.9])],
     debug: { st, arch, lecterns, awake, get end() { return end; } },
-    leave() { U.uRevealAll.value = 0; fin.hidden = true; },
+    leave() { if (save.load('hollow-fin', null) !== 'achever') U.uRevealAll.value = 0; fin.hidden = true; },
+    // sauter dans le vide après la fin : retour tout en haut (un voyage neuf si la page est déchirée)
+    get finished() { return !!st.choice; },
+    onExit() { if (st.choice === 'dechirer') fresh(); },
     interact() {
       if (!near) return;
       const [, what] = near;
@@ -104,6 +121,8 @@ export function createStory(scene, { nodes, nodeMeshes, rings, awake, plat, ramp
         else { const k = Math.min(1, end.t / 6); page.scale.set(1, Math.max(0.02, 1 - k * 1.5), 1); scene.traverse(o => { const u = o.material?.uniforms?.uFade; if (u && o !== hero?.rig.g && !hero?.rig.g.getObjectById(o.id)) u.value = Math.max(u.value, k); }); }
         if (end.t > 10 && !queue.length && qT < 0.5 && fin.hidden && !end.shown) { end.shown = true; showEnd(end.kind); }
       }
+      if (!end || end.shown) { const [txt, at] = goal(p); ui?.goal(txt, at); } else ui?.goal(null);
+      mark.set(st.choice || st.awake.includes(false) ? null : arch.position, 5); mark.update(t, p);
       near = nearest(p); ui?.prompt(near && !end ? near[0] : null);
     },
   };

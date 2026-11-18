@@ -12,6 +12,7 @@ import { ink } from './ink.js';
 import { U } from './ink.js';
 import { rng, paint, lump, tube, merge, cast, TAU } from './modelage.js';
 import { save } from './ui.js';
+import { beacon } from './sol.js';
 
 const SAP_MAX = 8, COST = 4;
 
@@ -27,7 +28,7 @@ function greffeeGeometry() {
   return merge(K);
 }
 
-export function createStory(scene, { floorAt, mesa, heart, heartMesh, H, valve, gates, sap, start, look, eye, ui, hero }) {
+export function createStory(scene, { floorAt, mesa, heart, heartMesh, H, valve, gates, sap, start, look, eye, climbs, ui, hero }) {
   const st = Object.assign({ met: false, told: false, ink: 0, taken: [], choice: null, host: false }, save.load('hollow-terres', {}));
   const persist = () => save.keep('hollow-terres', st);
   const r = rng(5505);
@@ -86,6 +87,19 @@ export function createStory(scene, { floorAt, mesa, heart, heartMesh, H, valve, 
     const at = ac.currentTime + 0.02; thump(v, at, 62); thump(v * 0.6, at + (0.28 * 60) / H.bpm, 55);
   };
 
+  // ce qu'il faut faire maintenant ; la balise dorée sur la Greffée tant que le Battement n'a pas son sort
+  const mark = beacon(scene);
+  function goal(p) {
+    if (!st.met) {
+      if (p.y > mesa.top - 6) return ['Trouve la Greffée, au pied du cœur, sur le dos de l’Hôte', greffee.position];
+      const C = climbs.find(C => p.y < C.top - 1) ?? climbs[2];
+      return ['Monte sur le dos de l’Hôte : escalade les piliers veinés de rouge (avance contre eux, Z pour grimper) et marche sur les côtes', new THREE.Vector3(C.x, Math.min(C.top, p.y + 4), C.z)];
+    }
+    if (!st.told) return ['Parle à la Greffée (E)', greffee.position];
+    if (st.choice) return ['La Valve est ouverte, près de la Greffée : saute dedans', new THREE.Vector3(valve.x, lidY, valve.z)];
+    if (st.ink < COST) { const d = drops.filter(d => d.m.visible).sort((u, v) => u.m.position.distanceTo(p) - v.m.position.distanceTo(p))[0]; return [`Ramasse la sève : les grappes rouges qui luisent, en haut des piliers et sur l’Hôte (${st.ink}/${COST})`, d ? d.m.position : greffee.position]; }
+    return ['Choisis : nourris le Battement par sa bouche · ou fais-le taire au pinceau, sur son flanc (E)', mouthP];
+  }
   function nearest(p) {
     const c = [];
     if (st.met && p.distanceTo(greffee.position) < 6) c.push(['parler', 'girl', p.distanceTo(greffee.position)]);
@@ -124,6 +138,7 @@ export function createStory(scene, { floorAt, mesa, heart, heartMesh, H, valve, 
       if (gates.valve && opened < 1) { opened = Math.min(1, opened + dt / 4); lid.children.forEach(m => m.scale.set(1 - opened * 0.7, 1, 1)); lid.position.y = lidY - opened * 3; if (opened >= 1) lid.visible = false; }
       // l'œil de l'Hôte : la première fois qu'il s'ouvre, c'est une page
       if (!st.host && eye.open > 0.6) { st.host = true; persist(); ui?.page('On marchait sur un Hôte'); }
+      { const [txt, at] = goal(p); ui?.goal(txt, at); mark.set(st.choice ? null : greffee.position, 3); mark.update(t, p); }
       near = nearest(p); ui?.prompt(near ? near[0] : null);
     },
   };

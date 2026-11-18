@@ -7,8 +7,8 @@ const load = (k, d) => { try { return JSON.parse(localStorage.getItem(k)) ?? d; 
 const keep = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch { /* stockage plein ou bloqué : tant pis, la page reste en mémoire */ } };
 
 export function createUI(camera, canvas) {
-  const say = $('#say'), prompt = $('#prompt'), inkEl = $('#ink'), airEl = $('#air'), book = $('#carnet'), v = new THREE.Vector3();
-  let anchor = null, sayTimer = 0, pending = null;
+  const say = $('#say'), prompt = $('#prompt'), inkEl = $('#ink'), airEl = $('#air'), goalEl = $('#goal'), markEl = $('#mark'), book = $('#carnet'), v = new THREE.Vector3();
+  let anchor = null, sayTimer = 0, pending = null, target = null, goalText = '';
   const pages = load('hollow-carnet', []);
   const place = (el, p, dy) => { v.copy(p).project(camera); const vis = v.z < 1 && Math.abs(v.x) < 1.2 && Math.abs(v.y) < 1.2; el.style.opacity = vis ? '' : 0; el.style.left = `${(v.x * 0.5 + 0.5) * innerWidth}px`; el.style.top = `${(-v.y * 0.5 + 0.5) * innerHeight - dy}px`; };
   const ui = {
@@ -24,7 +24,12 @@ export function createUI(camera, canvas) {
     // le souffle, de 0 à 1 (null : on respire, la bande disparaît)
     air(k) { airEl.hidden = k == null; if (k != null) { airEl.style.setProperty('--k', k.toFixed(3)); airEl.classList.toggle('low', k < 0.25); } },
     // une strate neuve : ni encrier ni souffle tant qu'elle ne les montre pas
-    clear() { inkEl.hidden = true; ui.air(null); ui.prompt(null); },
+    clear() { inkEl.hidden = true; ui.air(null); ui.prompt(null); ui.goal(null); },
+    // l'objectif : ce qu'il faut faire maintenant (une ligne en haut à gauche), et un repère sur la cible (un point du monde)
+    goal(text, at = null) {
+      if (text !== goalText) { goalText = text || ''; goalEl.textContent = goalText; goalEl.hidden = !text; if (text) { goalEl.classList.remove('new'); void goalEl.offsetWidth; goalEl.classList.add('new'); } }
+      target = text ? at : null; markEl.hidden = !target;
+    },
     // une page du carnet : on capture l'image juste après le prochain dessin, on l'encre en noir et blanc
     page(caption) { pending = caption; },
     capture() {
@@ -42,6 +47,8 @@ export function createUI(camera, canvas) {
       return !book.hidden;
     },
     update(dt) {
+      // le repère : sur la cible si elle est à l'écran, sinon collé au bord, une flèche vers elle
+      if (target) { v.copy(target).project(camera); const behind = v.z > 1; let x = v.x, y = v.y; if (behind) { x = -x; y = -y; } const off = behind || Math.abs(x) > 0.92 || Math.abs(y) > 0.88, k = off ? 0.9 / Math.max(Math.abs(x) / 0.92, Math.abs(y) / 0.88, 1e-3) : 1; x *= off ? k : 1; y *= off ? k : 1; markEl.style.left = `${(x * 0.5 + 0.5) * innerWidth}px`; markEl.style.top = `${(-y * 0.5 + 0.5) * innerHeight}px`; markEl.classList.toggle('off', off); markEl.style.setProperty('--a', `${Math.atan2(-y, x)}rad`); markEl.dataset.d = `${Math.round(camera.position.distanceTo(target))} m`; }
       if (anchor) { place(say, anchor, 40); sayTimer -= dt; if (sayTimer <= 0) { say.classList.remove('on'); anchor = null; } }
     },
   };

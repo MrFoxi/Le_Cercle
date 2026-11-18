@@ -10,7 +10,7 @@ import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { ink } from './ink.js';
 
 export const HIP = 0.9, THIGH = 0.42, SHIN = 0.42;
-const COAT = '#33335a', COAT_LIGHT = '#4a4a78', BOOT = '#1a1820', SCARF = '#ece2c8', SKIN = '#e0c0a8', HAIR = '#1c1a24';
+const BOOT = '#1a1820';
 
 // une pièce peinte d'un dégradé (sombre en bas, comme une ombre douce)
 function part(g, top, bottom = top) {
@@ -42,7 +42,9 @@ function brushGeometry() {
   return join([handle, ...rings, ferrule, tuft]);
 }
 
-export function createVoyageur() {
+// o : d'autres couleurs (les voyageurs et les habitants qu'on croise), brush: false sans le grand pinceau
+export function createVoyageur(o = {}) {
+  const { coat: COAT = '#33335a', coatLight: COAT_LIGHT = '#4a4a78', scarf: SCARF = '#ece2c8', skin: SKIN = '#e0c0a8', hair: HAIR = '#1c1a24', brush: withBrush = true } = o;
   const mat = ink({ line: 1, side: THREE.DoubleSide }), glow = ink({ line: 0.4, glow: 1.4, color: '#7a6aff', vertexColors: false });
   const mesh = (g, m = mat) => { const o = new THREE.Mesh(g, m); o.layers.enable(1); return o; };
   const grp = (x = 0, y = 0, z = 0, ...kids) => { const o = new THREE.Group(); o.position.set(x, y, z); if (kids.length) o.add(...kids); return o; };
@@ -98,7 +100,7 @@ export function createVoyageur() {
   const onBack = grp(-0.2, -0.73, -0.29); onBack.rotation.set(0.1, 0, -0.55); spine.add(onBack);
   spine.add(mesh(part(new THREE.TorusGeometry(0.3, 0.012, 4, 24, Math.PI * 0.7).rotateZ(-0.6).scale(0.75, 1, 1.05).translate(0.02, 0.2, 0), '#5a4028')));
   const inHand = grp(0, -0.29, 0.02); ER.add(inHand);
-  onBack.add(brush);
+  if (withBrush) onBack.add(brush);
 
   // l'écharpe : une bande qui part de la nuque et flotte (simulée dans le monde)
   const N = 9, SEG = 0.14, pts = Array.from({ length: N }, () => new THREE.Vector3()), prev = pts.map(p => p.clone());

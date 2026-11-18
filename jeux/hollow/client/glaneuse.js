@@ -9,6 +9,7 @@ import { rng, paint, lump, tube, merge, cast, TAU } from './modelage.js';
 import { tree, umbrella, seeder } from './jardins.js';
 import { R_ABYSS } from './terrain.js';
 import { save } from './ui.js';
+import { beacon } from './sol.js';
 
 const INK_MAX = 6, BRIDGE_COST = 3;
 
@@ -85,7 +86,10 @@ export function createStory(scene, { terrain, exitAt, start, ui }) {
     const u = umbrella(k * 13 + 5), g = new THREE.Group(), heart = ink({ line: 0.4, glow: st.pollen.includes(k) ? 0.1 : 1.6, color: '#ffd860' });
     g.add(cast(new THREE.Mesh(u.stem, ink({ line: 0.8 }))), cast(new THREE.Mesh(u.petals, ink({ line: 0.55, trans: 0.9, side: THREE.DoubleSide }))), new THREE.Mesh(u.heart, heart));
     g.position.set(x, ground(x, z), z); g.rotation.y = r() * TAU; scene.add(g);
-    blooms.push({ k, x, z, heart, top: g.position.clone().add(new THREE.Vector3(...u.top)) });
+    // une colonne de lumière dorée au-dessus des ombrelles à pollen : on les voit de loin (elle s'éteint une fois cueillie)
+    const pillar = new THREE.Mesh(new THREE.CylinderGeometry(1.2, 2.2, 26, 16, 1, true).translate(0, 13, 0), glowy({ color: '#ffd860', alpha: 0.35, add: true, soft: 1 }));
+    pillar.position.copy(g.position).add(new THREE.Vector3(0, u.top[1], 0)); pillar.visible = !st.pollen.includes(k); scene.add(pillar);
+    blooms.push({ k, x, z, heart, pillar, top: g.position.clone().add(new THREE.Vector3(...u.top)) });
   }
   // les trois Semeurs dorés, perdus sur la terrasse
   const seedG = seeder(), seeds = [0, 1, 2].map(k => {
@@ -102,13 +106,25 @@ export function createStory(scene, { terrain, exitAt, start, ui }) {
 
   /* --- les paroles --- */
   const LINES = {
-    first: ['Encore un manteau qui descend…', 'Ici, ce qui n’est pas encré n’existe pas.', 'Le pollen des ombrelles, c’est de l’encre. Va le cueillir.', 'Trois Semeurs se sont perdus. Ramène-les à l’arbre-mère, sur l’île.', 'Lui seul peut ouvrir la descente. Et ne reste pas dans le regard du Jardinier.'],
+    first: ['Encore un manteau qui descend…', 'Ici, ce qui n’est pas encré n’existe pas. Tout est au crayon, sauf ce que tu as vu.', 'Le pollen des ombrelles dorées, celles qui brillent sous une colonne de lumière, c’est de l’encre. Passe dessous pour le cueillir.', 'Avec trois gouttes, encre la passerelle : approche-toi de la borne de pierre, au bord de la terrasse, et appuie sur E.', 'De l’autre côté, sur l’île, l’arbre-mère a perdu trois Semeurs dorés. Approche-toi d’un Semeur, appuie sur E : il te suivra.', 'Quand les trois seront rentrés, la descente s’ouvrira. Et ne reste pas dans le regard du Jardinier.'],
     noInk: ['La passerelle n’est qu’un dessin. Il te faut trois gouttes d’encre.'],
     seeds: n => [`Encore ${n} Semeur${n > 1 ? 's' : ''}. Ils brillent d’or.`],
     done: ['L’arbre a parlé. La descente est ouverte.', '…', 'Je ne me souviens plus de mon nom.'],
   };
   let queue = [], qT = 0;
   const talk = lines => { queue = [...lines]; qT = 0; };
+  // ce qu'il faut faire maintenant, et où : la ligne d'objectif et son repère ; la balise dorée sur la Glaneuse tant que
+  // la descente n'est pas ouverte
+  const mark = beacon(scene), V = (x, y, z) => new THREE.Vector3(x, y, z);
+  function goal(p) {
+    if (!st.met) return ['Parle à la Glaneuse, la vieille femme au panier doré', gl.position];
+    if (st.open) { const a = Math.atan2(p.z, p.x); return ['La descente est ouverte : saute dans le gouffre, au centre des Jardins', V(Math.cos(a) * (R_ABYSS - 40), netY, Math.sin(a) * (R_ABYSS - 40))]; }
+    if (!st.bridge && st.ink < BRIDGE_COST) { const b = blooms.filter(b => !st.pollen.includes(b.k)).sort((u, v) => Math.hypot(u.x - p.x, u.z - p.z) - Math.hypot(v.x - p.x, v.z - p.z))[0]; return [`Cueille le pollen : passe sous une ombrelle dorée, sous sa colonne de lumière (encre ${st.ink}/${BRIDGE_COST})`, b?.top ?? stone.position]; }
+    if (!st.bridge) return ['Encre la passerelle : va à la borne de pierre, au bord de la terrasse, et appuie sur E', stone.position];
+    if (seeds.some(s => s.follow)) return ['Emmène le Semeur sur l’île de l’arbre-mère, par la passerelle', V(I.x, I.y, I.z)];
+    const s = seeds.filter(s => !s.done).sort((u, v) => u.m.position.distanceTo(p) - v.m.position.distanceTo(p))[0];
+    return [`Trouve un Semeur doré, approche-toi et appuie sur E pour qu’il te suive (${st.delivered.length}/3 rentrés)`, s.m.position];
+  }
 
   /* --- le terrain de la strate, avec l'île, la passerelle encrée et le treillis --- */
   function terrainX(x, z) {
@@ -156,7 +172,7 @@ export function createStory(scene, { terrain, exitAt, start, ui }) {
       gl.rotation.y += Math.atan2(Math.sin(Math.atan2(p.x - gl.position.x, p.z - gl.position.z) - gl.rotation.y), Math.cos(Math.atan2(p.x - gl.position.x, p.z - gl.position.z) - gl.rotation.y)) * 0.05;
       glMat.uniforms.uFade.value = st.open ? 0.85 : 0.45 + Math.min(0.35, (t - began) / 2400);
       // le pollen : passer sous une ombrelle remplit l'encrier
-      for (const b of blooms) if (!st.pollen.includes(b.k) && st.ink < INK_MAX && Math.hypot(p.x - b.x, p.z - b.z) < 7) { st.pollen.push(b.k); st.ink++; persist(); ui?.ink(st.ink, INK_MAX); b.heart.uniforms.uGlow.value = 0.1; ui?.say('+1 goutte d’encre', b.top, 1.6); }
+      for (const b of blooms) if (!st.pollen.includes(b.k) && st.ink < INK_MAX && Math.hypot(p.x - b.x, p.z - b.z) < 7) { st.pollen.push(b.k); st.ink++; persist(); ui?.ink(st.ink, INK_MAX); b.heart.uniforms.uGlow.value = 0.1; b.pillar.visible = false; ui?.say('+1 goutte d’encre', b.top, 1.6); }
       // la passerelle encrée : la couleur s'y répand
       if (st.bridge && fadeB > 0 && (inkDelay += dt) > 0.9) { fadeB = Math.max(0, fadeB - dt * 0.5); bridgeMat.uniforms.uFade.value = fadeB; }
       // les Semeurs : ils flottent chez eux, suivent le voyageur, ou rentrent au nid de l'arbre-mère
@@ -172,6 +188,8 @@ export function createStory(scene, { terrain, exitAt, start, ui }) {
       // les trois sont rentrés : l'arbre fleurit, le treillis se retire, la descente est ouverte
       if (st.delivered.length === 3 && !st.open) { st.open = true; persist(); ui?.say('L’arbre-mère fleurit…', mother.position.clone().add(new THREE.Vector3(0, 30, 0)), 4); setTimeout(() => ui?.page('L’arbre-mère'), 1500); setTimeout(() => ui?.page('La descente s’ouvre'), 6500); }
       if (st.open && opening < 1) { opening = Math.min(1, opening + dt / 5); bloomMat.uniforms.uGlow.value = 0.2 + opening * 1.2; net.position.y = -opening * 60; net.scale.setScalar(Math.max(0.01, 1 - opening * 0.6)); if (opening >= 1) net.visible = false; }
+      // l'objectif et la balise
+      { const [txt, at] = goal(p); ui?.goal(txt, at); mark.set(st.open ? null : gl.position, 2.3); mark.update(t, p); }
       // l'invite
       near = nearest(p); ui?.prompt(near ? (near[1] === 'gl' && !st.met ? null : near[0]) : null);
     },

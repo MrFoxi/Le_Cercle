@@ -9,6 +9,7 @@ import * as THREE from 'three';
 import { ink, glowy } from './ink.js';
 import { rng, paint, lump, tube, merge, cast, TAU } from './modelage.js';
 import { save } from './ui.js';
+import { beacon } from './sol.js';
 
 const INK_MAX = 6, WAKE_COST = 3;
 
@@ -22,14 +23,14 @@ function veilleuseGeometry() {
   return merge([body, knees, head, hat, ...spots]);
 }
 
-export function createStory(scene, { floorAt, caps, exit, roots, gates, sleeper, lidY, ui }) {
+export function createStory(scene, { floorAt, caps, exit, roots, gates, sleeper, lidY, girlAt, ui }) {
   const st = Object.assign({ met: false, ink: 0, spores: [], choice: null, told: false }, save.load('hollow-foret', {}));
   const persist = () => save.keep('hollow-foret', st);
   const r = rng(3303);
   gates.main = st.choice === 'eveil'; gates.roots = st.choice === 'racines';
 
   // la Veilleuse, sur un rocher, entre l'Endormi et le gouffre ; une petite lueur dans ses mains
-  const vx = sleeper.position.x - 60, vz = sleeper.position.z + 40, vy = floorAt(vx, vz);
+  const [vx, vz] = girlAt ?? [sleeper.position.x - 60, sleeper.position.z + 40], vy = floorAt(vx, vz);
   const rock = cast(new THREE.Mesh(paint(lump(1, { sx: 1.4, sy: 0.8, sz: 1.2, lumpy: 0.3, detail: 2 }), '#5a4a7a', '#2a1a48'), ink({ line: 1 })));
   rock.position.set(vx, vy + 0.4, vz); scene.add(rock);
   const vMat = ink({ line: 0.9, fade: st.choice === 'eveil' ? 0.9 : 0 }), girl = new THREE.Group();
@@ -71,8 +72,8 @@ export function createStory(scene, { floorAt, caps, exit, roots, gates, sleeper,
 
   const LINES = {
     first: ['Chut… Il dort. Il ne doit pas se réveiller.', 'Je chante pour lui depuis… je ne sais plus. Le manteau que je portais est devenu trop grand.', 'Sous lui, il y a le passage. Le seul. Enfin… presque le seul.'],
-    choice: ['Tu peux le réveiller. Il te faut de l’encre qui luit, celle des spores.', 'Mais si tu le réveilles, je n’aurai plus de chanson.', 'Ou tu peux me demander l’autre chemin. Il est long, et il est noir.'],
-    roots: ['… Merci de ne pas l’avoir réveillé.', 'Le chemin des racines est là où la forêt ne s’allume jamais. Prends ça.', 'Une graine. Elle luit quand tout s’éteint.'],
+    choice: ['Le seul passage vers le bas est le gouffre, là, sous son chapeau. Il est fermé tant qu’il dort.', 'Pour le réveiller, peins-le avec trois gouttes d’encre qui luit : les grappes roses de spores, sur les chapeaux et autour de nous. Puis approche-toi de lui et appuie sur E.', 'Mais si tu le réveilles, je n’aurai plus de chanson.', 'Ou demande-moi l’autre chemin, celui des racines, juste là. Reviens me parler (E), je te le donnerai.'],
+    roots: ['… Merci de ne pas l’avoir réveillé.', 'Le chemin des racines s’est ouvert, sous l’arche qui luit, à côté. Prends ça.', 'Une graine. Elle luit quand tout s’éteint. Saute dans le trou des racines.'],
     eveil: ['Non… non !', '…'],
     after: { eveil: ['…'], racines: ['Va. Je continue de chanter.'] },
   };
@@ -81,6 +82,16 @@ export function createStory(scene, { floorAt, caps, exit, roots, gates, sleeper,
   ui?.ink(st.ink, INK_MAX);
   const base = sleeper.position.y;
   if (st.choice === 'eveil') { sleeper.position.y = base + 140; sleeper.userData.awake = true; }
+  // ce qu'il faut faire maintenant, et où ; la balise dorée sur la Veilleuse tant qu'aucun choix n'est fait
+  const mark = beacon(scene), sleepBase = () => new THREE.Vector3(sleeper.position.x, floorAt(sleeper.position.x, sleeper.position.z) + 4, sleeper.position.z);
+  function goal(p) {
+    if (!st.met) return ['Descends de chapeau en chapeau jusqu’au sol, puis rejoins la Veilleuse : elle chante, dans la lumière cyan', girl.position];
+    if (!st.told) return ['Parle à la Veilleuse (E)', girl.position];
+    if (st.choice === 'eveil') return ['Le gouffre s’est ouvert sous l’Endormi : saute dedans', new THREE.Vector3(exit.x, floorAt(exit.x + exit.R + 4, exit.z), exit.z)];
+    if (st.choice === 'racines') return ['Le chemin des racines est ouvert : saute dans le trou, sous l’arche qui luit', new THREE.Vector3(roots.x, lidY(roots), roots.z)];
+    if (st.ink < WAKE_COST) { const c = clusters.filter(c => c.m.visible).sort((u, v) => u.m.position.distanceTo(p) - v.m.position.distanceTo(p))[0]; return [`Ramasse l’encre qui luit : passe dans une grappe rose de spores (${st.ink}/${WAKE_COST}) · ou reparle à la Veilleuse pour l’autre chemin`, c ? c.m.position : girl.position]; }
+    return ['Choisis : réveille l’Endormi au pinceau (approche-toi de lui, E) · ou reparle à la Veilleuse pour le chemin des racines', sleepBase()];
+  }
   function nearest(p) {
     const c = [], d = v => p.distanceTo(v);
     if (st.met && d(girl.position) < 6) c.push([st.told && !st.choice ? 'demander l’autre chemin' : 'parler', 'girl', d(girl.position)]);
@@ -131,6 +142,7 @@ export function createStory(scene, { floorAt, caps, exit, roots, gates, sleeper,
       if (st.choice && opened < 1) { opened = Math.min(1, opened + dt / 5); const lid = st.choice === 'eveil' ? lidMain : lidRoots; lid.position.y = -opened * 30; if (opened >= 1) lid.visible = false; }
       if (st.choice === 'racines') { column.visible = motes.visible = true; motes.rotation.y = t * 0.1; }
       if (gates.main && lidMain.visible && opened >= 1) lidMain.visible = false;
+      { const [txt, at] = goal(p); ui?.goal(txt, at); mark.set(st.choice ? null : girl.position, 1.8); mark.update(t, p); }
       near = nearest(p); ui?.prompt(near ? near[0] : null);
     },
   };

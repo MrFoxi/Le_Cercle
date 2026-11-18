@@ -7,6 +7,8 @@ import { ink, glowy, skyMaterial, U } from './ink.js';
 import { rng, paint, lump, tube, merge, cast } from './modelage.js';
 import { createGround, sectors } from './sol.js';
 import { createStory } from './glaneuse.js';
+import { createPopulation } from './population.js';
+import { abyss } from './sol.js';
 
 const TAU = Math.PI * 2;
 
@@ -120,7 +122,7 @@ export function buildJardins(scene, Q) {
   }
   // ombrelles de verre (une sur cinq est immense), et la tache de couleur que leur lumière pose au sol
   {
-    const kinds = Array.from({ length: 10 }, (_, k) => umbrella(k * 13 + 5, k >= 8)), stem = ink({ line: 0.8, wind: 0.002 }), petal = ink({ line: 0.55, trans: 0.9, side: THREE.DoubleSide, wind: 0.002 }), heart = ink({ line: 0.4, glow: 0.6 });
+    const kinds = Array.from({ length: 10 }, (_, k) => umbrella(k * 13 + 5, k >= 8)), stem = ink({ line: 0.8, wind: 0.002 }), petal = ink({ line: 0.55, trans: 0.9, side: THREE.DoubleSide, wind: 0.002 }), heart = ink({ line: 0.4, glow: 0.12 }); // les ombrelles du décor ne luisent presque pas : seules celles à pollen brillent
     const lists = kinds.map(() => []), patches = new Map();
     for (let k = 0; k < Q.umbrellas; k++) {
       const s = spot(30); if (!s) continue;
@@ -251,9 +253,31 @@ export function create(scene, Q, ctx = {}) {
   // l'histoire : la Glaneuse, l'encre, la passerelle, les Semeurs, l'arbre-mère ; la descente est fermée jusqu'au bout
   const story = createStory(scene, { terrain, exitAt: (x, z) => terrain(x, z).kind === 'void', start, ui: ctx.ui }), base = w.update;
   w.colliders.push(...story.colliders);
+  // le gouffre : une paroi qui s'enfonce, une mer de nuages qu'on traverse en tombant, la brume au fond
+  const rim = Math.min(...[0, 1, 2, 3, 4, 5].map(k => heightAt(Math.cos(k) * (R_ABYSS + 4), Math.sin(k) * (R_ABYSS + 4))));
+  const hole = abyss(scene, { x: 0, z: 0, R: R_ABYSS, y: rim - 4, depth: 700, wall: ['#8a9aa8', '#2a3a4a'], mist: '#ffffff', clouds: 40 });
+  // la surface du Hollow : du monde. Des voyageurs en route, des habitants (cueilleurs, bergers, enfants, un conteur et
+  // ceux qui l'écoutent), des petites bêtes. Ils n'ont pas d'énigme : seule la Glaneuse a une balise.
+  const [sx, sy, sz] = start, as = Math.atan2(sz, sx), rs = Math.hypot(sx, sz), pr = rng(808);
+  const spot = (da, dr, ter = 0) => { for (let i = 0; i < 40; i++) { const a = as + (pr() - 0.5) * da, d = rs - ter * TERRACE + (pr() - 0.5) * dr, x = Math.cos(a) * d, z = Math.sin(a) * d; if (Math.abs(heightAt(x, z) - (sy - ter * 26)) < 4 && Math.hypot(x - sx, z - sz) > 12) return [x, z]; } return [sx + 20, sz]; };
+  const L = {
+    voyageur: ['Tu descends, toi aussi ?', 'On dit qu’en bas, il y a une ville. Une vraie.', 'Je me repose un peu. Après, je descends.', 'Ne reste pas dans le regard du Jardinier.', 'Mon manteau était bleu, avant. Il pâlit à chaque strate.', 'Tu as vu la Glaneuse ? Elle t’apprendra à encrer.'],
+    cueilleur: ['Les ombrelles qui brillent d’or sont pleines de pollen. Passe dessous.', 'Le pollen, c’est de l’encre. Sans encre, rien n’existe ici.', 'Les autres ombrelles sont vides. Cherche la lumière.'],
+    berger: ['Mes Semeurs dérivent au vent. Les dorés, eux, se perdent toujours.', 'L’arbre-mère ouvre la descente quand ses Semeurs rentrent.'],
+    enfant: ['Attrape-moi !', 'Hi hi !', 'T’as un grand pinceau !'],
+    conteur: ['Il était une fois un manteau qui descendait, descendait…', '… et tout en bas, quelqu’un l’attendait.'],
+    auditeur: ['Chut, il raconte.', '…'],
+  };
+  const people = [];
+  for (let k = 0; k < 10; k++) people.push({ kind: 'voyageur', home: spot(0.5, 160, k % 3), wander: 40, lines: L.voyageur });
+  for (let k = 0; k < 6; k++) people.push({ kind: 'cueilleur', home: spot(0.18, 120), wander: 25, lines: L.cueilleur });
+  for (let k = 0; k < 3; k++) people.push({ kind: 'berger', home: spot(0.4, 140, k % 2), wander: 30, lines: L.berger });
+  for (let k = 0; k < 4; k++) people.push({ kind: 'enfant', home: spot(0.12, 80), wander: 30, lines: L.enfant });
+  { const c = spot(0.1, 60); people.push({ kind: 'conteur', home: c, wander: 0, lines: L.conteur }); for (let k = 0; k < 4; k++) { const a = k * 1.4 + 0.5; people.push({ kind: 'auditeur', home: [c[0] + Math.cos(a) * 2.6, c[1] + Math.sin(a) * 2.6], wander: 0, lines: L.auditeur }); } }
+  const pop = createPopulation(scene, { people, ground: heightAt, ui: ctx.ui, seed: 11, critters: { count: 60, spot: r => spot(0.6, 220, (r() * 2) | 0) } });
   return Object.assign(w, {
     look: LOOK, terrain: story.terrain, start, camYaw: Math.atan2(start[0], start[2]),
-    exitAt: story.exitAt, killY: () => -150, interact: story.interact, story,
-    update(t, p) { base(t, p); story.update(t, p); },
+    exitAt: story.exitAt, exitDrop: 70, killY: () => -150, interact: story.interact, story, // on traverse la mer de nuages avant que la chute ne commence
+    update(t, p) { base(t, p); story.update(t, p); pop.update(t, p); hole.update(t); },
   });
 }

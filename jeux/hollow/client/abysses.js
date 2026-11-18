@@ -12,6 +12,7 @@ import { ink, glowy, skyMaterial, U } from './ink.js';
 import { rng, paint, lump, tube, merge, cast, TAU } from './modelage.js';
 import { createGround, sectors } from './sol.js';
 import { createStory } from './plongeur.js';
+import { abyss } from './sol.js';
 
 /* ---------- Le relief : un bassin, la ville, la Fosse ---------- */
 export const SURF = 300, R_BASIN = 1300, DARK = SURF - 40; // sous DARK, plus de jour : le souffle s'use
@@ -266,10 +267,11 @@ export function create(scene, Q, ctx = {}) {
   // l'histoire : le Plongeur, ses fenêtres allumées, le souffle et les cloches de nacre, la Fosse
   const story = createStory(scene, { floorAt, PL, windows: WINDOWS, bells: BELLS, fosse: FOSSE, lidY: LID_Y, gates, dark: DARK, surf: SURF, start, long: live.long, ui: ctx.ui, hero: ctx.hero }), base = live.update;
   live.colliders.push(...story.colliders);
+  const pit = abyss(scene, { x: FOSSE.x, z: FOSSE.z, R: FOSSE.R + 2, y: LID_Y - 4, depth: 260, wall: ['#2f6a70', '#05121a'], mist: '#ff5a3a' }); // la Fosse : une gorge qui rougeoie
   return Object.assign(live, {
     look: LOOK, terrain, start, spheres, swim: { surface: SURF }, hint: 'Sous l’eau : la souris choisit la direction · Espace remonte · X descend · Maj nage vite',
     camYaw: Math.atan2(start[0] - story.debug.plongeur.position.x, start[2] - story.debug.plongeur.position.z),
-    exitAt, killY: () => LID_Y - 40, interact: story.interact, story,
-    update(t, p) { base(t, p); story.update(t, p); },
+    exitAt, killY: () => LID_Y - 10, interact: story.interact, story,
+    update(t, p) { base(t, p); story.update(t, p); pit.update(t); },
   });
 }

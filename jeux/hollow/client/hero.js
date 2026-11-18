@@ -183,8 +183,10 @@ export function createHero(camera, dom) {
     if (was && !st.ground) st.fallFrom = st.p.y;
     if (!was && st.ground && world.maxFall && st.fallFrom - h > world.maxFall) { st.p.copy(st.safe); st.v.set(0, 0, 0); st.fade = 1; }
     if (st.ground && h > -1e8) st.safe.copy(st.p);
+    // dans la sortie : dès qu'il est passé sous le bord (de exitDrop mètres), la chute vers la strate suivante commence
+    if (!st.ground && world.exitAt(st.p.x, st.p.z) && st.p.y < st.safe.y - (world.exitDrop ?? 8)) st.exit = true;
     // dans le vide : la sortie de la strate fait tomber plus bas ; ailleurs, retour au dernier appui
-    if (st.p.y < world.killY(st.safe)) {
+    else if (st.p.y < world.killY(st.safe)) {
       if (world.exitAt(st.p.x, st.p.z)) st.exit = true;
       else { st.p.copy(st.safe); st.v.set(0, 0, 0); st.fade = 1; }
     }
