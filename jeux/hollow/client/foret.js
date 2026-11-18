@@ -262,7 +262,7 @@ export function create(scene, Q, ctx = {}) {
   const story = createStory(scene, { floorAt, caps: PATH, exit: EXIT, roots: ROOTS, gates, sleeper, lidY, girlAt: GIRL, ui: ctx.ui }), base = live.update;
   live.colliders.push(...story.colliders);
   // les deux passages : de vrais gouffres, une paroi qui s'enfonce et la brume violette au fond
-  const holes2 = [abyss(scene, { x: EXIT.x, z: EXIT.z, R: EXIT.R + 2, y: lidMain(EXIT.x, EXIT.z) - 6, depth: 300, wall: ['#5a4a7a', '#0a0818'], mist: '#6a4aa8' }), abyss(scene, { x: ROOTS.x, z: ROOTS.z, R: ROOTS.R + 1, y: lidRoots(ROOTS.x, ROOTS.z) - 3, depth: 200, wall: ['#4a3a6a', '#0a0818'], mist: '#4ae8f0' })];
+  const holes2 = [abyss(scene, { x: EXIT.x, z: EXIT.z, R: EXIT.R + 5, floorAt, depth: 300, wall: ['#5a4a7a', '#0a0818'], mist: '#6a4aa8' }), abyss(scene, { x: ROOTS.x, z: ROOTS.z, R: ROOTS.R + 2, floorAt, depth: 200, wall: ['#4a3a6a', '#0a0818'], mist: '#4ae8f0' })];
   // trois voyageurs, dans la forêt (on croise de moins en moins de monde en descendant)
   const Lf = ['Chut… la forêt écoute. Marche doucement, elle s’allume.', 'Tu entends la petite qui chante ? Elle est près de l’Endormi.', 'Les grappes roses, sur les chapeaux, c’est de l’encre qui luit.'];
   const pop = createPopulation(scene, { people: [[30, 20], [-40, 60], [70, -50]].map(([dx, dz]) => ({ kind: 'voyageur', home: [GIRL[0] - OUT[0] * 60 + dx, GIRL[1] - OUT[1] * 60 + dz], wander: 20, lines: Lf })), ground: floorAt, ui: ctx.ui, seed: 31 });

@@ -254,8 +254,7 @@ export function create(scene, Q, ctx = {}) {
   const story = createStory(scene, { terrain, exitAt: (x, z) => terrain(x, z).kind === 'void', start, ui: ctx.ui }), base = w.update;
   w.colliders.push(...story.colliders);
   // le gouffre : une paroi qui s'enfonce, une mer de nuages qu'on traverse en tombant, la brume au fond
-  const rim = Math.min(...[0, 1, 2, 3, 4, 5].map(k => heightAt(Math.cos(k) * (R_ABYSS + 4), Math.sin(k) * (R_ABYSS + 4))));
-  const hole = abyss(scene, { x: 0, z: 0, R: R_ABYSS, y: rim - 4, depth: 700, wall: ['#8a9aa8', '#2a3a4a'], mist: '#ffffff', clouds: 40 });
+  const hole = abyss(scene, { x: 0, z: 0, R: R_ABYSS, floorAt: (x, z) => { const t = terrain(x, z); return t.kind === 'void' ? -400 : t.h; }, depth: 700, wall: ['#8a9aa8', '#2a3a4a'], mist: '#ffffff', clouds: 40 });
   // la surface du Hollow : du monde. Des voyageurs en route, des habitants (cueilleurs, bergers, enfants, un conteur et
   // ceux qui l'écoutent), des petites bêtes. Ils n'ont pas d'énigme : seule la Glaneuse a une balise.
   const [sx, sy, sz] = start, as = Math.atan2(sz, sx), rs = Math.hypot(sx, sz), pr = rng(808);
@@ -277,7 +276,7 @@ export function create(scene, Q, ctx = {}) {
   const pop = createPopulation(scene, { people, ground: heightAt, ui: ctx.ui, seed: 11, critters: { count: 60, spot: r => spot(0.6, 220, (r() * 2) | 0) } });
   return Object.assign(w, {
     look: LOOK, terrain: story.terrain, start, camYaw: Math.atan2(start[0], start[2]),
-    exitAt: story.exitAt, exitDrop: 70, killY: () => -150, interact: story.interact, story, // on traverse la mer de nuages avant que la chute ne commence
+    exitAt: story.exitAt, exitDrop: 22, killY: () => -150, interact: story.interact, story, // on traverse la mer de nuages avant que la chute ne commence
     update(t, p) { base(t, p); story.update(t, p); pop.update(t, p); hole.update(t); },
   });
 }

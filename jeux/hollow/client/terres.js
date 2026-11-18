@@ -287,7 +287,7 @@ export function create(scene, Q, ctx = {}) {
   const story = createStory(scene, { floorAt, mesa: MESA, heart: HEART, heartMesh: heart, H, valve: VALVE, gates, sap: SAP, start, look: LOOK, eye: live.eye, climbs: CLIMBS, ui: ctx.ui, hero: ctx.hero }), base = live.update;
   live.colliders.push(...story.colliders);
   // la Valve : une gorge de chair qui s'enfonce dans l'Hôte ; et un seul voyageur, assis, à moitié pris par le sol
-  const throat = abyss(scene, { x: VALVE.x, z: VALVE.z, R: VALVE.R + 1, y: valveLid(VALVE.x, VALVE.z) - 2, depth: 110, wall: ['#e8705a', '#3a0a08'], mist: '#ff9a7a' });
+  const throat = abyss(scene, { x: VALVE.x, z: VALVE.z, R: VALVE.R + 2, floorAt, depth: 110, wall: ['#e8705a', '#3a0a08'], mist: '#ff9a7a' });
   const pop = createPopulation(scene, { people: [{ kind: 'auditeur', home: [start[0] - D.x * 40 + 8, start[2] - D.y * 40], wander: 0, lines: ['C’est tiède… je reste encore un peu.', 'Tu entends ? Il bat. Il bat pour nous.'] }], ground: floorAt, ui: ctx.ui, seed: 51 });
   return Object.assign(live, {
     look: LOOK, terrain, start, climbs: CLIMBS,

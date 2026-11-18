@@ -184,7 +184,7 @@ export function create(scene, Q, ctx = {}) {
     for (let i = 0; i < 70; i++) { const a = t * 0.05 + (i / 70) * TAU * 3, rad = 10 + (i % 7) * 3; pages.setMatrixAt(i, m4.compose(p3.set(Math.cos(a) * rad, PLAT.y + 6 + (i % 5) * 3 + Math.sin(t * 0.4 + i) * 1.5, Math.sin(a) * rad), q.setFromEuler(e3.set(Math.sin(t * 0.7 + i) * 0.5, -a, Math.sin(t * 0.5 + i) * 0.3)), s3.setScalar(1))); }
     pages.instanceMatrix.needsUpdate = true;
   };
-  const voidFx = abyss(scene, { x: 0, z: 0, R: R0 * 1.03, y: -1, depth: 420, wall: ['#3a3a7a', '#05060e'], mist: '#5ae8ff' }); // le vide du centre : la paroi taillée s'enfonce, une brume cyan
+  const voidFx = abyss(scene, { x: 0, z: 0, R: R0 * 1.03, floorAt, depth: 420, wall: ['#3a3a7a', '#05060e'], mist: '#3a6a9a' }); // le vide du centre : la paroi taillée s'enfonce, une brume cyan
   const start = spawn();
   // l'histoire : les nœuds à réveiller, l'Archiviste, le dessin inachevé, la fin
   const story = createStory(scene, { nodes: NODES, nodeMeshes: nodes, rings, awake, plat: PLAT, ramps: RAMPS, start, ui: ctx.ui, hero: ctx.hero }), base = live.update;

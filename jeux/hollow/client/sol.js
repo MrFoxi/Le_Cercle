@@ -71,22 +71,41 @@ export function beacon(scene) {
     update(t, eye) { if (!at) return; drop.position.set(at.x, at.y + this.h + Math.sin(t * 2) * 0.2, at.z); drop.rotation.y = t; halo.position.copy(drop.position); halo.lookAt(eye); ring.scale.setScalar(1 + Math.sin(t * 2.4) * 0.08); },
   };
 }
-// un beau vide : sous le bord d'un trou, une paroi qui s'enfonce et noircit, des voiles de brume qui tournent l'un
-// sous l'autre, et le fond qui se perd dans la couleur de la strate (on ne voit plus jamais à travers le monde)
-// o : { x, z, R, y (le bord), depth, wall (couleurs de la paroi), mist, clouds (des nuages dedans) }
+// un beau vide. Le bord réel du trou est mesuré dans 96 directions (floorAt < -100 : le vide) : la paroi part de ce bord,
+// exactement à la hauteur du sol, et s'enfonce en noircissant (elle cache les bords en escalier du sol vu d'en dessous).
+// Juste sous le bord, une mer de brume épaisse, en plusieurs voiles (et des nuages, pour les Jardins) : on y plonge, et
+// la chute vers la strate suivante commence dedans. top() : la hauteur du bord le plus bas (pour la brume et la sortie).
+// o : { x, z, R (on cherche le bord en partant d'un peu au-delà), floorAt, depth, wall (deux couleurs), mist, clouds }
 export function abyss(scene, o) {
-  const { x, z, R, y, depth = 400, wall = ['#4a4a5a', '#0a0a12'], mist = '#ffffff', clouds = 0 } = o, grp = new THREE.Group();
-  const g = new THREE.CylinderGeometry(R, R * 0.85, depth, 48, 12, true).translate(0, -depth / 2, 0), p = g.attributes.position;
-  for (let i = 0; i < p.count; i++) { const a = Math.atan2(p.getZ(i), p.getX(i)), yy = p.getY(i), k = 1 + (Math.sin(a * 7 + yy * 0.05) * 0.03 + Math.sin(a * 3 - yy * 0.02) * 0.04); p.setX(i, p.getX(i) * k); p.setZ(i, p.getZ(i) * k); }
-  g.computeVertexNormals();
-  grp.add(new THREE.Mesh(paint(g, ...wall, 0.08), ink({ line: 0.7, side: THREE.DoubleSide })));
-  const floor = new THREE.Mesh(new THREE.CircleGeometry(R, 48).rotateX(-Math.PI / 2).translate(0, -depth + 2, 0), ink({ color: wall[1], vertexColors: false, line: 0, side: THREE.DoubleSide })); grp.add(floor);
+  const { x, z, R, floorAt, depth = 300, wall = ['#4a4a5a', '#0a0a12'], mist = '#ffffff', clouds = 0 } = o, N = 96, M = 14;
+  const E = [], Y = [];
+  for (let i = 0; i < N; i++) {
+    const a = (i / N) * TAU, c = Math.cos(a), s = Math.sin(a); let r = R * 1.15 + 6;
+    while (r > 1 && floorAt(x + c * r, z + s * r) > -100) r -= 0.25;
+    E.push(r); Y.push(floorAt(x + c * (r + 1), z + s * (r + 1))); // la paroi part du vide même : la lèvre couvre la fin du sol, qui s'arrête en escalier
+  }
+  const low = Math.min(...Y), P = [], I = [];
+  // une lèvre peinte comme le sol (même matière : elle ne se voit pas) : elle comble l'écart entre la fin du sol, qui
+  // s'arrête en escalier, et la paroi
+  const LP = [], LI = [];
+  for (let i = 0; i <= N; i++) { const k = i % N, a = (k / N) * TAU; for (const [rr, dy] of [[E[k], 0.06], [E[k] + 9, 0.15]]) LP.push(x + Math.cos(a) * rr, (dy < 0.1 ? Y[k] : floorAt(x + Math.cos(a) * rr, z + Math.sin(a) * rr)) + dy, z + Math.sin(a) * rr); }
+  for (let i = 0; i < N; i++) { const p = i * 2; LI.push(p, p + 1, p + 2, p + 1, p + 3, p + 2); }
+  const lip = new THREE.BufferGeometry(); lip.setAttribute('position', new THREE.Float32BufferAttribute(LP, 3)); lip.setIndex(LI); lip.computeVertexNormals();
+  scene.add(cast(new THREE.Mesh(lip, ink({ kind: 'terrain', vertexColors: false, side: THREE.DoubleSide }))));
+  for (let j = 0; j <= M; j++) for (let i = 0; i <= N; i++) {
+    const k = i % N, a = (k / N) * TAU, t = j / M, rr = E[k] * (1 - t * 0.12) * (1 + Math.sin(a * 7 + j) * 0.015 * t);
+    P.push(x + Math.cos(a) * rr, (j === 0 ? Y[k] + 0.06 : low - depth * t ** 1.4), z + Math.sin(a) * rr);
+  }
+  for (let j = 0; j < M; j++) for (let i = 0; i < N; i++) { const p = j * (N + 1) + i, q = p + N + 1; I.push(p, q, p + 1, p + 1, q, q + 1); }
+  const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(P, 3)); g.setIndex(I); g.computeVertexNormals();
+  scene.add(new THREE.Mesh(paint(g, ...wall, 0.08), ink({ line: 0.6, side: THREE.DoubleSide })));
+  const Rm = Math.max(...E);
+  // la mer de brume : des voiles serrés juste sous le bord, de plus en plus épais, qui tournent l'un contre l'autre
   const veils = [];
-  for (let k = 0; k < 6; k++) { const m = new THREE.Mesh(new THREE.PlaneGeometry(R * 2.4, R * 2.4).rotateX(-Math.PI / 2), glowy({ color: mist, alpha: 0.18 + k * 0.08, soft: 1 })); m.position.y = -(k + 1) * depth / 8; grp.add(m); veils.push(m); }
-  // des nuages, dedans : on les traverse en tombant
-  if (clouds) { const K = []; for (let k = 0; k < clouds; k++) { const a = k * 2.39996, d = Math.sqrt((k + 0.5) / clouds) * R * 0.85; for (let i = 0; i < 4; i++) K.push(paint(lump(R * 0.05 + (i % 2) * R * 0.03, { sy: 0.55, lumpy: 0.25, seed: k * 4 + i, detail: 2 }).translate(Math.cos(a) * d + (i - 1.5) * R * 0.05, -60 - (k % 3) * 18 + (i % 2) * 4, Math.sin(a) * d + (i % 3) * R * 0.02), '#ffffff', '#c8d4e8')); } grp.add(new THREE.Mesh(merge(K), ink({ line: 0.6, trans: 0.4 }))); }
-  grp.position.set(x, y, z); scene.add(grp);
-  return { update(t) { veils.forEach((m, k) => { m.rotation.y = t * 0.02 * (k % 2 ? 1 : -1); }); } };
+  for (let k = 0; k < 5; k++) { const m = new THREE.Mesh(new THREE.CircleGeometry(Rm + 2, 64).rotateX(-Math.PI / 2), glowy({ color: mist, alpha: 0.22 + k * 0.1, soft: -1 })); m.position.set(x, low - 5 - k * 5, z); scene.add(m); veils.push(m); }
+  // des nuages, dans la mer de brume (les Jardins) : on les voit d'en haut, et on les traverse en tombant
+  if (clouds) { const K = []; for (let k = 0; k < clouds; k++) { const a = k * 2.39996, d = Math.sqrt((k + 0.5) / clouds) * Rm * 0.85; for (let i = 0; i < 4; i++) K.push(paint(lump(Rm * 0.04 + (i % 2) * Rm * 0.025, { sy: 0.5, lumpy: 0.25, seed: k * 4 + i, detail: 2 }).translate(x + Math.cos(a) * d + (i - 1.5) * Rm * 0.04, low - 8 - (k % 3) * 4 + (i % 2) * 2, z + Math.sin(a) * d + (i % 3) * Rm * 0.02), '#ffffff', '#d8e0ec')); } scene.add(new THREE.Mesh(merge(K), ink({ line: 0.5, trans: 0.4, glow: 0.15 }))); }
+  return { top: low, update(t) { veils.forEach((m, k) => { m.rotation.y = t * 0.015 * (k % 2 ? 1 : -1); }); } };
 }
 // les instances d'un même modèle, rangées par secteurs de 400 m : la carte graphique ne dessine que les secteurs dans le champ
 export function sectors(scene, geo, mat, items, place, shadow = true) {

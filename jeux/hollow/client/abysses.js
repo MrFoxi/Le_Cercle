@@ -267,7 +267,7 @@ export function create(scene, Q, ctx = {}) {
   // l'histoire : le Plongeur, ses fenêtres allumées, le souffle et les cloches de nacre, la Fosse
   const story = createStory(scene, { floorAt, PL, windows: WINDOWS, bells: BELLS, fosse: FOSSE, lidY: LID_Y, gates, dark: DARK, surf: SURF, start, long: live.long, ui: ctx.ui, hero: ctx.hero }), base = live.update;
   live.colliders.push(...story.colliders);
-  const pit = abyss(scene, { x: FOSSE.x, z: FOSSE.z, R: FOSSE.R + 2, y: LID_Y - 4, depth: 260, wall: ['#2f6a70', '#05121a'], mist: '#ff5a3a' }); // la Fosse : une gorge qui rougeoie
+  const pit = abyss(scene, { x: FOSSE.x, z: FOSSE.z, R: FOSSE.R + 2, floorAt, depth: 260, wall: ['#2f6a70', '#05121a'], mist: '#ff5a3a' }); // la Fosse : une gorge qui rougeoie
   return Object.assign(live, {
     look: LOOK, terrain, start, spheres, swim: { surface: SURF }, hint: 'Sous l’eau : la souris choisit la direction · Espace remonte · X descend · Maj nage vite',
     camYaw: Math.atan2(start[0] - story.debug.plongeur.position.x, start[2] - story.debug.plongeur.position.z),
