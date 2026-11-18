@@ -51,9 +51,11 @@ export function createHero(camera, dom) {
   dom.addEventListener('wheel', e => { cam.dist = Math.max(4, Math.min(160, cam.dist * (1 + Math.sign(e.deltaY) * 0.1))); e.preventDefault(); }, { passive: false });
 
   const has = (...c) => c.some(k => keys.has(k));
-  // la hauteur où l'on peut poser le pied (le vide n'en a pas)
-  const floorAt = (x, z) => { const t = world.terrain(x, z); return t.kind === 'void' ? -1e9 : t.h; };
-  const blocked = (x, z) => world.colliders.some(([cx, cz, r]) => (x - cx) ** 2 + (z - cz) ** 2 < (r + 0.3) ** 2);
+  // la hauteur où l'on peut poser le pied (le vide n'en a pas). below : on ne regarde que les surfaces sous cette
+  // hauteur (une strate à plusieurs étages, comme la Forêt et ses chapeaux, laisse passer dessous)
+  const floorAt = (x, z, below = Infinity) => { const t = world.terrain(x, z, below); return t.kind === 'void' ? -1e9 : t.h; };
+  // un obstacle [x, z, rayon, hauteur ?] : au-dessus de sa hauteur (sur un chapeau, par exemple), il ne gêne plus
+  const blocked = (x, z) => world.colliders.some(([cx, cz, r, top = Infinity]) => st.p.y < top && (x - cx) ** 2 + (z - cz) ** 2 < (r + 0.3) ** 2);
 
   // entrer dans une strate : posé à son départ, la caméra regardant où elle le dit. arrive : il tombe du ciel de la
   // strate (après la chute), freine en ouvrant son manteau, se pose genou à terre et se relève (onLand : l'impact)
@@ -68,18 +70,21 @@ export function createHero(camera, dom) {
   }
   const ease = k => k * k * (3 - 2 * k), clamp01 = k => Math.max(0, Math.min(1, k));
   function arriveUpdate(dt) {
-    const A = st.arrive, h = floorAt(st.p.x, st.p.z), above = st.p.y - h;
+    const A = st.arrive, h = floorAt(st.p.x, st.p.z, st.p.y + 0.6), above = st.p.y - h;
     A.t += dt;
     if (A.phase === 'air') {
       // il tombe vite, puis le manteau s'ouvre en corolle et le freine
-      const open = clamp01((45 - above) / 25);
+      const open = A.bounce ? 0.3 : clamp01((45 - above) / 25);
+      if (A.bounce) g.rotation.x = Math.min(1, A.t / 1.2) * Math.PI * 2;
       st.v.y += ((-40 + open * 30) - st.v.y) * Math.min(1, dt * (1 + open * 3));
       st.p.y += st.v.y * dt;
-      g.position.copy(st.p); g.rotation.set(0, g.rotation.y + dt * (2.5 - open * 2), 0);
+      g.position.copy(st.p); g.rotation.set(A.bounce ? g.rotation.x : 0, g.rotation.y + dt * (2.5 - open * 2), 0);
       torso.rotation.x = -0.25 * open; torso.scale.set(1 + open * 0.45 + Math.sin(A.t * 20) * 0.04 * open, 1 - open * 0.08, 1 + open * 0.45);
       AL.rotation.set(0, 0, -0.4 - open * 1.5 + Math.sin(A.t * 11) * 0.12); AR.rotation.set(0, 0, 0.4 + open * 1.5 - Math.sin(A.t * 11) * 0.12);
       L.rotation.set(0.3 * open + Math.sin(A.t * 8) * 0.3 * (1 - open), 0, -0.15); R.rotation.set(-0.2 * open - Math.sin(A.t * 8) * 0.3 * (1 - open), 0, 0.15);
-      if (st.p.y <= h) { st.p.y = h; st.v.set(0, 0, 0); A.phase = 'land'; A.t = 0; A.shake = 1; hero.onLand?.(st.p.clone()); }
+      if (st.p.y <= h && world.bounces && (A.bounce ?? 0) < world.bounces.length) {
+        const b = A.bounce ?? 0; A.bounce = b + 1; st.p.y = h; st.v.y = world.bounces[b]; A.t = 0; A.shake = 0.5; hero.onLand?.(st.p.clone(), A.bounce); world.onBounce?.(st.p, A.bounce);
+      } else if (st.p.y <= h) { st.p.y = h; st.v.set(0, 0, 0); A.phase = 'land'; A.t = 0; A.shake = 1; hero.onLand?.(st.p.clone(), 0); world.onBounce?.(st.p, 0); }
     } else {
       // l'impact : il s'écrase en boule, genou à terre, puis se relève lentement
       const hit = Math.exp(-A.t * 9), up = ease(clamp01((A.t - 0.7) / 0.9));
@@ -94,8 +99,10 @@ export function createHero(camera, dom) {
     A.shake *= Math.exp(-dt * 4);
     const air = A.phase === 'air', a = cam.yaw + (air ? A.t * 0.5 : 0.5 + A.t * 0.15), d = air ? 11 : 7 + ease(clamp01(A.t / 1.8)) * 7;
     const look = new THREE.Vector3(st.p.x, st.p.y + (air ? 0.8 : 0.9), st.p.z);
-    camera.position.set(look.x + Math.sin(a) * d, look.y + (air ? -6 : 1.2 + A.t * 0.9), look.z + Math.cos(a) * d);
-    camera.position.y = Math.max(camera.position.y, floorAt(camera.position.x, camera.position.z) + (air ? 3 : 0.8)); // pas au ras du sol : le sol vu de trop près se raye
+    // d'en dessous seulement tant qu'il est haut dans le ciel ; près du sol ou pendant un rebond, au-dessus de lui
+    const low = air && !A.bounce && above > 25;
+    camera.position.set(look.x + Math.sin(a) * d, look.y + (low ? -6 : air ? 2.5 : 1.2 + A.t * 0.9), look.z + Math.cos(a) * d);
+    camera.position.y = Math.max(camera.position.y, floorAt(camera.position.x, camera.position.z, st.p.y + 1) + (low ? 3 : 0.8)); // pas au ras du sol : le sol vu de trop près se raye
     camera.position.x += (Math.random() - 0.5) * A.shake * 0.8; camera.position.y += (Math.random() - 0.5) * A.shake * 0.8;
     camera.lookAt(look); cam.look.copy(look).setY(st.p.y + 1.6);
   }
@@ -127,16 +134,20 @@ export function createHero(camera, dom) {
     st.v.x += ((dx * speed) - st.v.x) * Math.min(1, dt * 10 * k); st.v.z += ((dz * speed) - st.v.z) * Math.min(1, dt * 10 * k);
     if (st.ground && has('Space')) { st.v.y = JUMP; st.ground = false; }
     // pas à pas : une falaise arrête, une pente se monte ; on glisse le long de l'obstacle
-    const tryMove = (nx, nz) => { const h = floorAt(nx, nz); return !(st.ground && h > st.p.y + STEP_UP) && !(!st.ground && h > st.p.y + 0.2) && !blocked(nx, nz); };
+    const tryMove = (nx, nz) => { const h = floorAt(nx, nz, st.p.y + STEP_UP + 0.05); return !(st.ground && h > st.p.y + STEP_UP) && !(!st.ground && h > st.p.y + 0.2) && !blocked(nx, nz); };
     const nx = st.p.x + st.v.x * dt, nz = st.p.z + st.v.z * dt;
     if (tryMove(nx, nz)) { st.p.x = nx; st.p.z = nz; }
     else if (tryMove(nx, st.p.z)) { st.p.x = nx; st.v.z = 0; }
     else if (tryMove(st.p.x, nz)) { st.p.z = nz; st.v.x = 0; }
     else { st.v.x = st.v.z = 0; }
     // gravité, sol
-    const h = floorAt(st.p.x, st.p.z);
+    const h = floorAt(st.p.x, st.p.z, st.p.y + 0.6);
     st.v.y -= GRAV * dt; st.p.y += st.v.y * dt;
+    const was = st.ground;
     if (st.p.y <= h) { st.p.y = h; st.v.y = 0; st.ground = true; } else if (st.ground && st.p.y - h < 0.6 && st.v.y <= 0) { st.p.y = h; st.v.y = 0; } else st.ground = false;
+    // une chute trop haute (la strate le dit) ramène au dernier appui
+    if (was && !st.ground) st.fallFrom = st.p.y;
+    if (!was && st.ground && world.maxFall && st.fallFrom - h > world.maxFall) { st.p.copy(st.safe); st.v.set(0, 0, 0); st.fade = 1; }
     if (st.ground && h > -1e8) st.safe.copy(st.p);
     // dans le vide : la sortie de la strate fait tomber plus bas ; ailleurs, retour au dernier appui
     if (st.p.y < world.killY(st.safe)) {
@@ -162,7 +173,7 @@ export function createHero(camera, dom) {
     cam.look.lerp(new THREE.Vector3(st.p.x, st.p.y + 1.6, st.p.z), st.fly ? 1 : 1 - Math.exp(-dt * 8));
     const cx = cam.look.x + Math.sin(cam.yaw) * Math.cos(cam.pitch) * cam.dist, cz = cam.look.z + Math.cos(cam.yaw) * Math.cos(cam.pitch) * cam.dist;
     let cy = cam.look.y + Math.sin(cam.pitch) * cam.dist + 1.5;
-    if (!st.fly) cy = Math.max(cy, floorAt(cx, cz) + 1.2);
+    if (!st.fly) cy = Math.max(cy, floorAt(cx, cz, cy + 1) + 1.2);
     camera.position.set(cx, cy, cz); camera.lookAt(cam.look.x, cam.look.y + 1.2, cam.look.z);
   }
   function setFly(on) { st.fly = on; st.v.set(0, 0, 0); if (!on) pose(); }

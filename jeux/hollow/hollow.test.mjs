@@ -47,3 +47,25 @@ test('les Brumes se traversent à pied, d’île en île, jusqu’au Puits', asy
   assert.ok(B.exitAt(E.x, E.z) && B.terrain(E.x, E.z).kind === 'void', 'le Puits s’ouvre au milieu de la dernière île');
   assert.strictEqual(B.terrain(x, z).kind, 'ground');
 });
+
+// La Forêt : on descend de chapeau en chapeau (chacun déborde sur le suivant, moins de 30 m plus bas), puis au sol
+test('la Forêt se descend de chapeau en chapeau jusqu’au sol, et le gouffre s’ouvre', async () => {
+  const F = await import('./client/foret.js');
+  const path = F.caps.filter(C => C.path !== undefined);
+  assert.ok(path.length > 15, 'un long chemin de chapeaux');
+  for (let i = 0; i + 1 < path.length; i++) {
+    const A = path[i], B = path[i + 1], d = Math.hypot(A.x - B.x, A.z - B.z);
+    assert.ok(d < A.R + B.R - 6, `le chapeau ${i + 1} passe sous le bord du chapeau ${i}`);
+    assert.ok(A.y - B.y < 28, `une marche de moins de 30 m entre ${i} et ${i + 1}`);
+    // en marchant tout droit vers le suivant, on tombe sur lui (pas au sol)
+    const ux = (B.x - A.x) / d, uz = (B.z - A.z) / d, x = A.x + ux * (A.R + 1), z = A.z + uz * (A.R + 1);
+    assert.ok(F.terrain(x, z, A.y).h > F.floorAt(x, z) + 1, `au bord du chapeau ${i}, le suivant est dessous`);
+  }
+  // le pied d'un chapeau ne traverse jamais un chapeau plus bas
+  for (const A of path) for (const B of path) if (B.y < A.y - 1) assert.ok(Math.hypot(A.x - B.x, A.z - B.z) > B.R + 3, 'un pied traverse un chapeau');
+  const L = path.at(-1);
+  assert.ok(L.y - F.floorAt(L.x, L.z) < 28, 'du dernier chapeau, on saute au sol');
+  assert.ok(F.exitAt(F.EXIT.x, F.EXIT.z) && F.terrain(F.EXIT.x, F.EXIT.z).kind === 'void', 'le gouffre s’ouvre');
+  const [x, y, z] = F.spawn();
+  assert.ok(Math.abs(F.terrain(x, z, y + 1).h - y) < 0.01, 'on part du haut du premier chapeau');
+});

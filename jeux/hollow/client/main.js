@@ -10,14 +10,14 @@ import { createFall } from './chute.js';
 const STRATES = [
   { n: 1, name: 'Les Jardins suspendus', load: () => import('./jardins.js') },
   { n: 2, name: 'Les Brumes éternelles', load: () => import('./brumes.js') },
-  { n: 3, name: 'La Forêt des géants' }, { n: 4, name: 'Les Abysses engloutis' }, { n: 5, name: 'Les Terres organiques' }, { n: 6, name: 'La Cité oubliée' },
+  { n: 3, name: 'La Forêt des géants', load: () => import('./foret.js') }, { n: 4, name: 'Les Abysses engloutis' }, { n: 5, name: 'Les Terres organiques' }, { n: 6, name: 'La Cité oubliée' },
 ];
 
 // Qualité : le jeu est réglé pour une machine puissante ; il se replie tout seul si les images tardent.
 const PRESETS = {
-  haute: { trees: 1500, umbrellas: 260, rocks: 5000, arches: 34, islands: 70, falls: 40, grass: 160000, grassRadius: 110, seeders: 400, lanterns: 22, flock: 220, dpr: 2, shadows: true },
-  moyenne: { trees: 900, umbrellas: 160, rocks: 2600, arches: 24, islands: 45, falls: 28, grass: 70000, grassRadius: 75, seeders: 200, lanterns: 14, flock: 140, dpr: 1.25, shadows: true },
-  basse: { trees: 450, umbrellas: 80, rocks: 1200, arches: 14, islands: 25, falls: 18, grass: 20000, grassRadius: 45, seeders: 80, lanterns: 8, flock: 70, dpr: 1, shadows: false },
+  haute: { trees: 1500, umbrellas: 260, rocks: 5000, arches: 34, islands: 70, falls: 40, grass: 160000, grassRadius: 110, seeders: 400, lanterns: 22, flock: 220, vines: 420, shrooms: 1400, sensitives: 600, jellies: 90, spores: 3000, porters: 16, dpr: 2, shadows: true },
+  moyenne: { trees: 900, umbrellas: 160, rocks: 2600, arches: 24, islands: 45, falls: 28, grass: 70000, grassRadius: 75, seeders: 200, lanterns: 14, flock: 140, vines: 260, shrooms: 800, sensitives: 380, jellies: 60, spores: 1800, porters: 12, dpr: 1.25, shadows: true },
+  basse: { trees: 450, umbrellas: 80, rocks: 1200, arches: 14, islands: 25, falls: 18, grass: 20000, grassRadius: 45, seeders: 80, lanterns: 8, flock: 70, vines: 140, shrooms: 400, sensitives: 200, jellies: 30, spores: 800, porters: 8, dpr: 1, shadows: false },
 };
 const params = new URLSearchParams(location.search);
 const Q = PRESETS[params.get('q')] || (matchMedia('(pointer: coarse)').matches ? PRESETS.basse : PRESETS.haute);

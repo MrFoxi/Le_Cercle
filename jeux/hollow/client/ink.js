@@ -20,6 +20,8 @@ export const U = {
   // la palette du sol de la strate : herbe sombre, herbe claire, nappes, roche claire, roche sombre, mousse, fleurs (2)
   uPal: { value: [new THREE.Vector3(0.16, 0.42, 0.3), new THREE.Vector3(0.36, 0.64, 0.36), new THREE.Vector3(0.24, 0.6, 0.56), new THREE.Vector3(0.64, 0.68, 0.7), new THREE.Vector3(0.44, 0.48, 0.56), new THREE.Vector3(0.2, 0.48, 0.34), new THREE.Vector3(1, 0.55, 0.72), new THREE.Vector3(1, 0.9, 0.4)] },
   uSkyMid: { value: new THREE.Color(.62, .86, .98) }, uSkyTop: { value: new THREE.Color(1, .99, .96) },
+  // la lumière vivante réagit au voyageur : uReact > 0 l'allume autour de lui, < 0 l'éteint (quand il court)
+  uHero: { value: new THREE.Vector3() }, uReact: { value: 0 },
 };
 // L'allure d'une strate : soleil, ombres, brume, palette du sol, ciel. On la pose d'un coup en entrant.
 export function setLook(L) {
@@ -33,7 +35,7 @@ const COMMON = /* glsl */ `
 uniform float uTime, uBoil, uFogDensity, uShadowOn, uRevealAll;
 uniform vec3 uSunDir, uSunCol, uShadowCol, uFogCol;
 uniform sampler2D uReveal, uShadowMap; uniform vec4 uRevealRect; uniform mat4 uShadowMatrix;
-uniform vec3 uPal[8], uSkyMid, uSkyTop;
+uniform vec3 uPal[8], uSkyMid, uSkyTop, uHero; uniform float uReact;
 float hash12(vec2 p) { vec3 p3 = fract(vec3(p.xyx) * .1031); p3 += dot(p3, p3.yzx + 33.33); return fract((p3.x + p3.y) * p3.z); }
 float vnoise(vec2 p) { vec2 i = floor(p), f = fract(p); f = f * f * (3. - 2. * f);
   return mix(mix(hash12(i), hash12(i + vec2(1, 0)), f.x), mix(hash12(i + vec2(0, 1)), hash12(i + vec2(1, 1)), f.x), f.y); }
@@ -69,7 +71,7 @@ const FRAG = /* glsl */ `
 ${COMMON}
 layout(location = 0) out highp vec4 oColor;
 layout(location = 1) out highp vec4 gInfo;
-uniform vec3 uTint; uniform float uLine, uTrans, uKind, uGlow;
+uniform vec3 uTint; uniform float uLine, uTrans, uKind, uGlow, uPulse;
 varying vec3 vW, vN, vC; varying float vDepth; varying vec2 vUv;
 
 float shadowAt(vec3 w) {
@@ -132,7 +134,10 @@ void main() {
   vec3 col = mix(shade, base * .9, b1); col = mix(col, base * 1.07 + uSunCol * .05, b2);
   col *= 1. - hatch(vW, N, 2.6) * (1. - b1) * .42;
   col += base * uSunCol * uTrans * (pow(max(0., -ndl), 1.5) * .9 + .3); // les pétales de verre : le soleil passe au travers
-  col = mix(col, base * (1. + uGlow), step(.01, uGlow)); // ce qui luit ne prend pas l'ombre
+  // ce qui luit ne prend pas l'ombre ; avec uPulse, la lumière respire par vagues et répond au voyageur
+  float breathe = mix(1., .45 + .55 * (.5 + .5 * sin(uTime * .9 - dot(vW.xz, vec2(.012, .008)) - vW.y * .01)), uPulse);
+  breathe *= 1. + uReact * uPulse * smoothstep(34., 6., distance(vW, uHero)) * 1.4;
+  col = mix(col, base * (1. + uGlow * max(breathe, 0.)), step(.01, uGlow));
   // perspective aérienne : par lavis (paliers), et une brume plus épaisse vers le gouffre
   float fog = 1. - exp(-vDepth * uFogDensity);
   fog = max(fog, smoothstep(5., -260., vW.y) * .9); // le gouffre se noie dans la brume
@@ -161,7 +166,7 @@ export function ink(o = {}) {
     glslVersion: THREE.GLSL3, vertexShader: VERT, fragmentShader: FRAG, vertexColors: o.vertexColors !== false, side: o.side ?? THREE.FrontSide,
     uniforms: {
       ...U, uTint: { value: new THREE.Color(o.color ?? '#ffffff') }, uLine: { value: o.line ?? 1 }, uTrans: { value: o.trans ?? 0 },
-      uWind: { value: o.wind ?? 0 }, uKind: { value: { terrain: 1, water: 2 }[o.kind] ?? 0 }, uGlow: { value: o.glow ?? 0 },
+      uWind: { value: o.wind ?? 0 }, uKind: { value: { terrain: 1, water: 2 }[o.kind] ?? 0 }, uGlow: { value: o.glow ?? 0 }, uPulse: { value: o.pulse ?? 0 },
     },
   });
   return m;
