@@ -63,8 +63,8 @@ export const TEMPS = {
 
 /* ---------- Le matériel ---------- */
 export const CANNES = [
-  { id: 'legere', nom: 'La canne légère', texte: 'Sensible et douce : pour les petits leurres, la perche et le chevesne.', portee: 27, puissance: 0.6, resistance: 1, frein: 0.74 },
-  { id: 'forte', nom: 'La canne forte', texte: 'Longue et nerveuse : elle lance loin et tient tête au brochet.', portee: 36, puissance: 1, resistance: 1.75, frein: 0.82 },
+  { id: 'legere', nom: 'La canne légère', texte: 'Sensible et douce : pour les petits leurres, la perche et le chevesne.', portee: 27, puissance: 0.6, resistance: 1, frein: 0.74, allure: { long: 2.4, rayon: 0.0082, bambou: ['#e2c384', '#c39a58'], soie: '#2f6a58', anneaux: 6, moulinet: 0.04, raideur: 0.8 } },
+  { id: 'forte', nom: 'La canne forte', texte: 'Longue et nerveuse : elle lance loin et tient tête au brochet.', portee: 36, puissance: 1, resistance: 1.75, frein: 0.82, allure: { long: 3, rayon: 0.0118, bambou: ['#9c6c3a', '#74482a'], soie: '#8c2f38', anneaux: 7, moulinet: 0.05, raideur: 1.25 } },
 ];
 export const LEURRES = [
   { id: 'cuiller', nom: 'Cuiller argentée', famille: 'tournant', taille: 5, couleurs: ['#e6e8ee', '#b8524a'], coule: 0.7, ideale: 1.05, prof: 0.8, conseil: 'Mouline régulièrement, sans t’arrêter.' },

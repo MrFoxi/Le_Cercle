@@ -7,6 +7,8 @@ import { creerPoissons, majPoissons, activite, poidsDe } from './client/poissons
 import { creerPeche } from './client/peche.js';
 import { creerCarnet } from './client/carnet.js';
 import { creerTemps, momentDe } from './client/temps.js';
+import { MORCEAUX, composer, lireMesure, lireAccord } from './client/partition.js';
+import { INSTRUMENTS, SR, rendre, boucleEau, boucleVent, bouclePluie, boucleGrillons, reponse } from './client/instruments.js';
 
 test('l’étang : cinq secteurs au bord de l’eau, chacun différent, tous accessibles à pied', () => {
   assert.strictEqual(ETANG.secteurs.length, 5);
@@ -108,4 +110,23 @@ test('le temps : quatre moments, la météo change lentement et change la lumiè
   const T = creerTemps(hasard(3), { heure: 12 }), midi = T.lumiere.force; T.changer('pluie'); for (let i = 0; i < 40; i++) T.maj(0.05); assert.ok(T.pluie < 0.4, 'le changement est progressif');
   for (let i = 0; i < 4000; i++) T.maj(0.05); assert.ok(T.pluie > 0.5 || T.meteo !== 'pluie'); assert.ok(TEMPS.dureeJour > 600);
   const N = creerTemps(hasard(1), { heure: 2 }); assert.ok(N.lumiere.force < midi * 0.6, 'la nuit est sombre'); assert.ok(N.lumiere.nuit > 0.8);
+});
+
+test('la bande originale : chaque mesure est juste, le chant ne frotte pas contre son accord, chaque moment a sa pièce', () => {
+  assert.deepStrictEqual(MORCEAUX.map(m => m.id).sort(), ['jour', 'matin', 'nuit', 'pluie', 'soir']);
+  for (const P of MORCEAUX) for (const nom of ['A', 'B']) {
+    const S = P[nom]; assert.strictEqual(S.accords.length, S.chant.length, P.id);
+    S.chant.forEach((c, i) => {
+      const notes = lireMesure(c), total = notes.reduce((s, n) => s + n.dur, 0); assert.strictEqual(total, P.mesure, P.id + nom + (i + 1) + ' : ' + total + ' temps');
+      const accord = lireAccord(S.accords[i]).map(m => m % 12);
+      for (const n of notes) if (n.note !== null && n.dur >= 1) for (const a of accord) assert.notStrictEqual((n.note - a + 12) % 12, 1, P.id + nom + (i + 1) + ' : neuvième mineure contre l accord (' + c + ')'); // la septième majeure, elle, est la couleur recherchée
+    });
+  }
+  for (const P of MORCEAUX) { const a = composer(P, 1), b = composer(P, 2); assert.ok(a.duree > 75 && a.duree < 240, P.id + ' dure ' + a.duree); assert.ok(a.notes.every(n => INSTRUMENTS.includes(n.inst) && n.m >= 24 && n.m <= 100 && n.t >= 0 && n.t < a.duree && n.v > 0 && n.v <= 1)); assert.notDeepStrictEqual(a.notes.map(n => n.t), b.notes.map(n => n.t), 'deux écoutes diffèrent'); }
+});
+test('la lutherie : chaque instrument sonne, sans saturer ni claquer, et les nappes bouclent sans couture', () => {
+  const sain = (d, nom) => { let m = 0; for (const x of d) { assert.ok(Number.isFinite(x), nom); m = Math.max(m, Math.abs(x)); } assert.ok(m > 0.3 && m <= 1, nom + ' : crête ' + m); };
+  for (const inst of INSTRUMENTS) for (const m of [43, 67, 86]) { const d = rendre(inst, m, 1.5); sain(d, inst + m); assert.ok(Math.abs(d[d.length - 1]) < 0.02, inst + m + ' finit net'); assert.ok(Math.abs(d[0]) < 0.02, inst + m + ' commence net'); }
+  for (const [nom, f] of Object.entries({ boucleEau, boucleVent, bouclePluie, boucleGrillons })) for (const c of f()) { sain(c, nom); let e = 0; for (let i = 1; i < c.length; i++) e = Math.max(e, Math.abs(c[i] - c[i - 1])); assert.ok(Math.abs(c[0] - c[c.length - 1]) <= e, nom + ' : la boucle saute'); }
+  assert.strictEqual(reponse(SR).length, 2);
 });
