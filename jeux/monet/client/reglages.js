@@ -137,3 +137,18 @@ export const LIEUX = [
   { id: 'brumes', nom: 'Le Lac des Brumes', x: 0.86, y: 0.62 },
   { id: 'jardin', nom: 'Le Jardin oublié', x: 0.55, y: 0.85 },
 ];
+
+/* ---------- Les légendes : un poisson hors du commun par coin de l'étang. Il ne mord qu'au bon moment, par le bon temps, au bon leurre ---------- */
+export const LEGENDES = [
+  { id: 'reine', nom: 'La Reine rayée', espece: 'perche', secteur: 'crique', longueur: 51, moments: ['matin'], meteos: ['soleil', 'couvert'], leurres: ['cuiller'],
+    rumeur: 'Une perche grande comme un avant-bras règne sur la petite crique. Elle ne sort qu’au matin, quand l’eau est claire, et ne court qu’après ce qui brille et tourne : une cuiller argentée.' },
+  { id: 'bronze', nom: 'Le Bronze', espece: 'chevesne', secteur: 'boisee', longueur: 66, moments: ['jour'], meteos: ['soleil'], leurres: ['vairon'],
+    rumeur: 'Sous les branches de la rive boisée patrouille un chevesne couleur de vieille cloche. En plein jour, par grand soleil, il se laisse tenter par un petit nageur vairon. Approche sans courir : il entend tout.' },
+  { id: 'ombre', nom: 'L’Ombre des nénuphars', espece: 'brochet', secteur: 'nenuphars', longueur: 116, moments: ['jour', 'soir'], meteos: ['pluie'], leurres: ['ondulante'],
+    rumeur: 'Quand il pleut sur les grands nénuphars, une ombre longue comme une barque glisse sous les feuilles. Elle aime l’éclat du cuivre : une ondulante, moulinée sans s’arrêter.' },
+  { id: 'dame', nom: 'La Vieille Dame du pont', espece: 'brochet', secteur: 'pont', longueur: 128, moments: ['matin', 'soir'], meteos: ['couvert', 'brouillard'], leurres: ['jerk'],
+    rumeur: 'Sous les arches du pont dort la plus vieille bête de l’étang. On ne la voit qu’à la lumière basse, matin ou soir, sous un ciel gris ou dans la brume. Elle ne regarde que les grands nageurs, et casse les cannes trop tendres.' },
+  { id: 'fantome', nom: 'Le Fantôme du saule', espece: 'sandre', secteur: 'saule', longueur: 97, moments: ['nuit'], meteos: ['soleil', 'couvert', 'pluie', 'brouillard'], leurres: ['shad'],
+    rumeur: 'Au fond du trou du vieux saule vit un sandre pâle comme la lune. Il ne chasse qu’en pleine nuit, tout contre le fond, et ne touche qu’un shad mené très lentement.' },
+];
+export const legende = id => LEGENDES.find(l => l.id === id);

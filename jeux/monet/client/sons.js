@@ -98,6 +98,8 @@ export const sons = {
   grenouille(pan = rnd(-0.5, 0.5), loin = 0.45) { if (!ok) return; const t = ctx.currentTime + 0.02, d = lieu(pan, loin), f = ctx.createBiquadFilter(); f.type = 'bandpass'; f.frequency.value = rnd(720, 1000); f.Q.value = 2.2; f.connect(d); for (let k = 0, N = 2 + Math.floor(rnd(0, 3)); k < N; k++) for (let i = 0; i < 9; i++) ton(f, t + k * 0.42 + i * 0.03, rnd(92, 104), 82, 0.022, 0.28, { type: 'sawtooth', a: 0.003 }); },
   // un envol : des battements d'ailes qui s'éloignent
   envol() { if (!ok) return; const t = ctx.currentTime + 0.01, p = rnd(-0.6, 0.6); for (let i = 0; i < 14; i++) souffle(lieu(p + i * 0.03, 0.35 + i * 0.03), t + i * 0.085, 0.06, 0.09 * (1 - i / 16), rnd(650, 1050), 420, { q: 0.7, a: 0.012 }); },
+  // la brosse sur la toile
+  pinceau() { if (!ok) return; const t = ctx.currentTime + 0.01, d = lieu(rnd(-0.2, 0.2), 0.05, gestes); souffle(d, t, rnd(0.12, 0.26), 0.035, rnd(1800, 2600), rnd(900, 1300), { q: 0.8, a: 0.04 }); },
   musique() {
     audio.musique = !audio.musique; try { localStorage.setItem('monet-musique', audio.musique ? '1' : '0'); } catch { /* stockage bloqué */ }
     if (ok) { const t = ctx.currentTime; orchestre.gain.setTargetAtTime(audio.musique ? 0.34 : 0, t, 0.5); orchestre.echo.gain.setTargetAtTime(audio.musique ? 1 : 0, t, 0.5); }

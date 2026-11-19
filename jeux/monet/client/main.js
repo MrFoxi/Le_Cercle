@@ -1,18 +1,21 @@
 // LES EAUX DE MONET — la boucle du jeu : marcher, regarder, pêcher, observer. Chaque module fait son métier ; ici on les relie.
 import * as THREE from 'three';
-import { QUALITE, ETANG, ESPECES, LEURRES, FAMILLES, PECHE, espece } from './reglages.js';
+import { QUALITE, ETANG, ESPECES, LEURRES, FAMILLES, PECHE, LEGENDES, espece } from './reglages.js';
 import { hauteur, sol, surPont, secteurEn, dansLEau, profondeur, abri, OBSTACLES, NENUPHARS } from './etang.js';
 import { UNI, Toile, FACE, matiereTouches, pioche } from './peinture.js';
 import { construireDecor } from './decor.js';
 import { creerEau, creerCiel } from './eau.js';
 import { creerVuePoisson } from './vue-poissons.js';
-import { creerPoissons, majPoissons, retirer, relacher, activite } from './poissons.js';
+import { creerPoissons, majPoissons, retirer, relacher, activite, eveillee } from './poissons.js';
 import { creerPeche } from './peche.js';
 import { creerMains } from './mains.js';
 import { creerTemps, momentDe } from './temps.js';
 import { creerCarnet } from './carnet.js';
 import { creerInterface } from './interface.js';
 import { sons, audio } from './sons.js';
+import { creerJardinier, endroit } from './personnage.js';
+import { parler, POSTES, NOM } from './jardinier.js';
+import { creerChevalet } from './chevalet.js';
 
 const $ = s => document.querySelector(s), params = new URLSearchParams(location.search);
 const Q = QUALITE[params.get('q')] ?? (matchMedia('(pointer: coarse)').matches ? QUALITE.basse : QUALITE.moyenne); UNI.uLod.value = Q.lod;
@@ -28,6 +31,7 @@ const carnet = creerCarnet(stock), peche = creerPeche(), poissons = creerPoisson
 const corps = poissons.map(f => { const m = creerVuePoisson(f.sp.id); m.scale.setScalar(f.longueur / 100); m.visible = false; scene.add(m); return m; });
 const J = { x: ETANG.depart.x, y: 0, z: ETANG.depart.z, lacet: ETANG.depart.regard, tangage: 0.06, vit: 0, pas: 0, secteur: null };
 J.y = sol(J.x, J.z) + 1.62; camera.position.set(J.x, J.y, J.z);
+const anselme = creerJardinier(scene), chev = creerChevalet($('#chevalet')); let poste = null, repliques = [], parole = false, dAnselme = 99, tableauDemande = false, legT = 30;
 const touches = new Set(); let gauche = false, droit = false, clicG = false, clicE = false, tirer = false, viseur = false, enPartie = false, tenu = null, photoDemandee = false, noteT = 0, lieuT = 0, aideFix = '';
 
 const note = (txt, s = 4.5) => { const n = $('#note'); n.textContent = txt; n.classList.add('on'); noteT = s; };
@@ -39,6 +43,8 @@ function decouvrir() { for (const l of carnet.verifierLieux()) { note(`Un nouvea
 /* ---------- Les commandes ---------- */
 addEventListener('keydown', e => {
   sons.ouvrir(); if (e.repeat) return; touches.add(e.code);
+  if (chev.actif) { if (e.code === 'KeyE' && chev.fini) signer(); if (e.code === 'Escape') { chev.fermer(); note('Tu grattes la toile : on recommencera.', 3); } return; }
+  if (e.code === 'KeyV' && enPartie && !ui.ouvert && !viseur && peche.etat === 'repos') { tableauDemande = true; taire(); }
   if (e.code === 'KeyE') clicE = true; if (e.code === 'Space') { tirer = true; e.preventDefault(); }
   if (e.code === 'KeyC') ui.basculer('carnet'); if (e.code === 'KeyB') ui.basculer('boite'); if (e.code === 'KeyK') ui.basculer('carte');
   if (e.code === 'Escape' && ui.ouvert) ui.fermer();
@@ -51,9 +57,9 @@ addEventListener('keyup', e => touches.delete(e.code)); addEventListener('blur',
 vue.addEventListener('contextmenu', e => e.preventDefault());
 addEventListener('mousedown', e => { sons.ouvrir(); if (ui.ouvert || !enPartie || e.target !== vue) return; if (document.pointerLockElement !== vue) { vue.requestPointerLock?.(); return; } if (e.button === 0) { gauche = true; clicG = true; } if (e.button === 2) droit = true; });
 addEventListener('mouseup', e => { if (e.button === 0) gauche = false; if (e.button === 2) droit = false; });
-addEventListener('mousemove', e => { if (document.pointerLockElement !== vue) return; J.lacet -= e.movementX * 0.0021; J.tangage = Math.max(-1.25, Math.min(1.2, J.tangage - e.movementY * 0.0019)); });
+addEventListener('mousemove', e => { if (document.pointerLockElement !== vue || chev.actif) return; J.lacet -= e.movementX * 0.0021; J.tangage = Math.max(-1.25, Math.min(1.2, J.tangage - e.movementY * 0.0019)); });
 addEventListener('wheel', e => { if (['eau', 'combat'].includes(peche.etat)) { peche.vitesse = Math.max(0, Math.min(2, peche.vitesse + (e.deltaY < 0 ? 1 : -1))); } }, { passive: true });
-$('#titre').addEventListener('click', () => { if (!pret) return; $('#titre').classList.add('parti'); enPartie = true; sons.ouvrir(); vue.requestPointerLock?.(); lieuTitre('L’Étang des Nymphéas'); });
+$('#titre').addEventListener('click', () => { if (!pret) return; $('#titre').classList.add('parti'); enPartie = true; sons.ouvrir(); vue.requestPointerLock?.(); lieuTitre('L’Étang des Nymphéas'); if (!carnet.donnees.jardinier.vu) setTimeout(() => note('Un vieil homme ratisse la berge, tout près du campement. Va le saluer.', 7), 6500); });
 let pret = false;
 
 /* ---------- Le promeneur ---------- */
@@ -80,8 +86,28 @@ function montrerPrise() {
   const r = peche.resultat, sp = espece(r.espece), b = carnet.prise(r); if (sp.id === 'sandre' && temps.lumiere.force < 0.75) carnet.geste('penombre');
   document.exitPointerLock?.(); gauche = droit = false; sons.prise();
   tenu = creerVuePoisson(sp.id); tenu.material.uniforms.uAir.value = 1; tenu.scale.setScalar(Math.min(0.58, 0.3 + r.longueur / 240)); tenu.position.set(0, -0.09, -0.62); tenu.rotation.y = Math.PI / 2; tenu.material.uniforms.uAmp.value = 0.035; camera.add(tenu);
-  $('#prise').hidden = false; $('#prise').innerHTML = `<h2>${sp.nom}</h2><p>${r.longueur} cm, ${r.poids.toFixed(2).replace('.', ',')} kg${b.nouvelle ? ' · une nouvelle page dans ton carnet' : b.record ? ' · ton plus beau à ce jour' : ''}</p><div class="choix"><button data-choix="relacher">Le relâcher (R)</button><button data-choix="conserver">Le conserver (G)</button></div>`;
-  decouvrir();
+  const g = r.legende && LEGENDES.find(x => x.id === r.legende); $('#prise').hidden = false; $('#prise').innerHTML = `<h2>${g ? g.nom : sp.nom}</h2><p>${g ? sp.nom + ', ' : ''}${r.longueur} cm, ${r.poids.toFixed(2).replace('.', ',')} kg${b.legende ? ' · une légende de l’étang ! Elle rejoint ton carnet' : b.nouvelle ? ' · une nouvelle page dans ton carnet' : b.record ? ' · ton plus beau à ce jour' : ''}</p><div class="choix"><button data-choix="relacher">Le relâcher (R)</button><button data-choix="conserver">Le conserver (G)</button></div>`;
+  decouvrir(); if (g) { sons.saut(); note(`${g.nom} ! Le père Anselme n’en croira pas ses yeux.`, 6); }
+}
+
+/* ---------- Le père Anselme : il change de coin selon l'heure, et parle quand on s'approche ---------- */
+function taire() { repliques = []; parole = false; $('#parole').hidden = true; }
+function dire(txt) { parole = true; $('#parole').hidden = false; $('#parole').innerHTML = `<b>${NOM}</b><p></p><small>${repliques.length ? 'E : la suite' : 'E : au revoir'}</small>`; $('#parole p').textContent = txt; }
+function jardiner(dt) {
+  const id = carnet.donnees.jardinier.vu ? POSTES[momentDe(temps.heure).id] : 'camp';
+  if (id !== poste && (poste === null || dAnselme > 30)) { const [x, z] = endroit(id); anselme.poser(x, z); poste = id; }
+  dAnselme = anselme.maj(dt, J, parole);
+  if (clicE && dAnselme < 3 && peche.etat === 'repos' && !ui.ouvert && !viseur) { clicE = false; if (parole && !repliques.length) taire(); else { if (!parole) repliques = parler(carnet); dire(repliques.shift()); sons.page(); } }
+  if (parole && dAnselme > 5) taire();
+}
+function signer() { const img = chev.signer(); carnet.tableau({ img, titre: chev.titre, date: Date.now() }); sons.page(); note('Signé ! Le tableau rejoint la galerie de ton carnet.', 4); }
+// une légende éveillée, pas trop loin : un remous énorme trahit sa présence
+const DU = { 'Le ': 'du ', 'La ': 'de la ', 'Les ': 'des ' };
+function legendes(dt) {
+  if ((legT -= dt) > 0) return; legT = 50 + Math.random() * 50;
+  const f = poissons.find(p => p.legende && p.etat === 'cale' && eveillee(p.legende, temps.heure, temps.suivante ?? temps.meteo) && Math.hypot(p.x - J.x, p.z - J.z) < 60); if (!f) return;
+  const n = ETANG.secteurs.find(s => s.id === f.legende.secteur).nom, art = Object.keys(DU).find(a => n.startsWith(a));
+  eau.rond(f.x, f.z, 2.4); sons.saut(); note(`Un remous énorme, du côté ${DU[art]}${n.slice(art.length)}…`, 5);
 }
 
 /* ---------- Ce qui se passe sur l'étang : des événements vrais, qui disent où sont les poissons ---------- */
@@ -143,7 +169,7 @@ function prendrePhoto() {
   const av = camera.getWorldDirection(v3).clone(), sujets = new Set(); poissons.forEach((f, i) => { if (corps[i].visible && new THREE.Vector3(f.x - J.x, f.y - J.y, f.z - J.z).normalize().dot(av) > 0.86) sujets.add(f.sp.nom); });
   const s = secteurEn(J.x, J.z), c = document.createElement('canvas'), W = 420, H = Math.round((W * vue.height) / vue.width); c.width = W; c.height = H; c.getContext('2d').drawImage(vue, 0, 0, W, H);
   const lieu = s?.nom ?? 'L’Étang des Nymphéas', legende = `${sujets.size ? [...sujets].join(', ') + ', ' : oiseaux ? 'Envolée d’oiseaux, ' : ''}${lieu.charAt(0).toLowerCase() + lieu.slice(1)}, ${momentDe(temps.heure).nom.toLowerCase()}`;
-  carnet.photo({ img: c.toDataURL('image/jpeg', 0.62), legende: legende.charAt(0).toUpperCase() + legende.slice(1), date: Date.now() });
+  carnet.photo({ img: c.toDataURL('image/jpeg', 0.62), legende: legende.charAt(0).toUpperCase() + legende.slice(1), date: Date.now(), meteo: temps.pluie > 0.5 ? 'pluie' : temps.meteo });
   [...sujets].forEach(n => { const e = ESPECES.find(x => x.nom === n); if (carnet.observer(e.id)) note(`Nouvelle page au carnet : ${n}`); }); decouvrir();
   const fl = $('#flash'); fl.classList.remove('on'); void fl.offsetWidth; fl.classList.add('on'); sons.photo(); if (!noteT) note('La photo rejoint ton album.', 2.5);
 }
@@ -164,7 +190,7 @@ const OBJETS = [['carnet', 'E : ouvrir le carnet'], ['boite', 'E : ouvrir la bo�
 function aide() {
   if (viseur) return ''; const l = peche.leurreChoisi;
   switch (peche.etat) {
-    case 'repos': { const o = OBJETS.find(([k]) => pres(decor.hot[k])); if (o) { if (clicE) ui.ouvrir(o[0]); return o[1]; } return dansLEau(J.x - Math.sin(J.lacet) * 12, J.z - Math.cos(J.lacet) * 12) ? 'Maintiens le clic gauche pour lancer' : ''; }
+    case 'repos': { if (dAnselme < 3) return parole ? '' : 'E : parler au père Anselme'; const o = OBJETS.find(([k]) => pres(decor.hot[k])); if (o) { if (clicE) ui.ouvrir(o[0]); return o[1]; } return dansLEau(J.x - Math.sin(J.lacet) * 12, J.z - Math.cos(J.lacet) * 12) ? 'Maintiens le clic gauche pour lancer' : ''; }
     case 'charge': return 'Relâche pour lancer';
     case 'eau': return peche.l.accroche ? 'Clic gauche : donner des tirées pour libérer le leurre' : `${FAMILLES[l.famille]} : ${l.conseil} · clic droit : mouliner · clic gauche : tirée · F : ramener`;
     case 'touche': return 'Ça mord ! CLIC GAUCHE pour ferrer !';
@@ -182,12 +208,12 @@ let dernier = performance.now(), img = 0; const DT_MAX = params.has('debug') ? +
 function image(ms) {
   requestAnimationFrame(image); const dt = Math.min(DT_MAX, (ms - dernier) / 1000); dernier = ms; const t = ms / 1000; img++;
   temps.maj(dt); peindreLumiere(t);
-  if (enPartie) marcher(dt);
+  if (enPartie && !chev.actif) marcher(dt);
   J.y += (sol(J.x, J.z, J.y - 1.62) + 1.62 - J.y) * Math.min(1, dt * 9);
   camera.position.set(J.x, J.y, J.z); camera.rotation.set(J.tangage, J.lacet, 0);
   // un nouveau coin de l'étang
   const s = secteurEn(J.x, J.z); if (s && s.id !== J.secteur) { J.secteur = s.id; if (carnet.secteur(s.id)) { lieuTitre(s.nom); note(s.texte, 6); decouvrir(); } } else if (!s) J.secteur = null;
-  const aPied = peche.etat === 'repos' || peche.etat === 'charge', actif = enPartie && !ui.ouvert && !viseur, fwd = new THREE.Vector3(-Math.sin(J.lacet), 0, -Math.cos(J.lacet));
+  const aPied = peche.etat === 'repos' || peche.etat === 'charge', actif = enPartie && !ui.ouvert && !viseur && !chev.actif, fwd = new THREE.Vector3(-Math.sin(J.lacet), 0, -Math.cos(J.lacet));
   if (viseur && clicG) { photoDemandee = true; }
   const e = { pos: { x: J.x, y: J.y - 0.3, z: J.z }, dir: { x: fwd.x, z: fwd.z }, vent: { x: temps.vent * 0.8, z: temps.vent * 0.3 }, heure: temps.heure, meteo: temps.suivante ?? temps.meteo,
     charge: actif && gauche && aPied, moulinet: actif && droit, tiree: actif && (clicG || tirer) && peche.etat === 'eau', ferrer: actif && (clicG || tirer) && peche.etat === 'touche', prendre: actif && (clicG || clicE) && peche.etat === 'epuisette',
@@ -208,16 +234,17 @@ function image(ms) {
     if (x.type === 'touche') peche.touche(x.f);
     if (x.type === 'suit' && x.f.sp.id === 'brochet' && carnet.geste('suit')) { note('Noté dans le carnet : le brochet suit ton leurre…'); decouvrir(); }
   }
-  observer(dt); vivants(dt, t); pleuvoir(dt);
+  observer(dt); vivants(dt, t); pleuvoir(dt); jardiner(dt); legendes(dt);
+  if (chev.maj(dt) && Math.random() < dt * 6) sons.pinceau();
   // le lancer : où tombera le leurre
-  mains.maj(dt, peche, e, ui.ouvert || viseur); mains.cible.visible = peche.etat === 'charge'; if (mains.cible.visible) { const P = peche.canne.portee * (0.25 + peche.puissance * 0.75); mains.cible.position.set(J.x + fwd.x * P, 0.08, J.z + fwd.z * P); mains.cible.material.color.set(dansLEau(mains.cible.position.x, mains.cible.position.z) ? 0xfff2c8 : 0xe08a6a); }
+  mains.maj(dt, peche, e, chev.actif || tableauDemande ? 'net' : ui.ouvert || viseur); mains.cible.visible = peche.etat === 'charge'; if (mains.cible.visible) { const P = peche.canne.portee * (0.25 + peche.puissance * 0.75); mains.cible.position.set(J.x + fwd.x * P, 0.08, J.z + fwd.z * P); mains.cible.material.color.set(dansLEau(mains.cible.position.x, mains.cible.position.z) ? 0xfff2c8 : 0xe08a6a); }
   if (tenu) { tenu.material.uniforms.uNage.value = t * 5; tenu.rotation.z = Math.sin(t * 2.1) * 0.05; }
   // l'écran : le moins possible
-  const a = enPartie && !ui.ouvert ? aide() : ''; if (a !== aideFix) { $('#aide').textContent = a; aideFix = a; }
-  const mat = peche.leurreChoisi, txt = enPartie ? `${mat.nom}${['eau', 'combat'].includes(peche.etat) ? ` · moulinet ${['lent', 'moyen', 'rapide'][peche.vitesse]}` : ''}` : ''; if ($('#materiel').textContent !== txt) $('#materiel').textContent = txt;
+  const a = enPartie && !ui.ouvert && !chev.actif ? aide() : ''; if (a !== aideFix) { $('#aide').textContent = a; aideFix = a; }
+  const mat = peche.leurreChoisi, txt = enPartie && !chev.actif ? `${mat.nom}${['eau', 'combat'].includes(peche.etat) ? ` · moulinet ${['lent', 'moyen', 'rapide'][peche.vitesse]}` : ''}` : ''; if ($('#materiel').textContent !== txt) $('#materiel').textContent = txt;
   $('#tension').hidden = peche.etat !== 'combat'; if (peche.etat === 'combat') { const k = Math.min(1, peche.tension), f = $('#fil'); f.setAttribute('stroke-dasharray', `${(k * 100).toFixed(1)} 100`); f.setAttribute('stroke', k > 0.82 ? '#e0583c' : k > 0.6 ? '#f0c060' : '#fbf4e2'); }
   $('#force').hidden = peche.etat !== 'charge'; if (peche.etat === 'charge') $('#force').style.setProperty('--p', peche.puissance.toFixed(2));
-  $('#point').hidden = !enPartie || ui.ouvert; if (noteT > 0 && (noteT -= dt) <= 0) { noteT = 0; $('#note').classList.remove('on'); } if (lieuT > 0 && (lieuT -= dt) <= 0) $('#lieu').classList.remove('on');
+  $('#point').hidden = !enPartie || ui.ouvert || chev.actif; if (noteT > 0 && (noteT -= dt) <= 0) { noteT = 0; $('#note').classList.remove('on'); } if (lieuT > 0 && (lieuT -= dt) <= 0) $('#lieu').classList.remove('on');
   sons.maj(dt, temps, Math.max(0, 1 - Math.max(0, hauteur(J.x, J.z)) / 2));
   clicG = clicE = tirer = false;
   // le reflet : le paysage retourné, dans lequel les touches de l'eau viendront puiser
@@ -228,7 +255,8 @@ function image(ms) {
   }
   renderer.render(scene, camera);
   if (photoDemandee) { photoDemandee = false; prendrePhoto(); }
+  if (tableauDemande) { tableauDemande = false; const c = document.createElement('canvas'); c.width = 240; c.height = Math.round(240 * vue.height / vue.width); c.getContext('2d').drawImage(vue, 0, 0, c.width, c.height); const s = secteurEn(J.x, J.z); chev.commencer(c, `${s?.nom ?? 'L’Étang des Nymphéas'}, ${momentDe(temps.heure).nom.toLowerCase()}`); sons.page(); }
 }
-if (params.has('debug')) window.monet = { J, peche, poissons, carnet, temps, ui, eau, corps, camera, decor, UNI, entrer() { $('#titre').classList.add('parti'); enPartie = true; }, evenement, decider, touches };
+if (params.has('debug')) window.monet = { anselme, chev, signer, parlerA: () => { clicE = true; }, dAnselme: () => dAnselme, reveilLegende: () => { legT = 0; }, J, peche, poissons, carnet, temps, ui, eau, corps, camera, decor, UNI, entrer() { $('#titre').classList.add('parti'); enPartie = true; }, evenement, decider, touches };
 pret = true; $('#pret').textContent = 'Cliquer pour entrer dans le tableau';
 requestAnimationFrame(image);

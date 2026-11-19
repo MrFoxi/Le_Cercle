@@ -15,7 +15,7 @@ export function creerPeche(hasard = Math.random) {
   const dire = (type, extra = {}) => P.evenements.push({ type, ...extra });
   P.choisir = (canne, leurre) => { if (P.etat !== 'repos') return false; if (canne) P.canne = canne; if (leurre) P.leurreChoisi = leurre; return true; };
   // le leurre tel que les poissons le voient (null s'il n'est pas à l'eau)
-  P.vueLeurre = () => (P.etat === 'eau' && !P.l.accroche ? { x: P.l.x, y: P.l.y, z: P.l.z, famille: P.leurreChoisi.famille, taille: P.leurreChoisi.taille, anim: P.l.anim, vit: P.l.vit, plouf: P.l.plouf } : null);
+  P.vueLeurre = () => (P.etat === 'eau' && !P.l.accroche ? { x: P.l.x, y: P.l.y, z: P.l.z, id: P.leurreChoisi.id, famille: P.leurreChoisi.famille, taille: P.leurreChoisi.taille, anim: P.l.anim, vit: P.l.vit, plouf: P.l.plouf } : null);
   function rentrer() { P.etat = 'repos'; P.poisson = null; P.combat = null; P.tension = 0; P.puissance = 0; P.l.accroche = false; }
   P.rentrer = rentrer;
 
@@ -128,7 +128,7 @@ export function creerPeche(hasard = Math.random) {
         P.tension *= 1 - dt * 3;
         if (e.prendre) {
           const f = P.poisson, s = secteurEn(e.pos.x, e.pos.z);
-          P.resultat = { espece: f.sp.id, longueur: f.longueur, poids: f.poids, secteur: s?.id ?? null, leurre: P.leurreChoisi.id, canne: P.canne.id, heure: e.heure ?? 12, meteo: e.meteo ?? 'soleil' };
+          P.resultat = { espece: f.sp.id, legende: f.legende?.id ?? null, longueur: f.longueur, poids: f.poids, secteur: s?.id ?? null, leurre: P.leurreChoisi.id, canne: P.canne.id, heure: e.heure ?? 12, meteo: e.meteo ?? 'soleil' };
           P.etat = 'prise'; dire('prise', { f });
         }
         break;

@@ -51,6 +51,23 @@
     #flash { position: fixed; inset: 0; background: #fff; opacity: 0; pointer-events: none; }
     #flash.on { animation: flash .35s ease-out; }
     @keyframes flash { 0% { opacity: .85; } 100% { opacity: 0; } }
+    /* le père Anselme parle : un billet de papier, en bas de l'écran */
+    #parole { position: fixed; left: 50%; bottom: 13vh; transform: translateX(-50%); width: min(92vw, 640px); padding: 12px 20px 10px; background: var(--feuille); border: 1px solid var(--trait); box-shadow: 0 8px 24px rgba(40, 30, 16, .35); pointer-events: none; }
+    #parole[hidden] { display: none; }
+    #parole b { font: 400 1.6rem var(--main); }
+    #parole p { margin: 2px 0 4px; font-size: 1.16rem; line-height: 1.35; }
+    #parole small { color: var(--doux); font-style: italic; }
+    /* le chevalet : la toile dans son cadre de bois */
+    #chevalet { position: fixed; inset: 0; display: grid; place-content: center; justify-items: center; gap: 12px; padding: 3vh 3vw; background: rgba(40, 34, 22, .35); }
+    #chevalet[hidden] { display: none; }
+    #chevalet .cadre { padding: 12px; background: linear-gradient(135deg, #7a5436, #5a3c26); box-shadow: 0 16px 40px rgba(20, 14, 6, .55), inset 0 0 0 2px #3c2818; }
+    #chevalet canvas { display: block; width: min(86vw, 135vh); height: auto; background: #d8cfb8; }
+    #chevalet p { margin: 0; font-size: 1.5rem; text-align: center; }
+    .galerie { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 14px; }
+    .galerie figure { margin: 0; }
+    .galerie img { width: 100%; display: block; border: 8px solid #6b4a30; box-shadow: 2px 3px 8px rgba(40, 30, 16, .4); }
+    .galerie figcaption { font: 400 1.3rem var(--main); }
+    .legende b { font: 400 1.45rem var(--main); }
     /* les objets qu'on prend en main */
     #objet { position: fixed; inset: 0; display: grid; place-items: center; padding: 3vh 3vw; background: rgba(40, 34, 22, .55); overflow: auto; }
     #objet[hidden] { display: none; }
@@ -121,6 +138,8 @@
   <section id="prise" hidden aria-live="polite"></section>
   <div id="viseur" hidden><span class="ecrit">Clic pour photographier · P pour ranger l’appareil</span></div>
   <div id="flash"></div>
+  <section id="parole" hidden aria-live="polite"></section>
+  <section id="chevalet" hidden></section>
   <div id="voile"></div>
   <section id="objet" hidden></section>
   <section id="titre">
@@ -130,7 +149,7 @@
       <li><kbd>Z Q S D</kbd> marcher, <kbd>Maj</kbd> presser le pas</li><li><kbd>E</kbd> prendre, regarder</li>
       <li><kbd>Clic gauche</kbd> maintenu : lancer</li><li><kbd>Clic droit</kbd> maintenu : mouliner</li>
       <li><kbd>Clic gauche</kbd> : tirée, ferrer</li><li><kbd>Molette</kbd> : vitesse du moulinet</li>
-      <li><kbd>C</kbd> carnet, <kbd>B</kbd> leurres, <kbd>K</kbd> carte</li><li><kbd>P</kbd> appareil photo, <kbd>M</kbd> musique</li>
+      <li><kbd>C</kbd> carnet, <kbd>B</kbd> leurres, <kbd>K</kbd> carte</li><li><kbd>P</kbd> appareil photo, <kbd>M</kbd> musique</li><li><kbd>V</kbd> poser le chevalet, peindre</li><li><kbd>E</kbd> parler au père Anselme</li>
     </ul>
     <strong id="pret">Le tableau se peint…</strong>
   </section>

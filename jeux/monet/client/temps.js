@@ -6,7 +6,8 @@ const mixe = (a, b, k) => a.map((v, i) => v + (b[i] - v) * k);
 const CLES = TEMPS.lumieres.map(l => ({ ...l, soleil: couleur(l.soleil), ombre: couleur(l.ombre), horizon: couleur(l.horizon), zenith: couleur(l.zenith), brume: couleur(l.brume) }));
 const GRIS = { horizon: couleur('#b9bcc0'), zenith: couleur('#8d95a2'), brume: couleur('#c3c6c6'), soleil: couleur('#d6d8d8'), ombre: couleur('#7d8796') };
 
-export function momentDe(h) { const m = TEMPS.moments; let cur = m[0]; for (const x of m) if (x.de <= h) cur = x; return h < m[1].de ? m[0] : cur; }
+// la nuit commence le soir (21 h 30) et finit au matin : elle enjambe minuit
+export function momentDe(h) { const [nuit, ...jour] = TEMPS.moments; if (h >= nuit.de || h < jour[0].de) return nuit; let cur = jour[0]; for (const x of jour) if (x.de <= h) cur = x; return cur; }
 
 export function creerTemps(hasard = Math.random, depart = {}) {
   const T = { heure: depart.heure ?? TEMPS.heureDepart, jour: 1, meteo: depart.meteo ?? 'soleil', suivante: null, fondu: 1, attente: 5, couvert: 0, pluie: 0, brume: 0, vent: 0.25, lumiere: null };

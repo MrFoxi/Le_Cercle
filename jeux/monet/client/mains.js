@@ -38,8 +38,9 @@ export function creerMains(camera, scene) {
   return {
     rig, cible,
     secousse(k = 0.22) { kick = k; cv -= k * 7; },
-    // la pose suit l'état de la pêche
+    // la pose suit l'état de la pêche ; cachee === 'net' : rien de soi à l'image, tout de suite (le chevalet peint la vue)
     maj(dt, P, e, cachee) {
+      rig.visible = cachee !== 'net'; if (!rig.visible) { ligne.visible = false; if (vu) vu.visible = false; return tip; }
       const t = performance.now() / 1000, h = Math.min(dt, 0.033); let cA = 0.34, cY = -0.24, bend = 0.03, bendX = 0, down = 0;
       if (P.etat === 'charge') { cA = 0.5 + P.puissance * 1.15; cY = -0.14; bend = -0.25 * P.puissance; }
       if (P.etat === 'vol') { cA = 0.28; bend = 0.2; }

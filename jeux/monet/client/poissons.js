@@ -1,12 +1,14 @@
 // LES EAUX DE MONET — les poissons sont de vrais êtres : chacun a son coin d'eau, sa profondeur, ses heures, sa façon de nager,
 // il voit le leurre, s'y intéresse ou s'en méfie, a peur des pas lourds sur la berge. Aucun n'apparaît pour le joueur.
-import { ESPECES, espece } from './reglages.js';
+import { ESPECES, LEGENDES, ETANG, espece } from './reglages.js';
 import { profondeur, habitat, abri, CASES_EAU, hasard as graine } from './etang.js';
 import { momentDe } from './temps.js';
 
 const TAU = Math.PI * 2, angle = a => Math.atan2(Math.sin(a), Math.cos(a));
 // l'envie de chasser d'une espèce à cette heure, par ce temps (0 à environ 1,3)
 export function activite(sp, heure, meteo) { return sp.activite[momentDe(heure).id] * (sp.meteo[meteo] ?? 1); }
+// une légende est-elle sortie de sa cachette, à cette heure et par ce temps ?
+export const eveillee = (g, heure, meteo) => g.moments.includes(momentDe(heure).id) && g.meteos.includes(meteo);
 
 function placer(sp, r) {
   const notes = CASES_EAU.map(([x, z]) => [x, z, habitat(sp.habitat, x, z) ** 2 + 1e-4]), total = notes.reduce((s, n) => s + n[2], 0); let v = r() * total;
@@ -25,6 +27,12 @@ export function creerPoissons(seed = 7) {
       f.poids = poidsDe(sp, f.longueur); L.push(f); if (!chef) chef = f;
     }
   }
+  // les légendes : chacune dans l'eau la plus proche de son coin, assez profonde pour elle
+  for (const g of LEGENDES) {
+    const sp = espece(g.espece), s = ETANG.secteurs.find(x => x.id === g.secteur), [hx, hz] = CASES_EAU.filter(([x, z]) => profondeur(x, z) > sp.habitat.profMin + 0.15).sort((a, b) => Math.hypot(a[0] - s.x, a[1] - s.z) - Math.hypot(b[0] - s.x, b[1] - s.z))[0];
+    const f = { id: id++, sp, legende: g, chef: null, home: [hx, hz], x: hx, y: hauteurVoulue(sp, profondeur(hx, hz), 0), z: hz, cap: 0, vit: 0, etat: 'cale', cible: null, attente: 0, interet: 0, suivi: 0, mefiant: 0, phase: 0, nage: 0, longueur: g.longueur, retour: 0, decal: [0, 0] };
+    f.poids = poidsDe(sp, f.longueur); L.push(f);
+  }
   return L;
 }
 export const poidsDe = (sp, cm) => Math.round(sp.poids[0] * cm ** sp.poids[1]) / 1000;
@@ -37,8 +45,9 @@ export function perception(f, L, m) {
 }
 // l'envie de mordre ce leurre-là, animé comme ça
 function appetit(f, L, m) {
+  if (f.legende && (!eveillee(f.legende, m.heure, m.meteo) || !f.legende.leurres.includes(L.id))) return 0;
   const sp = f.sp, [a, b] = sp.tailleLeurre, fit = L.taille < a ? 0.55 : L.taille > b ? 0.35 : 1, fond = sp.colonne === 'fond' ? (L.y < -profondeur(L.x, L.z) + 1 ? 1 : 0.2) : sp.colonne === 'surface' ? (L.y > -1.4 ? 1 : 0.35) : 1;
-  return sp.leurres[L.famille] * fit * fond * L.anim * activite(sp, m.heure, m.meteo) * (f.faim > 0 ? 1.4 : 1); // faim : un banc ou des insectes viennent de passer
+  return sp.leurres[L.famille] * fit * fond * L.anim * activite(sp, m.heure, m.meteo) * (f.faim > 0 ? 1.4 : 1) * (f.legende ? 1.3 : 1); // faim : un banc ou des insectes viennent de passer
 }
 
 // un pas de vie pour tous. m : { heure, meteo, pluie, brume, force, joueur: {x, z, vitesse}, leurre: {x, y, z, famille, taille, anim, plouf} | null }

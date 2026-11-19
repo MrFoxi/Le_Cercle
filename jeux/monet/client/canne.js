@@ -4,14 +4,14 @@ import * as THREE from 'three';
 import { UNI, couleur, melange } from './peinture.js';
 
 const VERT = /* glsl */ `
-attribute vec3 aCol; attribute float aT; uniform float uC, uCX, uL; varying vec3 vCol, vN, vV, vP;
+attribute vec3 aCol; attribute float aT; uniform float uC, uCX, uL, uDensite; varying vec3 vCol, vN, vV, vP; varying float vFog;
 void main() {
   vec3 p = position; float t = aT; p.y -= uC * t * t; p.x += uCX * t * t; p.z += (uC * uC + uCX * uCX) * 2. / (3. * uL) * t * t * t; // la canne plie sans s'allonger
-  vec4 w = modelMatrix * vec4(p, 1.); vN = normalize(mat3(modelMatrix) * normal); vV = cameraPosition - w.xyz; vP = position; vCol = aCol;
+  vec4 w = modelMatrix * vec4(p, 1.); vN = normalize(mat3(modelMatrix) * normal); vV = cameraPosition - w.xyz; vP = position; vCol = aCol; vFog = 1. - exp(-length(vV) * uDensite);
   gl_Position = projectionMatrix * viewMatrix * w;
 }`;
 const FRAG = /* glsl */ `
-uniform vec3 uDirSoleil, uSoleil, uOmbre; uniform float uForce; varying vec3 vCol, vN, vV, vP;
+uniform vec3 uDirSoleil, uSoleil, uOmbre, uBrume; uniform float uForce; varying vec3 vCol, vN, vV, vP; varying float vFog;
 float h(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
 void main() {
   vec3 N = normalize(vN), V = normalize(vV); float a = atan(vP.y, vP.x), s = h(floor(vec2(vP.z * 46., a * 3.))), poil = h(floor(vec2(vP.z * 14., a * 9.)));
@@ -19,9 +19,9 @@ void main() {
   vec3 c = vCol * mix(uOmbre * .78, uSoleil * 1.04, smoothstep(.25, .8, e)) * uForce * (.86 + poil * .26) + vCol * uOmbre * .12;
   c = mix(c, c * vec3(.42, .36, .4), pow(1. - abs(dot(N, V)), 2.5) * .75); // le bord foncé qui détache l'objet du paysage
   c += uSoleil * pow(max(dot(N, normalize(uDirSoleil + V)), 0.), 26.) * .35 * uForce * step(.35, s);
-  gl_FragColor = vec4(c, 1.);
+  gl_FragColor = vec4(mix(c, uBrume, vFog), 1.);
 }`;
-const matiere = L => new THREE.ShaderMaterial({ vertexShader: VERT, fragmentShader: FRAG, uniforms: { uDirSoleil: UNI.uDirSoleil, uSoleil: UNI.uSoleil, uOmbre: UNI.uOmbre, uForce: UNI.uForce, uC: { value: 0 }, uCX: { value: 0 }, uL: { value: L } } });
+const matiere = L => new THREE.ShaderMaterial({ vertexShader: VERT, fragmentShader: FRAG, uniforms: { uDirSoleil: UNI.uDirSoleil, uSoleil: UNI.uSoleil, uOmbre: UNI.uOmbre, uForce: UNI.uForce, uBrume: UNI.uBrume, uDensite: UNI.uDensite, uC: { value: 0 }, uCX: { value: 0 }, uL: { value: L } } });
 
 // l'établi : on y assemble des pièces, chacune avec sa couleur et sa place le long de la canne (aT : 0 au talon, 1 au scion)
 export class Etabli {
