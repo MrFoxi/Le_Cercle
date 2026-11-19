@@ -18,8 +18,11 @@ export function creerTemps(hasard = Math.random, depart = {}) {
   }
   // changer de météo (fondu lent) ; sans argument, l'étang choisit
   T.changer = nom => { T.suivante = nom ?? tirer(); T.fondu = 0; };
+  // une météo tout de suite, sans fondu, qui dure un bon moment
+  T.imposer = nom => { const m = TEMPS.meteos[nom]; T.meteo = nom; T.suivante = null; T.fondu = 1; Object.assign(T, { couvert: m.couvert, pluie: m.pluie, brume: m.brume, vent: m.vent }); T.attente = TEMPS.dureeMeteo[1]; T.lumiere = lumiere(T); };
+  T.fige = false; // le temps arrêté : l'heure et la météo restent où on les a mises
   T.maj = dt => {
-    const dh = (dt / TEMPS.dureeJour) * 24; T.heure += dh; if (T.heure >= 24) { T.heure -= 24; T.jour++; }
+    const dh = T.fige ? 0 : (dt / TEMPS.dureeJour) * 24; T.heure += dh; if (T.heure >= 24) { T.heure -= 24; T.jour++; }
     T.attente -= dh; if (T.attente <= 0) { T.attente = TEMPS.dureeMeteo[0] + hasard() * (TEMPS.dureeMeteo[1] - TEMPS.dureeMeteo[0]); T.changer(); }
     const cible = TEMPS.meteos[T.suivante ?? T.meteo], k = Math.min(1, dt / (TEMPS.fondu * 0.35));
     for (const c of ['couvert', 'pluie', 'brume', 'vent']) T[c] += (cible[c] - T[c]) * k;

@@ -11,17 +11,18 @@ void main() {
   gl_Position = projectionMatrix * viewMatrix * w;
 }`;
 const FRAG = /* glsl */ `
-uniform vec3 uDirSoleil, uSoleil, uOmbre, uBrume; uniform float uForce; varying vec3 vCol, vN, vV, vP; varying float vFog;
+uniform vec3 uDirSoleil, uSoleil, uOmbre, uBrume; uniform float uForce, uDoux; varying vec3 vCol, vN, vV, vP; varying float vFog;
 float h(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
 void main() {
   vec3 N = normalize(vN), V = normalize(vV); float a = atan(vP.y, vP.x), s = h(floor(vec2(vP.z * 46., a * 3.))), poil = h(floor(vec2(vP.z * 14., a * 9.)));
-  float e = dot(N, uDirSoleil) * .5 + .5 + (s - .5) * .16; e = floor(e * 4. + .5) / 4.; // des aplats de lumière, posés au pinceau
-  vec3 c = vCol * mix(uOmbre * .78, uSoleil * 1.04, smoothstep(.25, .8, e)) * uForce * (.86 + poil * .26) + vCol * uOmbre * .12;
-  c = mix(c, c * vec3(.42, .36, .4), pow(1. - abs(dot(N, V)), 2.5) * .75); // le bord foncé qui détache l'objet du paysage
+  float bandes = mix(4., 9., uDoux), e = dot(N, uDirSoleil) * .5 + .5 + (s - .5) * .16 * (1. - uDoux * .6); e = floor(e * bandes + .5) / bandes; // des aplats de lumière, posés au pinceau
+  vec3 ombre = mix(uOmbre * .78, uOmbre * vec3(1.18, .82, .78) * .9, uDoux); // la peau garde du sang dans ses ombres
+  vec3 c = vCol * mix(ombre, uSoleil * 1.04, smoothstep(.25, .8, e)) * uForce * (.86 + poil * .26 * (1. - uDoux * .7)) + vCol * uOmbre * .12;
+  c = mix(c, c * vec3(.5, .34, .32), pow(1. - abs(dot(N, V)), 2.5) * (.75 - uDoux * .35)); // le bord foncé qui détache l'objet du paysage
   c += uSoleil * pow(max(dot(N, normalize(uDirSoleil + V)), 0.), 26.) * .35 * uForce * step(.35, s);
   gl_FragColor = vec4(mix(c, uBrume, vFog), 1.);
 }`;
-const matiere = L => new THREE.ShaderMaterial({ vertexShader: VERT, fragmentShader: FRAG, uniforms: { uDirSoleil: UNI.uDirSoleil, uSoleil: UNI.uSoleil, uOmbre: UNI.uOmbre, uForce: UNI.uForce, uBrume: UNI.uBrume, uDensite: UNI.uDensite, uC: { value: 0 }, uCX: { value: 0 }, uL: { value: L } } });
+const matiere = L => new THREE.ShaderMaterial({ vertexShader: VERT, fragmentShader: FRAG, uniforms: { uDirSoleil: UNI.uDirSoleil, uSoleil: UNI.uSoleil, uOmbre: UNI.uOmbre, uForce: UNI.uForce, uBrume: UNI.uBrume, uDensite: UNI.uDensite, uC: { value: 0 }, uCX: { value: 0 }, uL: { value: L }, uDoux: { value: 0 } } });
 
 // l'établi : on y assemble des pièces, chacune avec sa couleur et sa place le long de la canne (aT : 0 au talon, 1 au scion)
 export class Etabli {
@@ -35,9 +36,9 @@ export class Etabli {
     const [zh, rh, zb, rb] = z1 > z2 ? [z1, r1, z2, r2] : [z2, r2, z1, r1]; let g = new THREE.CylinderGeometry(rh, rb, zh - zb, n, 1, !ferme).toNonIndexed(); if (plat) g.computeVertexNormals();
     this.pose(g, new THREE.Matrix4().makeRotationX(Math.PI / 2).setPosition(x, y, (zh + zb) / 2), col);
   }
-  maille(L) {
+  maille(L, doux = 0) {
     const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(this.p, 3)); g.setAttribute('normal', new THREE.Float32BufferAttribute(this.n, 3)); g.setAttribute('aCol', new THREE.Float32BufferAttribute(this.c, 3)); g.setAttribute('aT', new THREE.Float32BufferAttribute(this.t, 1));
-    const m = new THREE.Mesh(g, matiere(L)); m.layers.set(2); m.frustumCulled = false; return m;
+    const m = new THREE.Mesh(g, matiere(L)); m.material.uniforms.uDoux.value = doux; m.layers.set(2); m.frustumCulled = false; return m;
   }
 }
 const graine = (a, b) => { const s = Math.sin(a * 91.7 + b * 47.3) * 43758.5453; return s - Math.floor(s); };
@@ -97,13 +98,32 @@ export function creerCanne(cfg) {
   };
 }
 
-// les leurres : une cuiller, un petit poisson de bois, un corps souple ; longueur 1, mis à l'échelle par mains.js
+// les leurres, longueur 1, la tête vers -z (là où la ligne s'attache) ; mis à l'échelle et animés par mains.js.
+// userData : la palette qui tourne (cuiller), le corps qui ondule (ondulante, nageur), la queue qui bat (souple)
 export function creerLeurre(l) {
-  const E = new Etabli(), [a, b] = l.couleurs.map(couleur), M = (x, y, z, sx = 1, sy = 1, sz = 1) => new THREE.Matrix4().compose(new THREE.Vector3(x, y, z), new THREE.Quaternion(), new THREE.Vector3(sx, sy, sz)), ACIER = couleur('#5a5c60');
-  const hamecon = z => { E.pose(new THREE.TorusGeometry(0.075, 0.012, 5, 10, 4.2), M(0, -0.07, z), ACIER); E.pose(new THREE.TorusGeometry(0.075, 0.012, 5, 10, 4.2).rotateY(2.1), M(0, -0.07, z), ACIER); };
-  const oeil = (z, y) => { for (const s of [-1, 1]) { E.pose(new THREE.SphereGeometry(0.034, 7, 5), M(s * 0.075, y, z), IVOIRE); E.pose(new THREE.SphereGeometry(0.018, 6, 4), M(s * 0.098, y, z), NOYER2); } };
-  if (l.famille === 'tournant') { E.pose(new THREE.SphereGeometry(0.5, 14, 8), M(0, 0, -0.1, 0.42, 0.05, 1), a); E.pose(new THREE.SphereGeometry(0.5, 10, 6), M(0, 0.03, -0.1, 0.2, 0.03, 0.55), b); E.tube(0.5, -0.65, 0.012, 0.012, 5, ACIER); E.pose(new THREE.SphereGeometry(0.06, 8, 6), M(0, 0, 0.38), b); hamecon(0.55); }
-  else if (l.famille === 'nageur') { E.pose(new THREE.SphereGeometry(0.5, 16, 10), M(0, 0, 0, 0.3, 0.36, 1), (x, y) => (y > 0.03 ? a : b)); E.pose(new THREE.BoxGeometry(0.2, 0.016, 0.24), new THREE.Matrix4().makeRotationX(0.5).setPosition(0, -0.08, -0.56), IVOIRE); oeil(-0.3, 0.05); hamecon(0.1); hamecon(0.46); }
-  else { const n = l.id === 'ver' ? 9 : 6; for (let i = 0; i < n; i++) { const k = i / (n - 1), z = -0.45 + k * 0.72, r = 0.17 * (1 - k * 0.55); E.pose(new THREE.SphereGeometry(r, 10, 7), M(0, l.id === 'ver' ? Math.sin(k * 5) * 0.05 : 0, z, 0.85, 1.1, 1.3), (x, y) => (y > 0.02 ? b : a)); } E.pose(new THREE.CylinderGeometry(0.13, 0.13, 0.05, 12), new THREE.Matrix4().makeRotationZ(Math.PI / 2).setPosition(0, 0, 0.42), b); oeil(-0.34, 0.05); hamecon(-0.1); }
-  return E.maille(1);
+  const [a, b] = l.couleurs.map(couleur), M = (x, y, z, sx = 1, sy = 1, sz = 1, rx = 0, ry = 0) => new THREE.Matrix4().compose(new THREE.Vector3(x, y, z), new THREE.Quaternion().setFromEuler(new THREE.Euler(rx, ry, 0)), new THREE.Vector3(sx, sy, sz)), ACIER = couleur('#6a6c72'), PLOMB = couleur('#8c8e94'), ROUGE = couleur('#b8423a');
+  const groupe = new THREE.Group(), corps = new THREE.Group(), E = new Etabli(); groupe.add(corps); groupe.userData = { famille: l.famille, id: l.id, corps };
+  const hamecon = (E, z, y = -0.07) => { E.pose(new THREE.TorusGeometry(0.075, 0.012, 5, 10, 4.2), M(0, y, z), ACIER); E.pose(new THREE.TorusGeometry(0.075, 0.012, 5, 10, 4.2).rotateY(2.1), M(0, y, z), ACIER); E.pose(new THREE.TorusGeometry(0.075, 0.012, 5, 10, 4.2).rotateY(-2.1), M(0, y, z), ACIER); };
+  const anneau = (E, z) => E.pose(new THREE.TorusGeometry(0.05, 0.012, 5, 10).rotateY(Math.PI / 2), M(0, 0, z), ACIER);
+  const oeil = (E, z, y, ecart) => { for (const s of [-1, 1]) { E.pose(new THREE.SphereGeometry(0.036, 8, 6), M(s * ecart, y, z), IVOIRE); E.pose(new THREE.SphereGeometry(0.02, 6, 4), M(s * (ecart + 0.022), y, z), NOYER2); } };
+  if (l.id === 'cuiller') {
+    // la cuiller tournante : un axe d'acier, un corps de perles, et la palette montée sur son étrier, qui tourne autour de l'axe
+    E.tube(0.5, -0.68, 0.012, 0.012, 6, ACIER); anneau(E, -0.7); for (let i = 0; i < 4; i++) E.pose(new THREE.SphereGeometry(0.06 - i * 0.004, 10, 8), M(0, 0, 0.02 + i * 0.1, 1, 1, 1.25), i === 0 ? ROUGE : b); hamecon(E, 0.56, -0.05);
+    const P = new Etabli(); P.pose(new THREE.SphereGeometry(1, 16, 10), M(0.17, 0, -0.2, 0.17, 0.022, 0.36, 0, 0.3), (x, y) => (y > 0 ? a : melange(a, couleur('#9aa0a8'), 0.4))); P.pose(new THREE.SphereGeometry(1, 10, 6), M(0.17, 0.02, -0.17, 0.07, 0.01, 0.14, 0, 0.3), ROUGE); P.tube(-0.44, -0.47, 0.03, 0.03, 6, ACIER, { x: 0.02 });
+    const lame = P.maille(1); corps.add(lame); groupe.userData.lame = lame;
+  } else if (l.id === 'ondulante') {
+    // l'ondulante : une cuiller creuse, de cuivre martelé, qui roule d'un flanc sur l'autre
+    E.pose(new THREE.SphereGeometry(1, 18, 10), M(0, 0, 0, 0.3, 0.06, 0.62), (x, y, z, f) => melange(a, couleur('#e8a868'), (f % 7) / 9)); E.pose(new THREE.SphereGeometry(1, 14, 8), M(0, 0.035, 0.02, 0.22, 0.03, 0.5), b); anneau(E, -0.66); hamecon(E, 0.7, -0.02);
+  } else if (l.famille === 'nageur') {
+    // le poisson nageur : un petit poisson de bois peint, sa bavette qui le fait plonger et frétiller
+    E.pose(new THREE.SphereGeometry(0.5, 18, 12), M(0, 0, 0, 0.3, 0.36, 1), (x, y) => (y > 0.06 ? a : y > -0.02 ? melange(a, b, 0.5) : b)); for (let i = 0; i < 6; i++) E.pose(new THREE.SphereGeometry(0.5, 8, 6), M(0, 0.13, -0.25 + i * 0.1, 0.02, 0.06, 0.05), melange(a, couleur('#2a3028'), 0.5));
+    E.pose(new THREE.BoxGeometry(0.22, 0.016, 0.26), new THREE.Matrix4().makeRotationX(0.5).setPosition(0, -0.08, -0.58), IVOIRE); E.pose(new THREE.SphereGeometry(0.5, 8, 6), M(0, 0, 0.5, 0.04, 0.2, 0.14), a); oeil(E, -0.32, 0.05, 0.1); anneau(E, -0.62); hamecon(E, 0.12, -0.2); hamecon(E, 0.46, -0.16);
+  } else {
+    // le souple : une tête plombée, un corps qui se tortille, et la queue qui bat (une palette pour le shad, une pointe fine pour le ver)
+    E.pose(new THREE.SphereGeometry(0.15, 12, 10), M(0, 0, -0.48), PLOMB); oeil(E, -0.52, 0.04, 0.1); anneau(E, -0.64); E.tube(-0.46, 0.05, 0.012, 0.012, 5, ACIER); hamecon(E, 0.08, 0.05);
+    const n = l.id === 'ver' ? 9 : 6; for (let i = 0; i < n; i++) { const k = i / (n - 1), z = -0.36 + k * 0.62, r = 0.17 * (1 - k * 0.5); E.pose(new THREE.SphereGeometry(r, 12, 8), M(0, 0, z, 0.85, 1.1, 1.3), (x, y) => (y > 0.03 ? b : a)); }
+    const Q = new Etabli(); if (l.id === 'ver') for (let i = 0; i < 5; i++) Q.pose(new THREE.SphereGeometry(0.07 - i * 0.012, 8, 6), M(0, 0, 0.04 + i * 0.07), a); else { Q.pose(new THREE.CylinderGeometry(0.035, 0.07, 0.14, 10).rotateX(Math.PI / 2), M(0, 0, 0.05), a); Q.pose(new THREE.CylinderGeometry(0.15, 0.15, 0.04, 16), new THREE.Matrix4().makeRotationZ(Math.PI / 2).setPosition(0, 0, 0.14), b); }
+    const queue = new THREE.Group(); queue.add(Q.maille(1)); queue.position.z = 0.27; corps.add(queue); groupe.userData.queue = queue;
+  }
+  corps.add(E.maille(1)); return groupe;
 }

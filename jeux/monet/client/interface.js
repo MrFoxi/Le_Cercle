@@ -4,7 +4,7 @@ import { ESPECES, LEURRES, CANNES, FAMILLES, LIEUX, ETANG, TEMPS, LEGENDES, espe
 import { DEFIS, POSTES } from './jardinier.js';
 import { illustrer } from './vue-poissons.js';
 import { momentDe } from './temps.js';
-import { sons } from './sons.js';
+import { sons, audio } from './sons.js';
 
 const $ = s => document.querySelector(s), h = v => String(v).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 const heureTxt = v => `${String(Math.floor(v)).padStart(2, '0')} h ${String(Math.floor((v % 1) * 60)).padStart(2, '0')}`, secteurNom = id => ETANG.secteurs.find(s => s.id === id)?.nom ?? 'Au large', meteoNom = id => TEMPS.meteos[id]?.nom ?? id, leurreNom = id => LEURRES.find(l => l.id === id)?.nom ?? id;
@@ -21,7 +21,7 @@ function peindreLeurre(c, L) {
 export function creerInterface({ carnet, peche, temps, voyager, secteursVus, reprendre }) {
   const fond = $('#objet'); let ouvert = null, onglet = 'especes', page = ESPECES[0].id;
   function fermer() { if (!ouvert) return; ouvert = null; fond.hidden = true; fond.innerHTML = ''; reprendre(); }
-  function ouvrir(q) { ouvert = q; fond.hidden = false; sons.page(); document.exitPointerLock?.(); ({ carnet: rendreCarnet, carte: rendreCarte, boite: rendreBoite })[q](); }
+  function ouvrir(q) { ouvert = q; fond.hidden = false; sons.page(); document.exitPointerLock?.(); ({ carnet: rendreCarnet, carte: rendreCarte, boite: rendreBoite, reglages: rendreReglages })[q](); }
 
   /* ---------- Le carnet naturaliste ---------- */
   function ficheHTML(e) {
@@ -54,7 +54,29 @@ export function creerInterface({ carnet, peche, temps, voyager, secteursVus, rep
     if (b.dataset.leurre) { peche.choisir(null, LEURRES.find(l => l.id === b.dataset.leurre)); return rendreBoite(); }
     if (b.dataset.canne) { peche.choisir(CANNES.find(c => c.id === b.dataset.canne), null); return rendreBoite(); }
     if (b.dataset.aller) { fermer(); voyager(b.dataset.aller); }
+    if (b.dataset.moment) { temps().heure = +b.dataset.moment; return rendreReglages(); }
+    if (b.dataset.meteo) { temps().imposer(b.dataset.meteo); return rendreReglages(); }
   });
+
+  // les curseurs et les cases du panneau de réglages
+  fond.addEventListener('input', ev => {
+    const c = ev.target; if (c.dataset.son) sons.regler(c.dataset.son, c.value / 100);
+    if (c.dataset.heure !== undefined) { temps().heure = +c.value; $('#heure-txt').textContent = heureTxt(+c.value); }
+    if (c.dataset.fige !== undefined) temps().fige = !c.checked;
+    if (c.dataset.musique !== undefined && c.checked !== audio.musique) sons.musique();
+  });
+
+  /* ---------- Les réglages : les sons, l'heure et le temps qu'il fait ---------- */
+  function rendreReglages() {
+    const T = temps(), V = audio.volumes, M = momentDe(T.heure).id, met = T.suivante ?? T.meteo, curseur = (k, n) => `<label class="curseur"><span>${n}</span><input type="range" min="0" max="100" value="${Math.round(V[k] * 100)}" data-son="${k}"></label>`;
+    fond.innerHTML = `<article class="reglages"><h1>Réglages</h1>
+      <section><h2>Les sons</h2>${curseur('general', 'Volume général')}${curseur('musique', 'La musique')}${curseur('nature', 'La nature')}${curseur('gestes', 'Les gestes du pêcheur')}<label class="case"><input type="checkbox" data-musique ${audio.musique ? 'checked' : ''}> Jouer la musique (M)</label></section>
+      <section><h2>L’heure</h2><label class="curseur"><span id="heure-txt">${heureTxt(T.heure)}</span><input type="range" min="0" max="23.75" step="0.25" value="${T.heure.toFixed(2)}" data-heure></label>
+        <div class="choix">${TEMPS.moments.map(m => `<button data-moment="${{ nuit: 23, matin: 7, jour: 13, soir: 19 }[m.id]}" class="${m.id === M ? 'on' : ''}">${h(m.nom)}</button>`).join('')}</div></section>
+      <section><h2>Le temps qu’il fait</h2><div class="choix">${Object.entries(TEMPS.meteos).map(([id, m]) => `<button data-meteo="${id}" class="${id === met ? 'on' : ''}">${h(m.nom)}</button>`).join('')}</div>
+        <label class="case"><input type="checkbox" data-fige ${T.fige ? '' : 'checked'}> Laisser les heures passer et le ciel changer</label></section>
+      <button class="fermer" data-fermer>Fermer (O)</button></article>`;
+  }
 
   /* ---------- La boîte à leurres ---------- */
   function rendreBoite() {

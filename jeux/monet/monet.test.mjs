@@ -114,6 +114,8 @@ test('le temps : quatre moments, la météo change lentement et change la lumiè
   assert.deepStrictEqual([3, 8, 13, 19, 22, 23.9].map(h => momentDe(h).id), ['nuit', 'matin', 'jour', 'soir', 'nuit', 'nuit']);
   const T = creerTemps(hasard(3), { heure: 12 }), midi = T.lumiere.force; T.changer('pluie'); for (let i = 0; i < 40; i++) T.maj(0.05); assert.ok(T.pluie < 0.4, 'le changement est progressif');
   for (let i = 0; i < 4000; i++) T.maj(0.05); assert.ok(T.pluie > 0.5 || T.meteo !== 'pluie'); assert.ok(TEMPS.dureeJour > 600);
+  // les réglages : une météo imposée tout de suite, le temps arrêté
+  const U = creerTemps(hasard(4), { heure: 10 }); U.imposer('pluie'); assert.strictEqual(U.pluie, 1); assert.strictEqual(U.meteo, 'pluie'); U.fige = true; U.heure = 19; for (let i = 0; i < 4000; i++) U.maj(0.05); assert.strictEqual(U.heure, 19); assert.strictEqual(U.meteo, 'pluie');
   const N = creerTemps(hasard(1), { heure: 2 }); assert.ok(N.lumiere.force < midi * 0.6, 'la nuit est sombre'); assert.ok(N.lumiere.nuit > 0.8);
 });
 

@@ -4,8 +4,9 @@ import { SR, boucleEau, boucleVent, bouclePluie, boucleGrillons, reponse } from 
 import { MORCEAUX, morceauDe, composer } from './partition.js';
 import { momentDe } from './temps.js';
 
-export const audio = { musique: true, volume: 0.85, morceau: null };
-try { audio.musique = localStorage.getItem('monet-musique') !== '0'; } catch { /* stockage bloqué */ }
+export const audio = { musique: true, morceau: null, volumes: { general: 1, musique: 1, nature: 1, gestes: 1 } };
+try { audio.musique = localStorage.getItem('monet-musique') !== '0'; Object.assign(audio.volumes, JSON.parse(localStorage.getItem('monet-sons') ?? '{}')); } catch { /* stockage bloqué */ }
+const BASE = { general: 0.85, musique: 0.34, nature: 1.5, gestes: 0.85 }; // le mélange voulu, quand tous les réglages sont au maximum
 const rnd = (a, b) => a + Math.random() * (b - a), choix = l => l[Math.floor(Math.random() * l.length)];
 let ctx, sortie, nature, gestes, orchestre, salle, W, ok = false, eau, vent, pluie, grillons, oiseauT = 3, nuitT = 6, rouage = 0, frein = 0;
 // la musique : du silence, une pièce préparée note par note sans à-coup, puis de nouveau le silence
@@ -53,10 +54,10 @@ export const sons = {
   ouvrir() {
     if (ctx) { ctx.resume(); return; }
     try { ctx = new (window.AudioContext || window.webkitAudioContext)(); } catch { return; }
-    sortie = ctx.createGain(); sortie.gain.value = audio.volume; const lim = ctx.createDynamicsCompressor(); lim.threshold.value = -14; lim.ratio.value = 3; lim.attack.value = 0.02; lim.release.value = 0.3; sortie.connect(lim); lim.connect(ctx.destination);
+    sortie = ctx.createGain(); sortie.gain.value = BASE.general * audio.volumes.general; const lim = ctx.createDynamicsCompressor(); lim.threshold.value = -14; lim.ratio.value = 3; lim.attack.value = 0.02; lim.release.value = 0.3; sortie.connect(lim); lim.connect(ctx.destination);
     salle = ctx.createConvolver(); const ir = reponse(ctx.sampleRate), bir = ctx.createBuffer(2, ir[0].length, ctx.sampleRate); ir.forEach((c, i) => bir.copyToChannel(c, i)); salle.buffer = bir; const retour = ctx.createGain(); retour.gain.value = 0.55; salle.connect(retour); retour.connect(sortie);
-    nature = ctx.createGain(); nature.gain.value = 1.5; nature.connect(sortie); gestes = ctx.createGain(); gestes.gain.value = 0.85; gestes.connect(sortie);
-    orchestre = ctx.createGain(); orchestre.gain.value = audio.musique ? 0.34 : 0; orchestre.connect(sortie); orchestre.echo = ctx.createGain(); orchestre.echo.gain.value = audio.musique ? 1 : 0; orchestre.echo.connect(salle);
+    nature = ctx.createGain(); nature.gain.value = BASE.nature * audio.volumes.nature; nature.connect(sortie); gestes = ctx.createGain(); gestes.gain.value = BASE.gestes * audio.volumes.gestes; gestes.connect(sortie);
+    orchestre = ctx.createGain(); orchestre.gain.value = audio.musique ? BASE.musique * audio.volumes.musique : 0; orchestre.connect(sortie); orchestre.echo = ctx.createGain(); orchestre.echo.gain.value = audio.musique ? 1 : 0; orchestre.echo.connect(salle);
     const n = ctx.createBuffer(1, SR * 3, SR), d = n.getChannelData(0); for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1; W = n;
     eau = boucle(boucleEau(), nature); vent = boucle(boucleVent(), nature, { type: 'lowpass', f: 1800 }); pluie = boucle(bouclePluie(), nature); grillons = boucle(boucleGrillons(), nature);
     M.luth = new Worker(new URL('./luth.js', import.meta.url), { type: 'module' }); M.luth.onmessage = ({ data }) => { M.commandes.delete(data.k); M.tampons.set(data.k, tampon([data.d])); }; PRISE.forEach(commander); ok = true;
@@ -100,9 +101,15 @@ export const sons = {
   envol() { if (!ok) return; const t = ctx.currentTime + 0.01, p = rnd(-0.6, 0.6); for (let i = 0; i < 14; i++) souffle(lieu(p + i * 0.03, 0.35 + i * 0.03), t + i * 0.085, 0.06, 0.09 * (1 - i / 16), rnd(650, 1050), 420, { q: 0.7, a: 0.012 }); },
   // la brosse sur la toile
   pinceau() { if (!ok) return; const t = ctx.currentTime + 0.01, d = lieu(rnd(-0.2, 0.2), 0.05, gestes); souffle(d, t, rnd(0.12, 0.26), 0.035, rnd(1800, 2600), rnd(900, 1300), { q: 0.8, a: 0.04 }); },
+  // un réglage de volume, de 0 à 1 : général, musique, nature ou gestes
+  regler(cle, v) {
+    audio.volumes[cle] = Math.max(0, Math.min(1, v)); try { localStorage.setItem('monet-sons', JSON.stringify(audio.volumes)); } catch { /* stockage bloqué */ }
+    if (!ok) return; const t = ctx.currentTime, k = BASE[cle] * audio.volumes[cle];
+    ({ general: sortie, nature, gestes, musique: orchestre })[cle].gain.setTargetAtTime(cle === 'musique' && !audio.musique ? 0 : k, t, 0.08);
+  },
   musique() {
     audio.musique = !audio.musique; try { localStorage.setItem('monet-musique', audio.musique ? '1' : '0'); } catch { /* stockage bloqué */ }
-    if (ok) { const t = ctx.currentTime; orchestre.gain.setTargetAtTime(audio.musique ? 0.34 : 0, t, 0.5); orchestre.echo.gain.setTargetAtTime(audio.musique ? 1 : 0, t, 0.5); }
+    if (ok) { const t = ctx.currentTime; orchestre.gain.setTargetAtTime(audio.musique ? BASE.musique * audio.volumes.musique : 0, t, 0.5); orchestre.echo.gain.setTargetAtTime(audio.musique ? 1 : 0, t, 0.5); }
     return audio.musique;
   },
 };

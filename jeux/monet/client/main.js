@@ -46,7 +46,7 @@ addEventListener('keydown', e => {
   if (chev.actif) { if (e.code === 'KeyE' && chev.fini) signer(); if (e.code === 'Escape') { chev.fermer(); note('Tu grattes la toile : on recommencera.', 3); } return; }
   if (e.code === 'KeyV' && enPartie && !ui.ouvert && !viseur && peche.etat === 'repos') { tableauDemande = true; taire(); }
   if (e.code === 'KeyE') clicE = true; if (e.code === 'Space') { tirer = true; e.preventDefault(); }
-  if (e.code === 'KeyC') ui.basculer('carnet'); if (e.code === 'KeyB') ui.basculer('boite'); if (e.code === 'KeyK') ui.basculer('carte');
+  if (e.code === 'KeyC') ui.basculer('carnet'); if (e.code === 'KeyB') ui.basculer('boite'); if (e.code === 'KeyK') ui.basculer('carte'); if (e.code === 'KeyO') ui.basculer('reglages');
   if (e.code === 'Escape' && ui.ouvert) ui.fermer();
   if (e.code === 'KeyM') note(sons.musique() ? 'La musique revient, tout doucement.' : 'Plus que les bruits de l’eau.', 2.5);
   if (e.code === 'KeyP' && !ui.ouvert && peche.etat !== 'prise') { viseur = !viseur; $('#viseur').hidden = !viseur; }
@@ -125,12 +125,12 @@ function evenement() {
   if (g < 0.68) { const a = Math.random() * 6.28, d = 22 + Math.random() * 30; oiseaux = { t: 0, x: J.x + Math.cos(a) * d, z: J.z + Math.sin(a) * d, a }; sons.envol(); return; }
   if (g < 0.84) { const C = poissons.filter(f => f.sp.id === 'chevesne' && f.etat === 'cale'), f = C[Math.floor(Math.random() * C.length)] ?? proches[0]; if (f) { nuageI = { t: 0, x: f.x, z: f.z, f }; f.faim = 70; note('Des insectes dansent au-dessus de l’eau : quelque chose monte les gober.'); } return; }
   if (g < 0.93) { const v = grenouilles.filter(x => !x.parti).sort((a, b) => Math.hypot(a.l.x - J.x, a.l.z - J.z) - Math.hypot(b.l.x - J.x, b.l.z - J.z))[0]; if (v) { v.saut = 0.001; sons.grenouille(); } return; }
-  if (temps.meteo !== 'pluie' && temps.heure > 8 && temps.heure < 20) { temps.changer('pluie'); note('Le ciel se couvre : une averse arrive.'); }
+  if (!temps.fige && temps.meteo !== 'pluie' && temps.heure > 8 && temps.heure < 20) { temps.changer('pluie'); note('Le ciel se couvre : une averse arrive.'); }
 }
 function vivants(dt, t) {
   evT -= dt; if (evT <= 0) { evT = 35 + Math.random() * 55; evenement(); }
   // une brume se lève certains matins
-  if (temps.jour !== brumeJour && temps.heure > 5.4 && temps.heure < 7) { brumeJour = temps.jour; if (Math.random() < 0.55) temps.changer('brouillard'); }
+  if (!temps.fige && temps.jour !== brumeJour && temps.heure > 5.4 && temps.heure < 7) { brumeJour = temps.jour; if (Math.random() < 0.55) temps.changer('brouillard'); }
   nuee.count = 0;
   if (oiseaux) { const O = oiseaux; O.t += dt; for (let i = 0; i < 16; i++) { const k = O.t * (4 + i * 0.12), bat = Math.sin(t * 16 + i) * 0.7; v3.set(O.x + Math.cos(O.a) * k + Math.sin(i * 3) * 2.2, 5 + O.t * (2.2 + (i % 4) * 0.3) + Math.cos(i * 2) * 1.2, O.z + Math.sin(O.a) * k + Math.cos(i * 5) * 2.2); nuee.setMatrixAt(i, m4.compose(v3, q4.setFromEuler(e4.set(bat, -O.a, 0)), s4)); } nuee.count = 16; nuee.instanceMatrix.needsUpdate = true; if (O.t > 11) oiseaux = null; }
   insectes.count = 0;
@@ -255,8 +255,8 @@ function image(ms) {
   }
   renderer.render(scene, camera);
   if (photoDemandee) { photoDemandee = false; prendrePhoto(); }
-  if (tableauDemande) { tableauDemande = false; const c = document.createElement('canvas'); c.width = 240; c.height = Math.round(240 * vue.height / vue.width); c.getContext('2d').drawImage(vue, 0, 0, c.width, c.height); const s = secteurEn(J.x, J.z); chev.commencer(c, `${s?.nom ?? 'L’Étang des Nymphéas'}, ${momentDe(temps.heure).nom.toLowerCase()}`); sons.page(); }
+  if (tableauDemande) { tableauDemande = false; const c = document.createElement('canvas'); c.width = 480; c.height = Math.round(480 * vue.height / vue.width); c.getContext('2d').drawImage(vue, 0, 0, c.width, c.height); const s = secteurEn(J.x, J.z); chev.commencer(c, `${s?.nom ?? 'L’Étang des Nymphéas'}, ${momentDe(temps.heure).nom.toLowerCase()}`); sons.page(); }
 }
-if (params.has('debug')) window.monet = { anselme, chev, signer, parlerA: () => { clicE = true; }, dAnselme: () => dAnselme, reveilLegende: () => { legT = 0; }, J, peche, poissons, carnet, temps, ui, eau, corps, camera, decor, UNI, entrer() { $('#titre').classList.add('parti'); enPartie = true; }, evenement, decider, touches };
+if (params.has('debug')) window.monet = { mains, anselme, chev, signer, parlerA: () => { clicE = true; }, dAnselme: () => dAnselme, reveilLegende: () => { legT = 0; }, J, peche, poissons, carnet, temps, ui, eau, corps, camera, decor, UNI, entrer() { $('#titre').classList.add('parti'); enPartie = true; }, evenement, decider, touches };
 pret = true; $('#pret').textContent = 'Cliquer pour entrer dans le tableau';
 requestAnimationFrame(image);

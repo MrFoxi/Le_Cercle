@@ -68,6 +68,16 @@
     .galerie img { width: 100%; display: block; border: 8px solid #6b4a30; box-shadow: 2px 3px 8px rgba(40, 30, 16, .4); }
     .galerie figcaption { font: 400 1.3rem var(--main); }
     .legende b { font: 400 1.45rem var(--main); }
+    /* les réglages */
+    .reglages { display: grid; gap: 14px; width: min(640px, 100%); padding: 20px 26px; background: var(--feuille); box-shadow: 0 14px 40px rgba(30, 22, 10, .5); }
+    .reglages h2 { margin: 0 0 6px; font-weight: 400; font-style: italic; font-size: 1.3rem; }
+    .reglages section { display: grid; gap: 8px; }
+    .curseur { display: grid; grid-template-columns: minmax(150px, 210px) minmax(0, 1fr); align-items: center; gap: 12px; font-size: 1.08rem; }
+    .curseur input { width: 100%; accent-color: var(--vert); min-height: 32px; }
+    .case { display: flex; align-items: center; gap: 10px; font-size: 1.05rem; }
+    .case input { width: 22px; height: 22px; accent-color: var(--vert); }
+    .reglages .choix { display: flex; flex-wrap: wrap; gap: 6px; }
+    @media (max-width: 520px) { .curseur { grid-template-columns: minmax(0, 1fr); gap: 2px; } }
     /* les objets qu'on prend en main */
     #objet { position: fixed; inset: 0; display: grid; place-items: center; padding: 3vh 3vw; background: rgba(40, 34, 22, .55); overflow: auto; }
     #objet[hidden] { display: none; }
@@ -149,7 +159,7 @@
       <li><kbd>Z Q S D</kbd> marcher, <kbd>Maj</kbd> presser le pas</li><li><kbd>E</kbd> prendre, regarder</li>
       <li><kbd>Clic gauche</kbd> maintenu : lancer</li><li><kbd>Clic droit</kbd> maintenu : mouliner</li>
       <li><kbd>Clic gauche</kbd> : tirée, ferrer</li><li><kbd>Molette</kbd> : vitesse du moulinet</li>
-      <li><kbd>C</kbd> carnet, <kbd>B</kbd> leurres, <kbd>K</kbd> carte</li><li><kbd>P</kbd> appareil photo, <kbd>M</kbd> musique</li><li><kbd>V</kbd> poser le chevalet, peindre</li><li><kbd>E</kbd> parler au père Anselme</li>
+      <li><kbd>C</kbd> carnet, <kbd>B</kbd> leurres, <kbd>K</kbd> carte</li><li><kbd>P</kbd> appareil photo, <kbd>M</kbd> musique</li><li><kbd>V</kbd> poser le chevalet, peindre</li><li><kbd>O</kbd> réglages : sons, heure, météo</li><li><kbd>E</kbd> parler au père Anselme</li>
     </ul>
     <strong id="pret">Le tableau se peint…</strong>
   </section>
