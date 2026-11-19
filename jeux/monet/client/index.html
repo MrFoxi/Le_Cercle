@@ -1,0 +1,138 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Les Eaux de Monet</title>
+  <link rel="icon" href="favicon.svg" type="image/svg+xml">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=IM+Fell+English:ital@0;1&family=La+Belle+Aurore&display=swap" rel="stylesheet">
+  <script type="importmap">{ "imports": { "three": "/vendor/three/build/three.module.js", "three/addons/": "/vendor/three/addons/" } }</script>
+  <script src="/shared/presence.js" defer></script>
+  <script type="module" src="main.js"></script>
+  <style>
+    :root { --papier: #efe6cf; --feuille: #f6efdc; --encre: #33291f; --doux: #6f6250; --trait: #c9b98f; --vert: #4f7f5c; --rose: #c8607c; --main: 'La Belle Aurore', 'Segoe Script', cursive; --livre: 'IM Fell English', Georgia, serif; }
+    * { box-sizing: border-box; }
+    html, body { margin: 0; height: 100%; overflow: hidden; background: #55704c; color: var(--encre); font-family: var(--livre); }
+    #vue { position: fixed; inset: 0; width: 100%; height: 100%; display: block; }
+    /* le grain de la toile, par-dessus tout le tableau */
+    #toile { position: fixed; inset: 0; pointer-events: none; mix-blend-mode: soft-light; opacity: .55; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='240' height='240'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9 .55' numOctaves='3'/%3E%3CfeColorMatrix values='0 0 0 0 .5 0 0 0 0 .5 0 0 0 0 .5 0 0 0 1.1 -.1'/%3E%3C/filter%3E%3Crect width='240' height='240' filter='url(%23n)'/%3E%3C/svg%3E"); }
+    #voile { position: fixed; inset: 0; background: var(--papier); opacity: 0; pointer-events: none; transition: opacity .7s ease; }
+    #voile.on { opacity: 1; }
+    /* le strict nécessaire à l'écran */
+    #point { position: fixed; left: 50%; top: 50%; width: 5px; height: 5px; margin: -2.5px; border-radius: 50%; background: #f6efdc; opacity: .7; box-shadow: 0 0 2px #33291f; pointer-events: none; }
+    .ecrit { color: #fbf4e2; text-shadow: 0 1px 3px rgba(40, 32, 20, .85), 0 0 12px rgba(40, 32, 20, .4); font-family: var(--main); }
+    #materiel { position: fixed; left: 22px; bottom: 16px; font-size: 1.45rem; pointer-events: none; }
+    #aide { position: fixed; left: 50%; bottom: 62px; transform: translateX(-50%); font-size: 1.6rem; text-align: center; width: min(92vw, 780px); pointer-events: none; }
+    #note { position: fixed; left: 50%; top: 21vh; transform: translateX(-50%); font-size: 1.9rem; text-align: center; width: min(92vw, 760px); opacity: 0; transition: opacity .6s; pointer-events: none; }
+    #note.on { opacity: 1; }
+    #lieu { position: fixed; left: 50%; top: 9vh; transform: translateX(-50%); font-size: 3.1rem; text-align: center; width: min(94vw, 900px); opacity: 0; transition: opacity 1.4s; pointer-events: none; }
+    #lieu.on { opacity: 1; }
+    #tension { position: fixed; left: 50%; bottom: 26px; width: min(62vw, 420px); height: 18px; margin-left: calc(min(62vw, 420px) / -2); pointer-events: none; }
+    #tension[hidden] { display: none; }
+    #tension svg { display: block; width: 100%; height: 100%; overflow: visible; }
+    #force { position: fixed; left: 50%; top: 58%; width: 150px; height: 10px; margin-left: -75px; border-bottom: 2px solid #fbf4e2; pointer-events: none; }
+    #force[hidden] { display: none; }
+    #force i { display: block; height: 100%; background: #fbf4e2; width: calc(var(--p, 0) * 100%); }
+    #prise { position: fixed; left: 50%; bottom: 4vh; transform: translateX(-50%); width: min(94vw, 560px); padding: 14px 22px; background: var(--feuille); border: 1px solid var(--trait); box-shadow: 0 8px 26px rgba(40, 30, 16, .4); text-align: center; }
+    #prise[hidden] { display: none; }
+    #prise h2 { margin: 0; font: 400 2.3rem var(--main); }
+    #prise p { margin: 2px 0 10px; font-size: 1.15rem; }
+    #prise .choix { display: flex; flex-wrap: wrap; gap: 10px; justify-content: center; }
+    button { font: 1.1rem var(--livre); color: var(--encre); background: transparent; border: 1px solid var(--encre); padding: 7px 16px; min-height: 44px; cursor: pointer; }
+    button:hover:not(:disabled) { background: var(--encre); color: var(--feuille); }
+    button:disabled { opacity: .45; cursor: default; }
+    button:focus-visible { outline: 3px solid var(--rose); outline-offset: 2px; }
+    /* le viseur de l'appareil photo */
+    #viseur { position: fixed; inset: 7vh 7vw; border: 2px solid rgba(251, 244, 226, .85); pointer-events: none; }
+    #viseur[hidden] { display: none; }
+    #viseur span { position: absolute; left: 12px; bottom: 6px; font-size: 1.4rem; }
+    #flash { position: fixed; inset: 0; background: #fff; opacity: 0; pointer-events: none; }
+    #flash.on { animation: flash .35s ease-out; }
+    @keyframes flash { 0% { opacity: .85; } 100% { opacity: 0; } }
+    /* les objets qu'on prend en main */
+    #objet { position: fixed; inset: 0; display: grid; place-items: center; padding: 3vh 3vw; background: rgba(40, 34, 22, .55); overflow: auto; }
+    #objet[hidden] { display: none; }
+    #objet h1 { margin: 0 0 6px; font: 400 2.4rem var(--main); }
+    .fermer { grid-column: 1 / -1; justify-self: center; }
+    .carnet { display: grid; grid-template-columns: minmax(180px, 250px) minmax(0, 1fr); gap: 12px 26px; width: min(1040px, 100%); padding: 22px 28px; background: var(--feuille); box-shadow: 0 14px 40px rgba(30, 22, 10, .5), inset 0 0 60px rgba(150, 120, 60, .18); }
+    .page-gauche { border-right: 1px solid var(--trait); padding-right: 18px; min-width: 0; }
+    .onglets { display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 12px; }
+    .onglets button { padding: 3px 8px; font-size: .98rem; border-color: var(--trait); min-height: 36px; }
+    button.on { background: var(--vert); border-color: var(--vert); color: #fff; }
+    .sommaire { margin: 0; padding: 0; list-style: none; display: grid; gap: 3px; }
+    .sommaire button { width: 100%; text-align: left; border: 0; border-bottom: 1px dotted var(--trait); font: 400 1.5rem var(--main); padding: 3px 6px; }
+    .compte { color: var(--doux); }
+    .page-droite { min-width: 0; }
+    .page-droite h2 { margin: 0; font: 400 2.7rem/1 var(--main); }
+    .page-droite h3 { margin: 12px 0 2px; font-weight: 400; font-style: italic; font-size: 1.25rem; }
+    .latin { margin: 0; font-style: italic; color: var(--doux); }
+    .desc { margin: 4px 0 8px; font-size: 1.15rem; }
+    #illu { display: block; width: 100%; max-width: 520px; height: auto; }
+    dl { display: grid; grid-template-columns: 150px minmax(0, 1fr); gap: 3px 14px; margin: 0; font-size: 1.03rem; }
+    dt { color: var(--doux); font-style: italic; }
+    dd { margin: 0; }
+    .liste { list-style: none; margin: 8px 0; padding: 0; display: grid; gap: 6px; font-size: 1.1rem; }
+    .album { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 12px; }
+    .album figure { margin: 0; }
+    .album img { width: 100%; display: block; border: 5px solid #fff; box-shadow: 1px 2px 6px rgba(40, 30, 16, .35); }
+    .album figcaption { font: 400 1.15rem var(--main); }
+    .boite { display: grid; gap: 12px; width: min(900px, 100%); padding: 20px 26px; background: #5f7a68; color: #f6efdc; box-shadow: 0 14px 40px rgba(30, 22, 10, .5); }
+    .boite button { color: #f6efdc; border-color: rgba(246, 239, 220, .5); }
+    .boite button:hover:not(:disabled), .boite button.on { background: #f6efdc; color: #33291f; }
+    .plateau { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+    .plateau button { display: grid; gap: 2px; justify-items: center; padding: 8px; text-align: center; background: rgba(40, 50, 40, .28); }
+    .plateau canvas { width: 100%; max-width: 150px; }
+    .plateau small, .cannes small { font-size: .9rem; }
+    .plateau em { font-size: .92rem; }
+    .cannes { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+    .cannes button { display: grid; gap: 2px; text-align: left; }
+    .carte { display: grid; gap: 10px; width: min(960px, 100%); padding: 18px 24px; background: var(--feuille); box-shadow: 0 14px 40px rgba(30, 22, 10, .5); }
+    .carte h2 { margin: 2px 0 0; font-weight: 400; font-style: italic; font-size: 1.3rem; }
+    .terre { position: relative; }
+    .terre canvas { display: block; width: 100%; height: auto; }
+    .lieu { position: absolute; transform: translate(-50%, -50%); width: 190px; max-width: 34%; text-align: center; color: var(--doux); }
+    .lieu b { display: block; font: 400 1.25rem/1 var(--main); color: var(--encre); }
+    .lieu small { font-size: .8rem; }
+    .lieu.ici b { color: #1f5a4a; font-size: 1.55rem; }
+    .coins { display: flex; flex-wrap: wrap; gap: 6px; }
+    /* l'écran d'entrée */
+    #titre { position: fixed; inset: 0; display: grid; place-content: center; justify-items: center; gap: 10px; padding: 24px; text-align: center; cursor: pointer; color: #fbf4e2; background: radial-gradient(ellipse at center, rgba(50, 60, 50, .1), rgba(40, 46, 44, .58)); transition: opacity 1.5s; text-shadow: 0 2px 10px rgba(30, 26, 18, .8); }
+    #titre.parti { opacity: 0; pointer-events: none; }
+    #titre h1 { margin: 0; font: 400 clamp(3.4rem, 11vw, 7.5rem)/1 var(--main); }
+    #titre p { margin: 0; font-size: 1.3rem; font-style: italic; }
+    #titre ul { display: grid; grid-template-columns: repeat(2, auto); gap: 2px 28px; margin: 18px 0; padding: 0; list-style: none; text-align: left; font-size: 1.08rem; }
+    #titre kbd { font: inherit; border-bottom: 1px solid currentColor; }
+    #titre strong { font: 400 1.9rem var(--main); }
+    @media (max-width: 720px) { .carnet { grid-template-columns: minmax(0, 1fr); } .page-gauche { border-right: 0; } .plateau { grid-template-columns: repeat(2, minmax(0, 1fr)); } dl { grid-template-columns: minmax(0, 1fr); } #titre ul { grid-template-columns: minmax(0, 1fr); } }
+  </style>
+</head>
+<body>
+  <canvas id="vue" aria-label="L’Étang des Nymphéas, peint à la manière impressionniste"></canvas>
+  <div id="toile"></div>
+  <div id="point"></div>
+  <div id="materiel" class="ecrit"></div>
+  <div id="aide" class="ecrit" aria-live="polite"></div>
+  <div id="note" class="ecrit" aria-live="polite"></div>
+  <div id="lieu" class="ecrit"></div>
+  <div id="force" hidden><i></i></div>
+  <div id="tension" hidden><svg viewBox="0 0 420 18" preserveAspectRatio="none" aria-hidden="true"><path d="M3 10 C 90 4, 200 15, 417 8" stroke="#fbf4e2" stroke-opacity=".4" stroke-width="9" stroke-linecap="round" fill="none"/><path id="fil" d="M3 10 C 90 4, 200 15, 417 8" stroke="#fbf4e2" stroke-width="9" stroke-linecap="round" fill="none" pathLength="100" stroke-dasharray="0 100"/></svg></div>
+  <section id="prise" hidden aria-live="polite"></section>
+  <div id="viseur" hidden><span class="ecrit">Clic pour photographier · P pour ranger l’appareil</span></div>
+  <div id="flash"></div>
+  <div id="voile"></div>
+  <section id="objet" hidden></section>
+  <section id="titre">
+    <h1>Les Eaux de Monet</h1>
+    <p>L’Étang des Nymphéas</p>
+    <ul>
+      <li><kbd>Z Q S D</kbd> marcher, <kbd>Maj</kbd> presser le pas</li><li><kbd>E</kbd> prendre, regarder</li>
+      <li><kbd>Clic gauche</kbd> maintenu : lancer</li><li><kbd>Clic droit</kbd> maintenu : mouliner</li>
+      <li><kbd>Clic gauche</kbd> : tirée, ferrer</li><li><kbd>Molette</kbd> : vitesse du moulinet</li>
+      <li><kbd>C</kbd> carnet, <kbd>B</kbd> leurres, <kbd>K</kbd> carte</li><li><kbd>P</kbd> appareil photo, <kbd>M</kbd> musique</li>
+    </ul>
+    <strong id="pret">Le tableau se peint…</strong>
+  </section>
+</body>
+</html>
